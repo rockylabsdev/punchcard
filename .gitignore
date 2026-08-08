@@ -1,0 +1,20 @@
+# Installed skills — restored from skills-lock.json, not committed
+.agents/skills/
+.claude/skills/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Xcode — commit the .xcodeproj, ignore per-user and build state
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcarchive
+.swiftpm/
+
+# Local API token — hardcoded CredentialStore impl, slices 2–7 (see ticket 02)
+Punchcard/Credentials/LocalSecrets.swift
+
+# OS cruft
+.DS_Store
