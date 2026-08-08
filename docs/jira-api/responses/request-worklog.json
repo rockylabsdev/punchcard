@@ -1,0 +1,11 @@
+{
+  "timeSpentSeconds": 300,
+  "started": "2026-08-08T19:28:01.000+0000",
+  "comment": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      { "type": "paragraph", "content": [ { "type": "text", "text": "Punchcard slice-0 spike — delete me" } ] }
+    ]
+  }
+}

@@ -18,3 +18,6 @@ Punchcard/Credentials/LocalSecrets.swift
 
 # OS cruft
 .DS_Store
+
+# Jira spike credentials — see docs/jira-api/spike-env.example
+docs/jira-api/.spike-env

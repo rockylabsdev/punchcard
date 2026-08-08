@@ -1,0 +1,11 @@
+# Copy to .spike-env (gitignored) and fill in.
+#
+# JIRA_TOKEN: an Atlassian API token, created at
+#   https://id.atlassian.com/manage-profile/security/api-tokens
+# JIRA_TICKET: a throwaway ticket you are happy to have a worklog posted to
+#   and deleted from.
+
+JIRA_SITE=company.atlassian.net
+JIRA_EMAIL=you@example.com
+JIRA_TOKEN=
+JIRA_TICKET=ABC-123
