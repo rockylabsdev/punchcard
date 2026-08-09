@@ -4,7 +4,7 @@ Source request: Handoff doc `jira-time-tracker-HANDOFF.md` (no Jira key — gree
 
 ## Destination
 
-A spec-ready understanding of the greenfield app so `to-spec` can write `.scratch/jira-time-tracker/spec.md`. The product decisions are settled (see handoff decision log); this map only clears the remaining **bootstrap / build-order** and **first-run auth-flow** fog — sharpened by the fact this is the user's first Swift/SwiftUI project.
+A spec-ready understanding of the greenfield app so `to-spec` can write the spec — **reached**, written to [`docs/spec.md`](../spec.md) (the original `.scratch/jira-time-tracker/spec.md` path predates the app getting its own repo). The product decisions are settled (see handoff decision log); this map only clears the remaining **bootstrap / build-order** and **first-run auth-flow** fog — sharpened by the fact this is the user's first Swift/SwiftUI project.
 
 ## Notes
 
