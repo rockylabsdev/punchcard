@@ -24,6 +24,12 @@ One start→stop period against a `TrackedTicket`.
 
 Elapsed time is derived from timestamps rather than accumulated by a ticking counter, so that sleep, quit, and clock changes cannot silently corrupt it.
 
+A pause does **not** end a `TimeEntry` — it closes the current **segment**. An entry is a list of segments and its elapsed time is their sum, so one entry may span several start/pause cycles. This preserves the invariant that **one `TimeEntry` produces exactly one `Worklog`**.
+
+### Segment
+
+One uninterrupted stretch of accrual inside a `TimeEntry`. A segment with no end time is the running one; there is at most one such segment in the whole app.
+
 ### Worklog
 
 The record submitted to Jira for a completed stretch of work — the body of the `POST` to Jira, and the thing whose sync state (pending / synced) the app tracks.
