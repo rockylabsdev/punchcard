@@ -1,6 +1,6 @@
 # Context
 
-Punchcard is a personal, single-user macOS menu-bar app that times work against a Jira ticket and syncs the elapsed time back to Jira as a worklog.
+Punchcard is a personal, single-user terminal app — a TUI plus a CLI sharing one core — that times work against a Jira ticket and syncs the elapsed time back to Jira as a worklog. It is built to be driven by a human at the keyboard or by an agent (Claude Code) through the CLI.
 
 ## Glossary
 
@@ -16,7 +16,7 @@ Note the third sense in this repo: the planning artifacts under `docs/wayfinder/
 
 A Jira ticket the user has added to their list, **whether or not it currently has time against it**.
 
-"Tracked" means *on the list*, not *running*. A ticket added a moment ago with zero elapsed time is a `TrackedTicket`; so is one last worked a week ago. This is deliberately not defined as "a row in the popover" — the popover renders `TrackedTicket`s, but the concept does not depend on being displayed.
+"Tracked" means *on the list*, not *running*. A ticket added a moment ago with zero elapsed time is a `TrackedTicket`; so is one last worked a week ago. This is deliberately not defined as "a row in the TUI" — the TUI renders `TrackedTicket`s, but the concept does not depend on being displayed.
 
 ### TimeEntry
 

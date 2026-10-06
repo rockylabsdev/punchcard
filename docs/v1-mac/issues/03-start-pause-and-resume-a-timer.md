@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-Build slice 3 of the [spec](../spec.md). `TimeEntry` and `Segment` are defined in [`CONTEXT.md`](../../CONTEXT.md) and are authoritative.
+Build slice 3 of the [spec](../spec.md). `TimeEntry` and `Segment` are defined in [`CONTEXT.md`](../../../CONTEXT.md) and are authoritative.
 
 - [ ] `TimeEntry` and `Segment` introduced
 - [ ] **A pause closes a `Segment`; it does not end the `TimeEntry`.** One entry holds a list of segments and may span several start/pause cycles — this preserves the invariant that one `TimeEntry` produces exactly one `Worklog`

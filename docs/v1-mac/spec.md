@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-Derived from the wayfinder map at [`docs/wayfinder/map.md`](wayfinder/map.md) and its five resolved tickets. Domain vocabulary is authoritative in root [`CONTEXT.md`](../CONTEXT.md) — `TrackedTicket`, `TimeEntry`, `Segment`, `Worklog`, `lastSeen`.
+Derived from the wayfinder map at [`docs/wayfinder/map.md`](wayfinder/map.md) and its five resolved tickets. Domain vocabulary is authoritative in root [`CONTEXT.md`](../../CONTEXT.md) — `TrackedTicket`, `TimeEntry`, `Segment`, `Worklog`, `lastSeen`.
 
 Resolution is **deliberately uneven**, per [02 - Walking-skeleton build order](wayfinder/issues/02-walking-skeleton-build-order.md): slices 0–5 are specified in enough detail to build from; slices 6–8 are specified as intent plus explicitly flagged open questions. That is a decision, not an omission.
 
