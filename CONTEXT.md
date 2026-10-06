@@ -28,7 +28,7 @@ A pause does **not** end a `TimeEntry` — it closes the current **segment**. An
 
 ### Segment
 
-One uninterrupted stretch of accrual inside a `TimeEntry`. A segment with no end time is the running one; there is at most one such segment in the whole app.
+One uninterrupted stretch of accrual inside a `TimeEntry`. A segment with no end time is the running one; there is at most one such segment across every writer: the TUI, the CLI, and any agent session. Every change to the state is one indivisible transition that closes any open segment before it opens another, so starting one ticket while another runs pauses the first.
 
 ### Worklog
 
@@ -39,13 +39,37 @@ A `Worklog` is what Jira stores; a `TimeEntry` is what Punchcard measured. They 
 ### Running / Paused / Stopped
 
 - **Running** — the timer is accruing against exactly one `TrackedTicket`. At most one ticket may be running at a time.
+
+A running timer measures **the user's attention, not an agent's work**. Several agents working in parallel do not make several timers: the user's time is one stream, and switching between agents' tickets is switching the one timer. A `Worklog` therefore records the user's own hours, and a day's worklogs never sum past the hours the user actually lived.
 - **Paused** — accrual suspended, no `Worklog` produced; resuming continues the same work.
 - **Stopped** — the work is finished and a `Worklog` is produced for Jira.
 
 Pause and stop are distinct actions with distinct consequences; stopping is the only path that reaches Jira.
 
+### Presence
+
+Evidence that the user is at the machine: a keystroke in the TUI, a command run, or typing or submitting a prompt in any Claude Code session. Only the user's own input counts. An agent's activity, a scheduled task, a message from another session, and an open but untouched TUI are not presence.
+
+Presence says nothing about *which* ticket the user is on. That is **focus**.
+
+### Focus
+
+Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs. A session whose ticket cannot be told gives presence but never focus.
+
+### Held
+
+A running timer the user set by hand. Focus from a prompt never moves a held timer. Only another act by hand does. A timer started automatically, from a prompt's focus, is not held and follows the user's focus from session to session.
+
 ### lastSeen
 
-A heartbeat timestamp persisted while the app runs, recording when it was last known alive.
+The last moment of **presence**. **Reading state is never presence**: asking what is running neither vouches for it nor changes it.
 
-If the app dies while a timer is running, `lastSeen` is the upper bound on how long that work could truthfully have lasted — recovery caps the running entry there rather than trusting the wall clock.
+`lastSeen` is not a sign of life. No Punchcard process needs to be alive for a timer to run, and a timer accrues whether or not the user is typing. A running timer is an open segment and nothing more.
+
+`lastSeen` is the upper bound on how long the work could truthfully have lasted. Recovery caps the running entry there rather than trusting the wall clock.
+
+### Stale
+
+A running timer is **stale** when there has been no presence for longer than the stale threshold. Staleness is derived, never stored, and can be observed only once: the first act of presence to find a stale timer caps its open segment at `lastSeen` and flags the entry **recovered** *before* recording itself, which would otherwise erase the gap. That capping is **recovery**; it replaces the old trigger of an app relaunching after a crash.
+
+A **recovered** entry stays flagged until it is stopped, where its duration is corrected, not merely until it is resumed.
