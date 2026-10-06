@@ -58,7 +58,7 @@ Presence says nothing about *which* ticket the user is on. That is **focus**.
 
 ### Focus
 
-Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs. A session whose ticket cannot be told gives presence but never focus.
+Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs: a ticket key in the git branch name. Nothing else names a session's ticket. A session whose ticket cannot be told gives presence but never focus.
 
 ### Held
 
