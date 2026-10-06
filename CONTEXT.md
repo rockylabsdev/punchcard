@@ -18,6 +18,10 @@ A Jira ticket the user has added to their list, **whether or not it currently ha
 
 "Tracked" means *on the list*, not *running*. A ticket added a moment ago with zero elapsed time is a `TrackedTicket`; so is one last worked a week ago. This is deliberately not defined as "a row in the TUI" — the TUI renders `TrackedTicket`s, but the concept does not depend on being displayed.
 
+### Unverified
+
+A `TrackedTicket` whose key Jira has not yet confirmed. It was added while Jira could not be reached, so it has no summary and may be a typo. Time against it accrues normally. It stops being unverified the first time Jira confirms the key; a key Jira reports not found is never added in the first place.
+
 ### TimeEntry
 
 One start→stop period against a `TrackedTicket`.
@@ -59,6 +63,14 @@ Evidence of which `TrackedTicket` the user is working on: a ticket they start or
 ### Held
 
 A running timer the user set by hand. Focus from a prompt never moves a held timer. Only another act by hand does. A timer started automatically, from a prompt's focus, is not held and follows the user's focus from session to session.
+
+### Origin
+
+Who caused a change: **hand** (the user, at a terminal or in the TUI), **prompt** (the user's own prompt in a Claude Code session, relayed as focus), or **agent** (an agent acting on its own).
+
+Origin decides two things. Only **hand** makes a timer **held**. **hand** and **prompt** are presence; **agent** is not. Origin never decides recovery: any change that finds a stale timer recovers it first, whoever caused the change.
+
+A command the user types into an agent's shell counts as **agent**. Origin is about who issued the change, as far as Punchcard can tell. It is not about whose fingers were on the keys.
 
 ### lastSeen
 
