@@ -13,6 +13,7 @@ Three layouts of the same app, switched live:
 
 | | Variant | Shape |
 |---|---|---|
+| A2 | Panes, refined | A after round one: B's strip as the header, wider list with one sync marker per row, worklog pane sized to content, nothing resizes on selection (the default) |
 | A | Panes | lazygit: ticket list on the left; selected ticket's entries over the worklog queue on the right; stop/add take over the right column |
 | B | Ledger | one dense table under a reverse-video "on the clock" strip; the selected row expands inline; stop/add are centred modals |
 | C | Clock | the running entry in block digits owns the top; compact list plus "owed to Jira" tray below; stop/add are a drawer and the clock collapses to a line |

@@ -38,7 +38,7 @@ const (
 
 var scenarioNames = []string{"normal day", "recovered entry", "auth failed (401)", "not configured", "first run, empty"}
 
-var variants = []struct{ key, name string }{{"A", "Panes"}, {"B", "Ledger"}, {"C", "Clock"}}
+var variants = []struct{ key, name string }{{"A", "Panes"}, {"A2", "Panes, refined"}, {"B", "Ledger"}, {"C", "Clock"}}
 
 type colourMode struct {
 	name    string
@@ -618,6 +618,8 @@ func (m model) View() tea.View {
 	switch variants[m.variant].key {
 	case "A":
 		body = m.viewA(dw, dh)
+	case "A2":
+		body = m.viewA2(dw, dh)
 	case "B":
 		body = m.viewB(dw, dh)
 	default:
@@ -668,7 +670,7 @@ func overlay(base, top string, w, h int) string {
 }
 
 func main() {
-	v := flag.String("variant", "A", "A, B or C")
+	v := flag.String("variant", "A2", "A, A2, B or C")
 	smoke := flag.Bool("smoke", false, "drive every variant and scenario through a key sequence headlessly")
 	dump := flag.String("dump", "", "print frames at WxH (e.g. 80x24) without colour and exit; for checking layout")
 	flag.Parse()

@@ -161,7 +161,7 @@ func (m model) stopForm(w int) string {
 		return l + "\n" + box.Width(min(w, 44)).Render(in)
 	}
 	lines := []string{
-		sBold.Render(t.key) + " " + sDim.Render(ansi.Truncate(t.summary, max(0, w-len(t.key)-1), "…")),
+		sBold.Render(t.key) + " " + sDim.Render(t.summary),
 		sDim.Render(fmt.Sprintf("measured %s across %d segment(s)", clock(measured), len(c.segs))),
 	}
 	if c.recovered {
