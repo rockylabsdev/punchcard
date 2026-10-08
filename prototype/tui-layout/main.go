@@ -38,7 +38,7 @@ const (
 
 var scenarioNames = []string{"normal day", "recovered entry", "auth failed (401)", "not configured", "first run, empty"}
 
-var variants = []struct{ key, name string }{{"A", "Panes"}, {"A2", "Panes, refined"}, {"B", "Ledger"}, {"C", "Clock"}}
+var variants = []struct{ key, name string }{{"A", "Panes"}, {"A2", "Panes, refined"}, {"A3", "Panes, quiet"}, {"B", "Ledger"}, {"C", "Clock"}}
 
 type colourMode struct {
 	name    string
@@ -78,19 +78,20 @@ type model struct {
 	mode mode
 
 	// stop dialog
-	stopT   *ticket
-	durIn   textinput.Model
-	comIn   textinput.Model
-	stopFoc int
-	stopErr string
-	addIn   textinput.Model
-	addSel  int // -1 = typing, >=0 = recents row
-	addErr  string
-	toast   string
-	toastAt time.Time
-	syncing bool
-	extStep int
-	paneFoc int // variant A: which pane has focus
+	stopT       *ticket
+	durIn       textinput.Model
+	comIn       textinput.Model
+	stopFoc     int
+	stopErr     string
+	addIn       textinput.Model
+	addSel      int // -1 = typing, >=0 = recents row
+	addErr      string
+	toast       string
+	toastAt     time.Time
+	syncing     bool
+	extStep     int
+	paneFoc     int // variant A: which pane has focus
+	bannerPlace int // variant A3: F7 cycles top / bottom / border
 }
 
 type tickMsg time.Time
@@ -206,6 +207,9 @@ func (m model) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "f6", "ctrl+f":
 		m.frame = !m.frame
+		return m, nil
+	case "f7", "ctrl+y":
+		m.bannerPlace = (m.bannerPlace + 1) % len(bannerPlaces)
 		return m, nil
 	case "f1", "ctrl+b":
 		m.hideBar = !m.hideBar
@@ -620,6 +624,8 @@ func (m model) View() tea.View {
 		body = m.viewA(dw, dh)
 	case "A2":
 		body = m.viewA2(dw, dh)
+	case "A3":
+		body = m.viewA3(dw, dh)
 	case "B":
 		body = m.viewB(dw, dh)
 	default:
@@ -655,8 +661,8 @@ func (m model) protoBar() string {
 	if m.frame {
 		frame = "80×24"
 	}
-	txt := fmt.Sprintf(" PROTOTYPE  F2 variant %s·%s  F3 colour %s  F4 scenario: %s  F5 change elsewhere  F6 frame %s  F1 hide ",
-		variants[m.variant].key, variants[m.variant].name, colourModes[m.colour].name, scenarioNames[m.scenario], frame)
+	txt := fmt.Sprintf(" PROTOTYPE  F2 variant %s·%s  F3 colour %s  F4 scenario: %s  F5 change elsewhere  F6 frame %s  F7 banner %s  F1 hide ",
+		variants[m.variant].key, variants[m.variant].name, colourModes[m.colour].name, scenarioNames[m.scenario], frame, bannerPlaces[m.bannerPlace])
 	return st.Width(m.w).Render(ansi.Truncate(txt, m.w, "…"))
 }
 
@@ -670,7 +676,7 @@ func overlay(base, top string, w, h int) string {
 }
 
 func main() {
-	v := flag.String("variant", "A2", "A, A2, B or C")
+	v := flag.String("variant", "A3", "A, A2, A3, B or C")
 	smoke := flag.Bool("smoke", false, "drive every variant and scenario through a key sequence headlessly")
 	dump := flag.String("dump", "", "print frames at WxH (e.g. 80x24) without colour and exit; for checking layout")
 	flag.Parse()
@@ -701,6 +707,7 @@ func dumpFrames(size string) {
 		for _, sc := range []int{scNormal, scRecovered, scAuthFailed, scEmpty} {
 			m := newModel(vi)
 			m.w, m.h, m.hideBar, m.colour = w, h, true, 3
+			fmt.Sscanf(os.Getenv("PC_BANNER"), "%d", &m.bannerPlace)
 			m.scenario, m.st = sc, seed(m.now, sc)
 			show := func(what string, m model) {
 				fmt.Printf("===== %s · %s · %s\n", variants[vi].key, scenarioNames[sc], what)
