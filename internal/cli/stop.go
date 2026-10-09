@@ -128,7 +128,8 @@ func (a *app) stop(s core.Stop, f stopFlags) {
 			a.code = a.failure("stop", err)
 			return
 		}
-		wl := findEntry(res.World.State, s.Key, s.EntryID).Worklog
+		e, _ := res.World.State.Entry(s.Key, s.EntryID)
+		wl := e.Worklog
 		d := StopData{Key: s.Key, EntryID: s.EntryID, Worklog: *wl}
 		a.done("stop", res, d, a.eventLines(res)+stoppedLine(s.Key, *wl))
 		return

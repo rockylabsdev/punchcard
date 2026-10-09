@@ -130,20 +130,11 @@ func (a *applier) resume(c Resume) error {
 	if _, e := a.running(); e != nil {
 		return nil
 	}
-	var latest *TimeEntry
-	for i := range a.w.State.TrackedTickets {
-		t := &a.w.State.TrackedTickets[i]
-		for j := range t.Entries {
-			e := &t.Entries[j]
-			if e.Paused() && (latest == nil || lastEnd(*e).After(lastEnd(*latest).Time)) {
-				latest = e
-			}
-		}
-	}
-	if latest == nil {
+	i, j := lastPaused(a.w.State)
+	if i < 0 {
 		return fmt.Errorf("%w: nothing is paused", ErrNoTimer)
 	}
-	a.open(latest, c.Origin)
+	a.open(&a.w.State.TrackedTickets[i].Entries[j], c.Origin)
 	return nil
 }
 

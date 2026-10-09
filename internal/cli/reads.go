@@ -130,11 +130,11 @@ func (o output) shortLine(d StatusData) string {
 	}
 	if tm != nil {
 		switch tm.State {
-		case "running":
+		case core.TimerRunning:
 			parts = append(parts, fmt.Sprintf("%s %s %s", o.paint(green, "▶"), tm.Key, short(secs(tm.ElapsedSeconds))))
-		case "paused":
+		case core.TimerPaused:
 			parts = append(parts, fmt.Sprintf("%s %s %s", o.paint(yellow, "⏸"), tm.Key, short(secs(tm.ElapsedSeconds))))
-		case "stale":
+		case core.TimerStale:
 			parts = append(parts, fmt.Sprintf("%s %s stale", o.paint(red, "!"), tm.Key))
 		}
 	}
@@ -174,15 +174,15 @@ func (o output) listText(d ListData) string {
 	for _, t := range d.Tickets {
 		marker, state, elapsed := " ", "-", ""
 		switch t.State {
-		case "running":
+		case core.TimerRunning:
 			marker = o.paint(green, "▶")
-		case "paused":
+		case core.TimerPaused:
 			marker = o.paint(yellow, "⏸")
-		case "stale":
+		case core.TimerStale:
 			marker = o.paint(red, "!")
 		}
-		if t.State != "" {
-			state, elapsed = t.State, clock(secs(t.ElapsedSeconds))
+		if t.State != core.TimerIdle {
+			state, elapsed = string(t.State), clock(secs(t.ElapsedSeconds))
 		}
 		unsent := ""
 		if t.Unsynced > 0 {

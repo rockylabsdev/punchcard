@@ -126,7 +126,7 @@ func (a *app) change(name string, c core.Command) {
 	case d.Running != nil:
 		human += a.out.timerLine(*d.Running, loc, res.Now)
 	case name == "pause":
-		if tm, ok := lastPaused(res.World, res); ok {
+		if tm, ok := lastPaused(res); ok {
 			human += a.out.timerLine(tm, loc, res.Now)
 		}
 	}
@@ -142,22 +142,12 @@ func (a *app) eventLines(res store.Result) string {
 }
 
 // lastPaused is the most recently paused timer.
-func lastPaused(w core.World, res store.Result) (Timer, bool) {
-	var best Timer
-	var bestEnd core.Timestamp
-	found := false
-	for _, t := range w.State.TrackedTickets {
-		for _, e := range t.Entries {
-			if !e.Paused() {
-				continue
-			}
-			end := e.Segments[len(e.Segments)-1].EndedAt
-			if !found || end.After(bestEnd.Time) {
-				best, bestEnd, found = timerOf(w, t, e, res.Now), end, true
-			}
-		}
+func lastPaused(res store.Result) (Timer, bool) {
+	t, e, ok := core.LastPaused(res.World.State)
+	if !ok {
+		return Timer{}, false
 	}
-	return best, found
+	return timerOf(res.World, t, e, res.Now), true
 }
 
 // pick asks for a ticket on a TTY, recents (the ls order) first. With no

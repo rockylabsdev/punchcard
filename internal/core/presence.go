@@ -32,10 +32,12 @@ func Stale(w World, now time.Time) bool {
 	if !ok {
 		return false
 	}
-	return now.Sub(effectiveLastSeen(w.Heartbeat, e).Time) > StaleAfter
+	return now.Sub(EffectiveLastSeen(w.Heartbeat, e).Time) > StaleAfter
 }
 
-func effectiveLastSeen(hb Heartbeat, e TimeEntry) Timestamp {
+// EffectiveLastSeen is the presence a running entry e is judged by:
+// lastSeen, or with none ever recorded, e's open segment's start.
+func EffectiveLastSeen(hb Heartbeat, e TimeEntry) Timestamp {
 	if hb.LastSeen.IsZero() {
 		return e.Segments[len(e.Segments)-1].StartedAt
 	}
@@ -59,7 +61,7 @@ func (a *applier) recover() {
 	}
 	t, e := a.running()
 	open := &e.Segments[len(e.Segments)-1]
-	end := effectiveLastSeen(a.w.Heartbeat, *e)
+	end := EffectiveLastSeen(a.w.Heartbeat, *e)
 	if end.Before(open.StartedAt.Time) {
 		end = open.StartedAt
 	}

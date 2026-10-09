@@ -121,7 +121,7 @@ func diff(old, cur core.State) []change {
 			}
 		}
 		for _, e := range t.Entries {
-			if oe, ok := entry(was, e.ID); ok && e.Stopped() && !oe.Stopped() {
+			if oe, ok := was.Entry(e.ID); ok && e.Stopped() && !oe.Stopped() {
 				rest = append(rest, change{t.Key, "stopped", e.Origin})
 			}
 		}
@@ -129,7 +129,7 @@ func diff(old, cur core.State) []change {
 		if !ok {
 			continue
 		}
-		oe, had := entry(was, e.ID)
+		oe, had := was.Entry(e.ID)
 		had = had && !oe.Stopped()
 		switch {
 		case e.Running() && !had:
@@ -141,14 +141,4 @@ func diff(old, cur core.State) []change {
 		}
 	}
 	return append(starts, rest...)
-}
-
-// entry finds an entry of t by id.
-func entry(t core.TrackedTicket, id string) (core.TimeEntry, bool) {
-	for _, e := range t.Entries {
-		if e.ID == id {
-			return e, true
-		}
-	}
-	return core.TimeEntry{}, false
 }
