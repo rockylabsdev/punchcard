@@ -13,7 +13,7 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
-	"golang.org/x/term"
+	"github.com/charmbracelet/x/term"
 )
 
 // Wordmark is PUNCHCARD in block letters, shown above the wizard.
@@ -49,7 +49,7 @@ type Terminal struct {
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
 	if f, ok := out.(*os.File); ok {
-		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w >= 20 {
+		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
 			width = min(w, 80)
 		}
 	}
