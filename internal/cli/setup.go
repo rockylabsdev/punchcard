@@ -1,15 +1,11 @@
 package cli
 
 import (
-	"errors"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/setup"
-	"github.com/j-dsmith/punchcard/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -28,22 +24,6 @@ func (a *app) setupCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-// firstRun: no config file and no state file. The state file's
-// existence is the "already introduced" marker; with no config
-// directory at all there is nowhere to set up.
-func firstRun(e Env) bool {
-	p, err := config.Path(e.Getenv)
-	if err != nil || e.Store.Err() != nil {
-		return false
-	}
-	return missing(p) && missing(filepath.Join(e.Store.Dir(), store.StateFile))
-}
-
-func missing(p string) bool {
-	_, err := os.Lstat(p)
-	return errors.Is(err, fs.ErrNotExist)
 }
 
 // runWizard is the real setup: Huh on the terminal, the Keychain

@@ -47,6 +47,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.markSynced(c)
 	case MarkFailed:
 		err = a.markFailed(c)
+	case MarkLocal:
+		err = a.markLocal(c)
 	case RecordAuthFailure:
 		a.w.State.AuthFailedAt = a.now
 	case ClearAuthFailure:

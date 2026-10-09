@@ -127,6 +127,16 @@ type MarkFailed struct {
 	Status int
 }
 
+// MarkLocal records that a pending or failed worklog is logged with no
+// tracker: the user removed the tracker and chose not to owe it. It
+// clears the failure and keeps the time and comment. It refuses a synced
+// worklog (ErrAlreadySynced) and one already local (ErrLocal). Only the
+// setup wizard's removal offer applies it; it has no CLI surface.
+type MarkLocal struct {
+	Key     string
+	EntryID string
+}
+
 // RecordAuthFailure records a Jira 401 at now.
 type RecordAuthFailure struct{}
 
@@ -154,6 +164,7 @@ func (Remove) command()            {}
 func (Touch) command()             {}
 func (MarkSynced) command()        {}
 func (MarkFailed) command()        {}
+func (MarkLocal) command()         {}
 func (RecordAuthFailure) command() {}
 func (ClearAuthFailure) command()  {}
 func (Verify) command()            {}

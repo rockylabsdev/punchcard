@@ -233,12 +233,6 @@ func (a *app) root() *cobra.Command {
 			// Without a data directory the TUI has nothing to show: status
 			// reports why (exit 1).
 			if a.env.TTY && a.env.TUI != nil && !a.out.json && a.env.Store.Err() == nil {
-				if firstRun(a.env) {
-					a.env.Setup(a.env) // finished or cancelled, the TUI opens next
-					if err := a.env.Store.Introduce(); err != nil {
-						a.out.notices([]string{"could not write state.json: " + err.Error()})
-					}
-				}
 				a.code = a.env.TUI(a.env)
 				return nil
 			}
