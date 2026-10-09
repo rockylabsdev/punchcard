@@ -35,3 +35,12 @@ jobs:
       # The slice 1 hand check: the envelope prints on both runners.
       - name: punchcard version --json
         run: go run ./cmd/punchcard version --json
+
+      # The Claude Code plugin's pure logic (band text, branch key, the
+      # stop --yes gate): Node's built-in test runner, no npm dependencies.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: plugin logic (node --test)
+        run: node --test plugin/test/logic.test.mjs
