@@ -41,7 +41,7 @@ func (t *Terminal) wordmark() string {
 	for _, r := range Wordmark {
 		switch r {
 		case '#':
-			b.WriteString(mark.Render("●"))
+			b.WriteString(mark.Render("⬤"))
 		case '.':
 			b.WriteString(tGutter.Render("·"))
 		default:
