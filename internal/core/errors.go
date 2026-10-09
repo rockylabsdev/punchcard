@@ -20,6 +20,11 @@ var (
 	ErrTooShort = errors.New("under one minute")
 	// ErrNotTracked: the key is not on the list.
 	ErrNotTracked = errors.New("ticket not tracked")
+	// ErrUnlogged: removing the ticket would throw away time not yet in Jira.
+	ErrUnlogged = errors.New("ticket has unlogged time")
+	// ErrAlreadySynced: the idempotency guard. A synced worklog is never
+	// POSTed or marked again.
+	ErrAlreadySynced = errors.New("worklog already synced")
 )
 
 // AmbiguousError: stop with no key found several paused entries and

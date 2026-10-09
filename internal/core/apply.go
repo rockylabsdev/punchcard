@@ -5,70 +5,6 @@ import (
 	"time"
 )
 
-// Command is one requested transition. The concrete types below are the
-// whole set.
-type Command interface{ command() }
-
-// Start starts the timer on Key. If Key is not tracked it is added with
-// Summary and Unverified. If Key has an open (unstopped) entry it is
-// resumed; otherwise a new entry with NewEntryID is created.
-type Start struct {
-	Key        string
-	Summary    string
-	Unverified bool
-	Origin     Origin
-	NewEntryID string
-}
-
-// Pause closes the running segment. The entry stays open.
-type Pause struct {
-	Origin Origin
-}
-
-// Resume with a Key is Start with that Key. With no Key it resumes the
-// most recently paused entry, and is a no-op while a timer runs.
-type Resume struct {
-	Key        string
-	Origin     Origin
-	NewEntryID string
-}
-
-// Stop ends an entry and produces its pending Worklog. With no Key it
-// targets the running entry, else the single paused one. Duration zero
-// means "use the measured elapsed"; either way it is truncated to the
-// minute and refused under one minute. Stop does not gate on origin: the
-// CLI owns needs_confirmation for agents.
-type Stop struct {
-	Key      string
-	Duration time.Duration
-	Comment  string
-	Origin   Origin
-}
-
-func (Start) command()  {}
-func (Pause) command()  {}
-func (Resume) command() {}
-func (Stop) command()   {}
-
-// EventKind names a side effect nobody asked for.
-type EventKind string
-
-const (
-	EventAdded  EventKind = "added"  // start added an untracked ticket
-	EventPaused EventKind = "paused" // another ticket's start paused this one
-	EventHeld   EventKind = "held"   // a start by hand held the running timer
-	// EventRecovered: a stale timer was capped; At is where it was capped.
-	EventRecovered EventKind = "recovered"
-)
-
-// Event is a side effect of a command, reported so nothing happens behind
-// the user's back. Fields beyond Kind and Key are set per kind.
-type Event struct {
-	Kind EventKind `json:"kind"`
-	Key  string    `json:"key"`
-	At   Timestamp `json:"at,omitzero"`
-}
-
 // Apply is the one transition: it takes the world as read fresh, a
 // command and the current time, and returns the next world and the side
 // effects. It never mutates w.
@@ -97,6 +33,22 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.resume(c)
 	case Stop:
 		origin, err = c.Origin, a.stop(c)
+	case Add:
+		origin, err = c.Origin, a.add(c)
+	case Remove:
+		origin, err = c.Origin, a.remove(c)
+	case Touch:
+		var vouched bool
+		vouched, err = a.touch(c)
+		if vouched {
+			origin = c.Origin
+		}
+	case MarkSynced:
+		err = a.markSynced(c)
+	case MarkFailed:
+		err = a.markFailed(c)
+	case RecordAuthFailure:
+		a.w.State.AuthFailedAt = a.now
 	default:
 		err = fmt.Errorf("%w: unknown command %T", ErrUsage, cmd)
 	}
@@ -133,27 +85,30 @@ func (a *applier) start(c Start) error {
 			return nil
 		}
 	}
-	t := a.ticket(c.Key)
+	_, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
+	return err
+}
+
+// switchTo closes any running segment (announced) and opens one on n's
+// key, tracking n first if needed. It returns the entry it opened.
+func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*TimeEntry, error) {
+	if openEntry(a.ticket(n.Key)) == nil && newEntryID == "" {
+		return nil, fmt.Errorf("%w: a new entry needs an id", ErrUsage)
+	}
+	if err := a.pauseRunning(origin, true); err != nil {
+		return nil, err
+	}
+	if a.track(n) {
+		a.emit(EventAdded, n.Key)
+	}
+	t := a.ticket(n.Key)
 	e := openEntry(t)
-	if e == nil && c.NewEntryID == "" {
-		return fmt.Errorf("%w: a new entry needs an id", ErrUsage)
-	}
-	if t == nil {
-		a.w.State.TrackedTickets = append(a.w.State.TrackedTickets, TrackedTicket{
-			Key: c.Key, Summary: c.Summary, Unverified: c.Unverified, AddedAt: a.now, Entries: []TimeEntry{},
-		})
-		a.emit(EventAdded, c.Key)
-	}
-	if err := a.pauseRunning(c.Origin, true); err != nil {
-		return err
-	}
-	t = a.ticket(c.Key)
-	if e = openEntry(t); e == nil {
-		t.Entries = append(t.Entries, TimeEntry{ID: c.NewEntryID})
+	if e == nil {
+		t.Entries = append(t.Entries, TimeEntry{ID: newEntryID})
 		e = &t.Entries[len(t.Entries)-1]
 	}
-	a.open(e, c.Origin)
-	return nil
+	a.open(e, origin)
+	return e, nil
 }
 
 func (a *applier) pause(c Pause) error {
