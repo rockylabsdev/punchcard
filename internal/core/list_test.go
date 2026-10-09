@@ -101,7 +101,7 @@ func TestApplyTouch(t *testing.T) {
 			w:    unheldA(),
 			cmd:  core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
 			want: state(
-				ticket("AA-1", entry("EA", agent, seg("09:00", "09:30"))),
+				ticket("AA-1", entry("EA", prompt, seg("09:00", "09:30"))),
 				ticket("BB-2", entry("EB", prompt, seg("09:30", "")))),
 			events:   []core.Event{{Kind: core.EventPaused, Key: "AA-1"}, {Kind: core.EventStarted, Key: "BB-2"}},
 			lastSeen: at("09:30"),

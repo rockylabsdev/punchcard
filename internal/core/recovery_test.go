@@ -89,7 +89,7 @@ func TestApplyRecovery(t *testing.T) {
 			cmd:  core.Start{Key: "BB-2", Origin: hand, NewEntryID: "EB"},
 			now:  "11:59",
 			want: state(
-				ticket("AA-1", entry("EA", agent, seg("09:00", "11:59"))),
+				ticket("AA-1", withOrigin(entry("EA", agent, seg("09:00", "11:59")), hand)),
 				ticket("BB-2", entry("EB", hand, seg("11:59", "")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1"}},
 		},
