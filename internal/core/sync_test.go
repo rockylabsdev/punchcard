@@ -94,6 +94,28 @@ func TestApplySyncOutcomes(t *testing.T) {
 			now:  "11:00", err: core.ErrLocal,
 		},
 		{
+			name: "mark local makes a pending worklog logged with no tracker",
+			w:    world("", stoppedAs(with(core.WorklogPending, nil))),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
+			now:  "10:00",
+			want: state(stoppedAs(local)),
+		},
+		{
+			name: "mark local clears a failure but keeps the time and comment",
+			w: world("", stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt, w.Comment = "Service Unavailable", 503, at("09:45"), "pairing"
+			}))),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
+			now:  "10:00",
+			want: state(stoppedAs(with(core.WorklogLocal, func(w *core.Worklog) { w.Comment = "pairing" }))),
+		},
+		{
+			name: "never mark a synced worklog local: the tracker has it",
+			w:    world("", stoppedAs(synced)),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
+			now:  "11:00", err: core.ErrAlreadySynced,
+		},
+		{
 			name: "an entry that is not stopped has no worklog to mark",
 			w:    world("", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "1"},

@@ -101,6 +101,18 @@ func TestTicketPaneIdleTicket(t *testing.T) {
 	wantLines(t, paneText(t, hs.frame(), 120), "· NOT RUNNING", "space starts it", "nothing yet")
 }
 
+// A local worklog has no moment a tracker took it: it is logged on its
+// own day, the day it started.
+func TestALocalWorklogIsLoggedToday(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.setup("07:00:00", add("payroll"), start("payroll", "A"))
+	hs.setup("07:30:00", core.Stop{Origin: core.OriginHand, Local: true})
+	hs.open("09:00:00", 120, 32)
+
+	wantLines(t, paneText(t, hs.frame(), 120), "30m ✓ logged")
+}
+
 func TestWorklogsTodayUseTheOutcomeWords(t *testing.T) {
 	hs := newHarness(t)
 	hs.setup("07:00:00", add("PUN-1"), start("PUN-1", "A"))

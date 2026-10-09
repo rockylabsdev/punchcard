@@ -25,6 +25,8 @@ func (m Model) sync() (Model, tea.Cmd) {
 	}
 	owed, _ := core.Owed(m.shown().State)
 	switch {
+	case m.noTracker:
+		return m.notify("no tracker · nothing is sent · S to set one up"), nil
 	case owed == 0:
 		return m.notify("nothing to send: Jira has everything"), nil
 	case m.sender == nil:

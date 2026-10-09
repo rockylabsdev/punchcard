@@ -22,17 +22,11 @@ type Options struct {
 	Store Store
 	Now   func() time.Time // read once, to seed the clock before the first tick
 	NewID func() string    // entry ids for starts
-	// Sender stops an entry and sends its worklog (worklog.Sender in the
-	// binary). Nil: a stop is recorded and its worklog left pending.
-	Sender Sender
-	// Tracker opens the client for summary lookups (add, and confirming
-	// an unverified ticket on start). Nil: the tracker is not configured.
-	Tracker func() (tracker.Client, error)
-	// NoTracker: none is configured. Nothing is looked up and a ticket
-	// added is never unverified.
-	NoTracker bool
-	// Grammar is the key grammar in effect (the zero value: the slug).
-	Grammar tracker.Grammar
+	// Tracking is the tracker in effect when the TUI opens.
+	Tracking
+	// Retrack reads the tracker in effect again, after S: setup may
+	// have chosen another. Nil: it never changes while the TUI is open.
+	Retrack func() Tracking
 	// Setup builds the `punchcard setup` command that S suspends into
 	// (tea.ExecProcess hands it the terminal). Nil: S says to run it
 	// from the shell.
@@ -40,6 +34,23 @@ type Options struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+}
+
+// Tracking is the tracker in effect and everything that follows from
+// it. With none, a stop is local, nothing is looked up and the Jira
+// conditions never show.
+type Tracking struct {
+	// Sender stops an entry and sends its worklog (worklog.Sender in the
+	// binary). Nil: a stop is recorded and its worklog left pending.
+	Sender Sender
+	// Tracker opens the client for summary lookups (add, and confirming
+	// an unverified ticket on start). Nil: the tracker is not configured.
+	Tracker func() (tracker.Client, error)
+	// NoTracker: none is configured. Nothing is looked up, a ticket
+	// added is never unverified, and nothing is said about Jira.
+	NoTracker bool
+	// Grammar is the key grammar in effect (the zero value: the slug).
+	Grammar tracker.Grammar
 }
 
 // Sender is the worklog seam, the only code that POSTs. Stop applies the

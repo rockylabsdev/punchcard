@@ -3,6 +3,7 @@ package setup
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ const esc = "<esc>"
 //
 //	? Title [note…] = answer     a field ("" answer keeps the prefilled value)
 //	? Title (Y/n) = y            a question ("" takes the default)
+//	? Title {a, b} = b           a choice ("" keeps the prefilled option)
 //	! message                    a validation error (the next answer retries)
 //	  line                       something the wizard said
 type scriptUI struct {
@@ -99,6 +101,33 @@ func (u *scriptUI) Confirm(q Question) (bool, error) {
 	}
 	fmt.Fprintf(&u.log, " = %s\n", a)
 	return a == "y", nil
+}
+
+func (u *scriptUI) Choose(c Choice) (string, error) {
+	a, _ := u.next(c.Title)
+	vals := make([]string, len(c.Options))
+	for i, o := range c.Options {
+		vals[i] = o.Value
+	}
+	fmt.Fprintf(&u.log, "? %s {%s}", c.Title, strings.Join(vals, ", "))
+	for _, n := range c.Note {
+		fmt.Fprintf(&u.log, " [%s]", n)
+	}
+	switch a {
+	case esc:
+		u.log.WriteString(" = <esc>\n")
+		return "", ErrAborted
+	case "":
+		a = c.Value
+	}
+	fmt.Fprintf(&u.log, " = %s\n", a)
+	for _, v := range vals {
+		if v == a {
+			return a, nil
+		}
+	}
+	u.t.Errorf("answer %q is not one of %v", a, vals)
+	return "", ErrAborted
 }
 
 func (u *scriptUI) Say(lines ...string) {
@@ -321,6 +350,20 @@ func (r *rig) tokenFile() (string, bool) {
 		r.t.Fatal(err)
 	}
 	return strings.TrimSpace(string(b)), true
+}
+
+// file is config.json as written, whatever Load would make of it.
+func (r *rig) file() config.Config {
+	r.t.Helper()
+	b, err := os.ReadFile(r.configPath())
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	var c config.Config
+	if err := json.Unmarshal(b, &c); err != nil {
+		r.t.Fatal(err)
+	}
+	return c
 }
 
 func (r *rig) settings() (string, bool) {

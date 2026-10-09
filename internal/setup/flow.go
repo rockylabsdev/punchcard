@@ -18,7 +18,7 @@ import (
 const TokenPage = "https://id.atlassian.com/manage-profile/security/api-tokens"
 
 // Run is the whole wizard; it returns the exit code. Esc or ctrl+c at
-// any credentials step writes nothing and says so.
+// the tracker step or any credentials step writes nothing and says so.
 func Run(d Deps) int {
 	if d.Now == nil {
 		d.Now = time.Now
@@ -29,7 +29,7 @@ func Run(d Deps) int {
 		}
 	}
 	w := wizard{Deps: d}
-	saved, err := w.credentials()
+	saved, err := w.tracker()
 	switch {
 	case errors.Is(err, ErrAborted):
 		w.UI.Say("Nothing saved")
@@ -54,11 +54,11 @@ func Run(d Deps) int {
 	return exitcode.OK
 }
 
-// stopped: esc in the plugin or ask-rule step. Credentials already
-// saved stay saved.
-func (w wizard) stopped(saved bool) int {
-	if saved {
-		w.UI.Say("Stopped. Your Jira credentials are saved.")
+// stopped: esc in the plugin or ask-rule step. What the tracker step
+// saved (saved names it) stays saved.
+func (w wizard) stopped(saved string) int {
+	if saved != "" {
+		w.UI.Say("Stopped. " + saved)
 	} else {
 		w.UI.Say("Stopped. Nothing changed.")
 	}
@@ -105,13 +105,126 @@ func (w wizard) where(s config.Secret) string {
 	return p
 }
 
-// credentials is the re-run fork, then site → email → token → test →
-// save. saved reports whether anything was written.
-func (w wizard) credentials() (saved bool, err error) {
+// The saved strings name what the tracker step wrote, for stopped.
+const (
+	savedJira = "Your Jira credentials are saved."
+	savedNone = "Your choice of no tracker is saved."
+)
+
+// tracker is the first step: none or Jira, prefilled from config, then
+// that choice's own steps. saved names what was written, if anything.
+func (w wizard) tracker() (saved string, err error) {
+	was, err := config.Chosen(w.Getenv)
+	switch {
+	case errors.Is(err, config.ErrNewerSchema):
+		return "", err
+	case err != nil:
+		was = config.TrackerNone // broken: a first setup
+	}
+	pick, err := w.UI.Choose(Choice{
+		Title: "Tracker",
+		Options: []Option{
+			{Label: "None: time stays on this machine", Value: string(config.TrackerNone)},
+			{Label: "Jira: stopped time becomes Jira worklogs", Value: string(config.TrackerJira)},
+		},
+		Value: string(was),
+	})
+	if err != nil {
+		return "", err
+	}
+	if config.Tracker(pick) == config.TrackerJira {
+		return w.credentials(was == config.TrackerJira)
+	}
+	return w.none(was)
+}
+
+// none writes tracker none. Leaving Jira first offers to mark what is
+// still owed local. A site and email already saved stay in the file
+// (only the tracker field says none) so that choosing Jira again finds
+// them and the Keychain token stored under that email; the Keychain is
+// never touched here.
+func (w wizard) none(was config.Tracker) (string, error) {
+	if was == config.TrackerJira {
+		if err := w.offerLocal(); err != nil {
+			return "", err
+		}
+	}
+	c := config.Config{Tracker: config.TrackerNone}
+	if old, err := config.Load(w.Getenv); err == nil {
+		c.SiteURL, c.Email = old.SiteURL, old.Email
+	}
+	if err := config.Save(w.Getenv, c); err != nil {
+		return "", err
+	}
+	p, _ := config.Path(w.Getenv) // Save succeeded, so the path exists
+	w.UI.Say("Saved " + p + ": no tracker, so stopped time is logged here")
+	return savedNone, nil
+}
+
+// offerLocal is the one way a pending or failed worklog becomes local:
+// with Jira removed nothing would ever send it, so the user may say it
+// is logged here. Declined, it stays owed.
+func (w wizard) offerLocal() error {
+	if w.Store == nil {
+		return nil
+	}
+	wd, _, err := w.Store.Read()
+	if err != nil {
+		w.UI.Say("⚠ Could not read your worklogs: " + err.Error())
+		return nil
+	}
+	n, total := core.Owed(wd.State)
+	if n == 0 {
+		return nil
+	}
+	ok, err := w.UI.Confirm(Question{
+		Title:   fmt.Sprintf("Mark %s (%s) as local?", worklogs(n), hm(total)),
+		Note:    []string{"They were never sent to Jira. Local means logged here, no longer owed."},
+		Default: true,
+	})
+	if err != nil || !ok {
+		return err
+	}
+	marked := 0
+	for _, u := range core.Unsent(wd.State) {
+		if _, err := w.Store.Apply(core.MarkLocal{Key: u.Key, EntryID: u.EntryID}); err != nil {
+			w.UI.Say("⚠ " + u.Key + " stays owed: " + err.Error())
+			continue
+		}
+		marked++
+	}
+	w.UI.Say(fmt.Sprintf("✓ Marked %s local", worklogs(marked)))
+	return nil
+}
+
+func worklogs(n int) string {
+	if n == 1 {
+		return "1 worklog"
+	}
+	return fmt.Sprintf("%d worklogs", n)
+}
+
+// hm is an amount of time: 45m, 2h, 2h 15m.
+func hm(d time.Duration) string {
+	h, m := int(d.Hours()), int(d.Minutes())%60
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%dm", m)
+	case m == 0:
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dh %dm", h, m)
+}
+
+// credentials is the re-run fork (when Jira was already the tracker),
+// then site → email → token → test → save. Coming back from none, a
+// kept site and email are prefilled and the stored token offered, and
+// the connection is always tested.
+func (w wizard) credentials(wasJira bool) (saved string, err error) {
 	old, lerr := config.Load(w.Getenv)
 	switch {
 	case errors.Is(lerr, config.ErrNewerSchema):
-		return false, lerr
+		return "", lerr
 	case lerr != nil:
 		old = config.Config{} // missing or broken: a first setup
 	}
@@ -119,10 +232,18 @@ func (w wizard) credentials() (saved bool, err error) {
 	if kerr != nil {
 		w.UI.Say("⚠ " + kerr.Error())
 	}
-	if old.Email != "" {
+	if wasJira && old.Email != "" {
 		change, err := w.fork(old, stored)
-		if err != nil || !change {
-			return false, err
+		if err != nil {
+			return "", err
+		}
+		if !change {
+			// A config from before the choice existed gets the field.
+			if old.Tracker != config.TrackerJira {
+				old.Tracker = config.TrackerJira
+				return "", config.Save(w.Getenv, old)
+			}
+			return "", nil
 		}
 	}
 	envTok := w.Getenv("PUNCHCARD_TOKEN")
@@ -132,17 +253,17 @@ func (w wizard) credentials() (saved bool, err error) {
 		switch step {
 		case stepSite:
 			if err := w.askSite(&f); err != nil {
-				return false, err
+				return "", err
 			}
 			step = stepEmail
 		case stepEmail:
 			if err := w.askEmail(&f); err != nil {
-				return false, err
+				return "", err
 			}
 			step = stepToken
 		case stepToken:
 			if err := w.askToken(&f, stored, envTok); err != nil {
-				return false, err
+				return "", err
 			}
 			step = stepTest
 		case stepTest:
@@ -158,12 +279,15 @@ func (w wizard) credentials() (saved bool, err error) {
 			w.UI.Say("✓ Connected as " + name)
 			ok, err := w.UI.Confirm(Question{Title: "Save these credentials?", Default: true})
 			if err != nil {
-				return false, err
+				return "", err
 			}
 			if !ok {
-				return false, errNotSaved
+				return "", errNotSaved
 			}
-			return true, w.save(f, stored, envTok)
+			if err := w.save(f, stored, envTok); err != nil {
+				return "", err
+			}
+			return savedJira, nil
 		}
 	}
 }
@@ -369,8 +493,8 @@ func (w wizard) saveToken(email, token string) error {
 }
 
 // clearAuthFailure: tested credentials make a recorded 401 history. It
-// writes only when one is recorded, so setup never creates state.json
-// (the first-run marker).
+// writes only when one is recorded, so setup never creates an empty
+// state.json for nothing.
 func (w wizard) clearAuthFailure() {
 	if w.Store == nil {
 		return

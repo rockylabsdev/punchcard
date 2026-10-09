@@ -59,7 +59,7 @@ func pluginRig(t *testing.T) *rig {
 func TestPluginStep(t *testing.T) {
 	t.Run("install runs marketplace add then install, output in the gutter", func(t *testing.T) {
 		r := pluginRig(t)
-		r.run("n", "", "n")
+		r.run("", "n", "", "n")
 		r.has("? Install the Claude Code plugin? (Y/n)",
 			"$ claude plugin marketplace add j-dsmith/punchcard", "$ claude plugin install punchcard@punchcard -s user")
 		want := []string{"plugin list --json", "plugin marketplace add j-dsmith/punchcard", "plugin install punchcard@punchcard -s user"}
@@ -72,7 +72,7 @@ func TestPluginStep(t *testing.T) {
 	})
 	t.Run("declined runs nothing", func(t *testing.T) {
 		r := pluginRig(t)
-		r.run("n", "n", "n")
+		r.run("", "n", "n", "n")
 		if diff := cmp.Diff([]string{"plugin list --json"}, r.claude.calls); diff != "" {
 			t.Errorf("claude calls (-want +got):\n%s", diff)
 		}
@@ -80,21 +80,21 @@ func TestPluginStep(t *testing.T) {
 	t.Run("installed at this version is a tick, no question", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.list = `[{"id":"punchcard@punchcard","version":"0.1.0"}]`
-		r.run("n", "n")
+		r.run("", "n", "n")
 		r.has("✓ Claude Code plugin installed (0.1.0)")
 		r.lacks("? Install", "? Update")
 	})
 	t.Run("a version mismatch offers claude plugin update", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.list = `[{"id":"punchcard@punchcard","version":"0.0.9"}]`
-		r.run("n", "", "n")
+		r.run("", "n", "", "n")
 		r.has("? Update the Claude Code plugin? (Y/n) [The plugin is 0.0.9; this punchcard is v0.1.0] = y",
 			"$ claude plugin update punchcard@punchcard")
 	})
 	t.Run("a failure says so, skips install and goes on to the ask rule", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.fail = map[string]error{"plugin marketplace add j-dsmith/punchcard": errors.New("exit status 1")}
-		if code := r.run("y", "", "", "", "", "", "n"); code != 0 { // change creds, keep all, save, install, no ask rule
+		if code := r.run("", "y", "", "", "", "", "", "n"); code != 0 { // change creds, keep all, save, install, no ask rule
 			t.Fatalf("exit %d", code)
 		}
 		r.has("✗ claude plugin marketplace add j-dsmith/punchcard failed: exit status 1", "? Add the ask rule")
@@ -113,7 +113,7 @@ func TestPluginStep(t *testing.T) {
 	t.Run("no claude prints the commands", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
-		r.run("n", "n")
+		r.run("", "n", "n")
 		r.has("claude plugin marketplace add j-dsmith/punchcard", "claude plugin install punchcard@punchcard -s user")
 		if len(r.claude.calls) > 0 {
 			t.Errorf("claude called: %v", r.claude.calls)
@@ -121,7 +121,7 @@ func TestPluginStep(t *testing.T) {
 	})
 	t.Run("esc at the plugin question keeps saved credentials", func(t *testing.T) {
 		r := pluginRig(t)
-		r.run("y", "", "", "", "", esc) // change, keep all, save, esc
+		r.run("", "y", "", "", "", "", esc) // change, keep all, save, esc
 		r.has("Stopped. Your Jira credentials are saved.")
 		r.lacks("Nothing saved")
 		if r.kc.items[email] != tok {
@@ -135,14 +135,14 @@ func TestAskRuleStep(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
 		writeSettings(t, r, `{"permissions":{"ask":["Bash(punchcard stop *--yes*)"]}}`)
-		r.run("n")
+		r.run("", "n")
 		r.has("✓ Ask rule in place")
 	})
 	t.Run("unparseable is left alone and the line printed", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
 		writeSettings(t, r, `{"permissions": {`)
-		r.run("n")
+		r.run("", "n")
 		r.has("Could not parse", `  "Bash(punchcard stop *--yes*)"`)
 		if s, _ := r.settings(); s != `{"permissions": {` {
 			t.Errorf("file changed: %q", s)
@@ -151,7 +151,7 @@ func TestAskRuleStep(t *testing.T) {
 	t.Run("declined writes nothing", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
-		r.run("n", "n")
+		r.run("", "n", "n")
 		if _, ok := r.settings(); ok {
 			t.Errorf("settings.json written")
 		}
@@ -160,7 +160,7 @@ func TestAskRuleStep(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
 		writeSettings(t, r, `{"model":"opus"}`)
-		r.run("n", "")
+		r.run("", "n", "")
 		r.has("old file kept as " + SettingsPath(r.getenv) + ".bak")
 		if s, _ := r.settings(); !strings.Contains(s, `"model": "opus"`) || !strings.Contains(s, AskRule) {
 			t.Errorf("settings.json = %s", s)

@@ -144,3 +144,14 @@ func (a *applier) markFailed(c MarkFailed) error {
 	a.events = append(a.events, Event{Kind: EventSyncFailed, Key: c.Key, Message: c.Message})
 	return nil
 }
+
+func (a *applier) markLocal(c MarkLocal) error {
+	e, err := a.stoppedEntry(c.Key, c.EntryID)
+	if err != nil {
+		return err
+	}
+	wl := e.Worklog
+	wl.State = WorklogLocal
+	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
+	return nil
+}

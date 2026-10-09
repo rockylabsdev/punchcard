@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/j-dsmith/punchcard/internal/cli"
 )
 
 // fromConfig makes the harness resolve the tracker the way the binary
@@ -130,6 +131,32 @@ func TestWithJiraAKeyIsUpperCasedOnEntry(t *testing.T) {
 	}
 	if r := h.run("start", "payroll"); r.code != 64 {
 		t.Errorf("start payroll with Jira: exit %d, want 64", r.code)
+	}
+}
+
+// The TUI's S runs setup as a child process, which may choose another
+// tracker; Retracked reads config's choice again.
+func TestRetrackedReadsTheTrackerAgain(t *testing.T) {
+	h := newHarness(t)
+	h.fromConfig(`{"schemaVersion": 1, "tracker": "none"}`)
+	var before, after cli.Env
+	r := h.runTTY("", func(e *cli.Env) {
+		e.TUI = func(e cli.Env) int {
+			before = e
+			writeFile(t, filepath.Join(h.env["XDG_CONFIG_HOME"], "punchcard"), "config.json",
+				`{"schemaVersion": 1, "tracker": "jira", "siteUrl": "https://example.atlassian.net", "email": "user@example.com"}`)
+			after = e.Retracked()
+			return 0
+		}
+	})
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if before.HasTracker() || !after.HasTracker() {
+		t.Errorf("tracker before setup %t, after %t; want none, then Jira", before.HasTracker(), after.HasTracker())
+	}
+	if after.Grammar().Valid("payroll") {
+		t.Errorf("after setup chose Jira, the slug grammar is still in effect")
 	}
 }
 
