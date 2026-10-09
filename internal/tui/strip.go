@@ -9,17 +9,19 @@ import (
 	"github.com/j-dsmith/punchcard/internal/core"
 )
 
-// jiraStrip is [3] Jira: your standing with Jira at a glance. The title
-// says logged today · owed · last sync (or why nothing can sync); the
-// rows lead with the outcome, worst first: owed worklogs from any day,
-// sent ones only from today. At most maxRows rows, the last of them
-// "+N more" when they do not fit; the strip's height follows.
-func (m Model) jiraStrip(w, maxRows int) []string {
-	title := m.stripTitle()
+// dayLog is [3] Today: the day's log. The title says logged today, and
+// with a tracker owed · last sync (or why nothing can sync); the rows
+// lead with the outcome, worst first: with a tracker, owed worklogs
+// from any day, then the ones logged today. Without one, only those
+// logged today: nothing is owed to anyone. At most maxRows rows, the
+// last of them "+N more" when they do not fit; the pane's height
+// follows.
+func (m Model) dayLog(w, maxRows int) []string {
+	title := m.dayLogTitle()
 	items := m.stripItems()
 	var body []string
 	if len(items) == 0 {
-		body = []string{sFaint.Render(" nothing stopped today — x on a row stops it and sends it here")}
+		body = []string{sFaint.Render(" nothing logged today — x on a row stops it and logs it here")}
 	} else {
 		body = append(body, sDim.Render(" "+fit("STATUS", stripStatusW)+fit("TICKET", stripKeyW)+rfit("TIME", 7)+"   STOPPED"))
 		more := ""
@@ -58,15 +60,15 @@ func (s stripItem) rank() int {
 	return 2
 }
 
-// stripItems are the worklogs the strip shows, worst first and newest
-// first within each outcome.
+// stripItems are the worklogs the day's log shows, worst first and
+// newest first within each outcome.
 func (m Model) stripItems() []stripItem {
 	var items []stripItem
 	for _, t := range m.shown().State.TrackedTickets {
 		for _, e := range t.Entries {
 			wl := e.Worklog
-			if wl == nil || (wl.State == core.WorklogSynced && !sameDay(wl.SyncedAt.Time, m.now)) {
-				continue // owed from any day, sent only from today
+			if wl == nil || !m.inDayLog(*wl) {
+				continue
 			}
 			var stopped time.Time
 			if n := len(e.Segments); n > 0 {
@@ -88,7 +90,7 @@ func (m Model) stripRows(items []stripItem) []string {
 	out := make([]string, 0, len(items))
 	for _, it := range items {
 		key := it.key
-		if it.wl.State == core.WorklogSynced {
+		if it.wl.Logged() {
 			key = sDim.Render(key)
 		}
 		d := time.Duration(it.wl.TimeSpentSeconds) * time.Second
@@ -109,19 +111,40 @@ func (m Model) when(t time.Time) string {
 	return t.In(m.now.Location()).Format("Jan 2 15:04")
 }
 
-// stripTitle: logged today · owed · last sync, where the last part
-// says instead why nothing can sync.
-func (m Model) stripTitle() string {
+// inDayLog: logged today, or (with a tracker) owed from any day.
+func (m Model) inDayLog(wl core.Worklog) bool {
+	if wl.Logged() {
+		return loggedToday(wl, m.now)
+	}
+	return !m.noTracker
+}
+
+// loggedToday: wl was logged today. A synced worklog counts on the day
+// the tracker took it, as it always has; a local one has no such
+// moment, so it counts on its own day, the day it started (CONTEXT.md).
+func loggedToday(wl core.Worklog, now time.Time) bool {
+	switch wl.State {
+	case core.WorklogSynced:
+		return sameDay(wl.SyncedAt.Time, now)
+	case core.WorklogLocal:
+		return sameDay(wl.StartedAt.Time, now)
+	}
+	return false
+}
+
+// dayLogTitle: logged today, and with a tracker owed · last sync, where
+// the last part says instead why nothing can sync.
+func (m Model) dayLogTitle() string {
 	st := m.shown().State
 	var logged time.Duration
 	var last time.Time
 	for _, t := range st.TrackedTickets {
 		for _, e := range t.Entries {
 			wl := e.Worklog
-			if wl == nil || wl.State != core.WorklogSynced {
+			if wl == nil || !wl.Logged() {
 				continue
 			}
-			if sameDay(wl.SyncedAt.Time, m.now) {
+			if loggedToday(*wl, m.now) {
 				logged += time.Duration(wl.TimeSpentSeconds) * time.Second
 			}
 			if wl.SyncedAt.After(last) {
@@ -129,8 +152,12 @@ func (m Model) stripTitle() string {
 			}
 		}
 	}
+	title := "[3] Today " + sDim.Render("· logged "+hm(logged))
+	if m.noTracker {
+		return title
+	}
 	_, owed := core.Owed(st)
-	title := "[3] Jira " + sDim.Render("· logged today "+hm(logged)+" · owed "+hm(owed))
+	title += sDim.Render(" · owed " + hm(owed))
 	switch {
 	case !st.AuthFailedAt.IsZero():
 		title += sDim.Render(" · ") + sFail.Render("token rejected")

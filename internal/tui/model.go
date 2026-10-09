@@ -37,6 +37,7 @@ type Model struct {
 	jira      func() (tracker.Client, error) // nil: the tracker is not configured
 	noTracker bool                           // none configured: nothing to look up
 	grammar   tracker.Grammar
+	retrack   func() Tracking // nil: the tracker never changes
 
 	w, h  int
 	now   time.Time
@@ -136,9 +137,16 @@ type intent struct {
 // (which Init starts). o.Now is read once, to seed the clock until the
 // first tick.
 func New(o Options) Model {
-	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Tracker, noTracker: o.NoTracker, grammar: o.Grammar,
+	m := Model{store: o.Store, newID: o.NewID, retrack: o.Retrack,
 		now: o.Now(), inflight: true, ticker: tick,
 		setup: o.Setup, execProcess: tea.ExecProcess, pal: newPalette(true)}
+	return m.track(o.Tracking)
+}
+
+// track puts t in effect.
+func (m Model) track(t Tracking) Model {
+	m.sender, m.jira, m.noTracker, m.grammar = t.Sender, t.Tracker, t.NoTracker, t.Grammar
+	return m
 }
 
 // Init loads the store, asks whether Jira is set up, asks the terminal
@@ -190,6 +198,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case setupDoneMsg:
 		return m.setupDone(msg)
+	case trackingMsg:
+		m = m.track(Tracking(msg))
+		m.link = link{} // about the old tracker; the probe asks again
+		return m, m.probe()
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
 		return m, nil
@@ -439,7 +451,7 @@ func describe(err error) string {
 	case errors.Is(err, core.ErrNoTimer):
 		return "nothing is running"
 	case errors.Is(err, core.ErrUnlogged):
-		return "it has time not yet in Jira; nothing removed"
+		return "it has time not yet logged; nothing removed"
 	case errors.Is(err, store.ErrBusy):
 		return "another punchcard holds the state file; try again"
 	case errors.Is(err, store.ErrNewerSchema):

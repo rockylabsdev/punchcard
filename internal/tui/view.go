@@ -12,7 +12,7 @@ import (
 // frame is the settled lazygit-style layout, top to bottom:
 //
 //	[1] Tickets (about 62%) | [2] Ticket      body, all the height left
-//	[3] Jira, full width, sized to its rows
+//	[3] Today (the day's log), full width, sized to its rows
 //	status line
 //	key bar
 //
@@ -20,15 +20,15 @@ import (
 // given; a later slice fills a region in without touching this layout.
 func (m Model) frame() string {
 	w, h := m.w, m.h
-	jira := m.jiraStrip(w, max(1, min(5, h/4)))
+	log := m.dayLog(w, max(1, min(5, h/4)))
 	status := m.statusLine(w)
 	keys := m.keyBar(w)
 
-	bodyH := max(0, h-len(jira)-2)
+	bodyH := max(0, h-len(log)-2)
 	lw := ticketsWidth(w)
 	body := joinColumns(m.ticketsPane(lw, bodyH), m.ticketPane(w-lw, bodyH))
 
-	lines := append(body, jira...)
+	lines := append(body, log...)
 	lines = append(lines, status, keys)
 	base := fitFrame(lines, w, h)
 	if m.dlg == nil || bodyH == 0 || w == 0 {
@@ -163,7 +163,7 @@ func (m Model) bindings() []binding {
 		bs = append(bs, binding{"d", "remove"})
 	}
 	// Movement is in help: the bar keeps room for what changes things.
-	if n, _ := core.Owed(m.shown().State); n > 0 {
+	if n, _ := core.Owed(m.shown().State); n > 0 && !m.noTracker {
 		bs = append(bs, binding{"r", "sync " + strconv.Itoa(n)})
 	}
 	return append(bs, binding{"S", "setup"}, binding{"?", "help"}, binding{"q", "quit"})

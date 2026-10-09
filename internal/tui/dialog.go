@@ -63,6 +63,7 @@ type stopDialog struct {
 	dur, comment    textinput.Model
 	onComment       bool
 	err             string
+	noTracker       bool // enter logs; it sends nothing
 }
 
 func (m Model) openStop() Model {
@@ -76,7 +77,7 @@ func (m Model) openStop() Model {
 		return m
 	}
 	d := stopDialog{ticket: t.Key, entryID: e.ID, summary: t.Summary, recovered: e.Recovered,
-		dur: newInput("e.g. 1h 20m"), comment: newInput("optional")}
+		dur: newInput("e.g. 1h 20m"), comment: newInput("optional"), noTracker: m.noTracker}
 	d.dur.Focus()
 	d = d.follow(m)
 	m.dlg = d
@@ -118,7 +119,11 @@ func (d stopDialog) tick(m Model) dialog { return d.follow(m) }
 func (d stopDialog) title() string { return "Stop " + d.ticket }
 
 func (d stopDialog) bindings() []binding {
-	return []binding{{"enter", "stop & send"}, {"tab", "field"}, {"esc", "cancel — keep timer"}}
+	enter := "stop & send"
+	if d.noTracker {
+		enter = "stop & log"
+	}
+	return []binding{{"enter", enter}, {"tab", "field"}, {"esc", "cancel — keep timer"}}
 }
 
 func (d stopDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
@@ -145,7 +150,11 @@ func (d stopDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		m.dlg = nil
-		m = m.notify("sending " + hm(dur) + " for " + d.ticket + " to Jira…")
+		if m.noTracker {
+			m = m.notify("logging " + hm(dur) + " for " + d.ticket + "…")
+		} else {
+			m = m.notify("sending " + hm(dur) + " for " + d.ticket + " to Jira…")
+		}
 		return m.enqueue(intent{kind: intentStop, stop: core.Stop{
 			Key: d.ticket, EntryID: d.entryID, Duration: dur,
 			Comment: strings.TrimSpace(d.comment.Value()), Origin: core.OriginHand,
@@ -183,7 +192,11 @@ func (d stopDialog) body(m Model, w int) []string {
 	dur, ok := parseDuration(d.dur.Value())
 	switch {
 	case ok:
-		lines = append(lines, wrap("→ sends "+sSync.Bold(true).Render(hm(dur))+" to Jira as one worklog", w)...)
+		if m.noTracker {
+			lines = append(lines, wrap("→ logs "+sSync.Bold(true).Render(hm(dur))+" as one worklog", w)...)
+		} else {
+			lines = append(lines, wrap("→ sends "+sSync.Bold(true).Render(hm(dur))+" to Jira as one worklog", w)...)
+		}
 	case d.recovered && strings.TrimSpace(d.dur.Value()) == "":
 		lines = append(lines, wrap(sRecov.Render("type the time you actually worked"), w)...)
 	case strings.TrimSpace(d.dur.Value()) == "":
@@ -233,7 +246,7 @@ func parseDuration(s string) (time.Duration, bool) {
 }
 
 // removeDialog is d: y removes the ticket, any other key keeps it. When
-// the ticket holds time not yet in Jira it says how much would be lost,
+// the ticket holds time not yet logged it says how much would be lost,
 // and only then does the remove force past core's refusal.
 type removeDialog struct {
 	ticket, summary string
@@ -280,7 +293,11 @@ func (d removeDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 func (d removeDialog) body(m Model, w int) []string {
 	lines := []string{fit(sBold.Render(d.ticket)+" "+sDim.Render(d.summary), w), ""}
 	if d.owes {
-		lines = append(lines, wrap(sFail.Render(gFailed+" its unsent "+hm(d.unsent)+" would be lost: it never reaches Jira"), w)...)
+		lost := " its unsent " + hm(d.unsent) + " would be lost: it never reaches Jira"
+		if m.noTracker {
+			lost = " its unlogged " + hm(d.unsent) + " would be lost: it is never logged"
+		}
+		lines = append(lines, wrap(sFail.Render(gFailed+lost), w)...)
 		lines = append(lines, "")
 	}
 	lines = append(lines, wrap(sBold.Render("y")+sDim.Render(" removes it from your list · any other key keeps it"), w)...)

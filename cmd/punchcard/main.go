@@ -34,11 +34,19 @@ func run() int {
 func openTUI(e cli.Env) int {
 	return tui.Run(tui.Options{
 		Store: e.Store, Now: e.Now, NewID: e.NewID,
+		Tracking: tracking(e),
+		Retrack:  func() tui.Tracking { return tracking(e.Retracked()) },
+		Setup:    setupCommand,
+		Stdin:    e.Stdin, Stdout: e.Stdout, Stderr: e.Stderr,
+	})
+}
+
+// tracking is e's tracker as the TUI takes it.
+func tracking(e cli.Env) tui.Tracking {
+	return tui.Tracking{
 		Sender:  worklog.Sender{Store: e.Store, Tracker: e.OpenTracker, NoTracker: !e.HasTracker()},
 		Tracker: e.OpenTracker, NoTracker: !e.HasTracker(), Grammar: e.Grammar(),
-		Setup: setupCommand,
-		Stdin: e.Stdin, Stdout: e.Stdout, Stderr: e.Stderr,
-	})
+	}
 }
 
 // setupCommand is `punchcard setup` as a child process, for S in the
