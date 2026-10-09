@@ -67,6 +67,7 @@ var (
 	sFail    = lipgloss.NewStyle().Foreground(cRed).Bold(true)
 	sWarn    = lipgloss.NewStyle().Foreground(cYellow) // not connected: worklogs wait
 	sSel     = lipgloss.NewStyle().Background(cSelBg)
+	sChanged = lipgloss.NewStyle().Italic(true) // a row changed elsewhere; blue stays sync's
 )
 
 // Symbols are single-cell, no emoji, none whose width varies.
