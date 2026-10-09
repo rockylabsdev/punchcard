@@ -12,6 +12,9 @@ var (
 	ErrUsage = errors.New("usage")
 	// ErrNoTimer: nothing running or paused to act on.
 	ErrNoTimer = errors.New("no timer")
+	// ErrHeld: the running timer was set by hand and only another act by
+	// hand may move or pause it.
+	ErrHeld = errors.New("timer is held")
 )
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]+-[0-9]+$`)

@@ -20,7 +20,22 @@ type Start struct {
 	NewEntryID string
 }
 
-func (Start) command() {}
+// Pause closes the running segment. The entry stays open.
+type Pause struct {
+	Origin Origin
+}
+
+// Resume with a Key is Start with that Key. With no Key it resumes the
+// most recently paused entry, and is a no-op while a timer runs.
+type Resume struct {
+	Key        string
+	Origin     Origin
+	NewEntryID string
+}
+
+func (Start) command()  {}
+func (Pause) command()  {}
+func (Resume) command() {}
 
 // EventKind names a side effect nobody asked for.
 type EventKind string
@@ -47,6 +62,10 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 	switch c := cmd.(type) {
 	case Start:
 		err = a.start(c)
+	case Pause:
+		err = a.pause(c)
+	case Resume:
+		err = a.resume(c)
 	default:
 		err = fmt.Errorf("%w: unknown command %T", ErrUsage, cmd)
 	}
@@ -91,28 +110,73 @@ func (a *applier) start(c Start) error {
 		})
 		a.emit(EventAdded, c.Key)
 	}
-	a.pauseRunning(true)
+	if err := a.pauseRunning(c.Origin, true); err != nil {
+		return err
+	}
 	t = a.ticket(c.Key)
 	if e = openEntry(t); e == nil {
 		t.Entries = append(t.Entries, TimeEntry{ID: c.NewEntryID})
 		e = &t.Entries[len(t.Entries)-1]
 	}
-	e.Segments = append(e.Segments, Segment{StartedAt: a.now})
-	e.Held, e.Origin = c.Origin == OriginHand, c.Origin
+	a.open(e, c.Origin)
 	return nil
 }
 
-// pauseRunning closes the open segment, if any, at now.
-func (a *applier) pauseRunning(announce bool) {
+func (a *applier) pause(c Pause) error {
+	if _, e := a.running(); e == nil {
+		return fmt.Errorf("%w: nothing is running", ErrNoTimer)
+	}
+	return a.pauseRunning(c.Origin, false)
+}
+
+func (a *applier) resume(c Resume) error {
+	if c.Key != "" {
+		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID})
+	}
+	if _, e := a.running(); e != nil {
+		return nil
+	}
+	var latest *TimeEntry
+	for i := range a.w.State.TrackedTickets {
+		t := &a.w.State.TrackedTickets[i]
+		for j := range t.Entries {
+			e := &t.Entries[j]
+			if e.Paused() && (latest == nil || lastEnd(*e).After(lastEnd(*latest).Time)) {
+				latest = e
+			}
+		}
+	}
+	if latest == nil {
+		return fmt.Errorf("%w: nothing is paused", ErrNoTimer)
+	}
+	a.open(latest, c.Origin)
+	return nil
+}
+
+// open starts a new segment on e; held and origin describe this stretch.
+func (a *applier) open(e *TimeEntry, origin Origin) {
+	e.Segments = append(e.Segments, Segment{StartedAt: a.now})
+	e.Held, e.Origin = origin == OriginHand, origin
+}
+
+// pauseRunning closes the open segment, if any, at now. Only an act by
+// hand may close a held timer.
+func (a *applier) pauseRunning(origin Origin, announce bool) error {
 	t, e := a.running()
 	if e == nil {
-		return
+		return nil
+	}
+	if e.Held && origin != OriginHand {
+		return fmt.Errorf("%w: %s was set by hand", ErrHeld, t.Key)
 	}
 	e.Segments[len(e.Segments)-1].EndedAt = a.now
 	if announce {
 		a.emit(EventPaused, t.Key)
 	}
+	return nil
 }
+
+func lastEnd(e TimeEntry) Timestamp { return e.Segments[len(e.Segments)-1].EndedAt }
 
 // ticket returns a pointer into the working state, or nil.
 func (a *applier) ticket(key string) *TrackedTicket {
