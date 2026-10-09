@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,14 +21,24 @@ type keychain struct {
 	token string
 	err   error
 	hang  bool
+
+	mu    sync.Mutex // the seam runs on the lookup's goroutine
 	asked []string
+}
+
+func (k *keychain) accounts() []string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.asked
 }
 
 func (k *keychain) read(t *testing.T) config.Keychain {
 	done := make(chan struct{})
 	t.Cleanup(func() { close(done) })
 	return func(account string) (string, error) {
+		k.mu.Lock()
 		k.asked = append(k.asked, account)
+		k.mu.Unlock()
 		if k.hang {
 			<-done
 		}
@@ -116,7 +127,7 @@ func TestTokenChain(t *testing.T) {
 				t.Error(d)
 			}
 			if !c.linux {
-				if d := cmp.Diff(c.asked, c.kc.asked); d != "" {
+				if d := cmp.Diff(c.asked, c.kc.accounts()); d != "" {
 					t.Errorf("keychain asked (-want +got):\n%s", d)
 				}
 			}
@@ -151,7 +162,7 @@ func TestCredentials(t *testing.T) {
 	dir := t.TempDir()
 	kc := &keychain{token: "k"}
 	get := env(map[string]string{"XDG_CONFIG_HOME": dir})
-	if _, _, err := config.Credentials(get, kc.read(t)); !errors.Is(err, config.ErrNotConfigured) || len(kc.asked) != 0 {
+	if _, _, err := config.Credentials(get, kc.read(t)); !errors.Is(err, config.ErrNotConfigured) || len(kc.accounts()) != 0 {
 		t.Fatalf("no config: err = %v, asked %v", err, kc.asked)
 	}
 	writeConfig(t, dir, `{"schemaVersion": 1, "siteUrl": "https://example.atlassian.net", "email": "`+email+`"}`)
