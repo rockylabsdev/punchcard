@@ -147,10 +147,13 @@ export function bandFrom(poll, hereKey, skew = null) {
   const d = env.data ?? {}
   const paused = Array.isArray(d.paused) ? d.paused : []
   const unsent = d.unsent?.count ?? 0
+  // One slot for Jira, the worse wins: token rejected, then a Keychain
+  // error (it names why Jira is not connected), then not connected.
   const authFailed = Boolean(d.authFailedAt)
-  const keychainBroken = !authFailed && Boolean(d.keychainError) // one slot: the worse wins
+  const keychainBroken = !authFailed && Boolean(d.keychainError)
+  const notConnected = !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
-  if (!shown && unsent === 0 && !authFailed && !keychainBroken && !skew) return null
+  if (!shown && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
   /** @type {string[]} */
   const parts = []
@@ -171,8 +174,12 @@ export function bandFrom(poll, hereKey, skew = null) {
     tone = 'error'
   }
   if (keychainBroken) {
-    parts.push('Keychain error')
+    parts.push(`Keychain error: ${String(d.keychainError).replace(/^macOS Keychain: /, '')}`)
     if (tone !== 'error') tone = 'warning'
+  }
+  if (notConnected) {
+    parts.push('Jira not connected')
+    if (tone === 'subtle') tone = 'warning'
   }
   const runningKey = d.running?.key ?? ''
   if (hereKey && hereKey !== runningKey) parts.push(`here: ${hereKey}`)
