@@ -194,3 +194,10 @@ func (g *gutterWriter) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+// Flush shows a last line that had no newline.
+func (g *gutterWriter) Flush() {
+	if g.buf.Len() > 0 {
+		g.Write([]byte("\n"))
+	}
+}

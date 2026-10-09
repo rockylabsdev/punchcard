@@ -169,7 +169,12 @@ func (w wizard) runClaude(args []string) bool {
 	w.UI.Say("$ " + command(args))
 	ctx, cancel := context.WithTimeout(context.Background(), pluginBudget)
 	defer cancel()
-	if err := w.Claude.Run(ctx, w.UI.Output(), args...); err != nil {
+	out := w.UI.Output()
+	err := w.Claude.Run(ctx, out, args...)
+	if f, ok := out.(interface{ Flush() }); ok {
+		f.Flush() // a last line with no newline
+	}
+	if err != nil {
 		w.UI.Say("✗ "+command(args)+" failed: "+err.Error(),
 			"  Your Jira credentials are unaffected; run it again by hand when you are ready.")
 		return false
