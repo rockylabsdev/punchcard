@@ -13,6 +13,7 @@ import {
   eventText,
   gateVerdict,
   isGatedStop,
+  manifestVersion,
   needsDuration,
   parseEnvelope,
   parsePunch,
@@ -23,8 +24,52 @@ import {
   submitTouch,
   tighten,
   tokenize,
+  versionSkew,
   worklogDuration,
 } from '../hooks/logic.mjs'
+
+describe('versionSkew', () => {
+  const cases = [
+    ['same version', '0.2.0', '0.2.0', null],
+    ['a leading v on either side is the same version', '0.2.0', 'v0.2.0', null],
+    ['binary upgraded, plugin not', '0.1.0', '0.2.0', { plugin: '0.1.0', binary: '0.2.0' }],
+    ['plugin ahead of the binary', 'v0.3.0', '0.2.0', { plugin: '0.3.0', binary: '0.2.0' }],
+    ['a dev binary never skews', '0.1.0', 'dev', null],
+    ['an unknown binary never skews', '0.1.0', 'unknown', null],
+    ['no plugin version', '', '0.2.0', null],
+    ['no binary version yet', '0.1.0', '', null],
+    ['not a version', '0.1.0', undefined, null],
+  ]
+  for (const [name, plugin, binary, want] of cases) {
+    test(name, () => assert.deepEqual(versionSkew(plugin, binary), want))
+  }
+})
+
+test('manifestVersion', () => {
+  assert.equal(manifestVersion('{ "name": "punchcard", "version": "0.3.1" }'), '0.3.1')
+  assert.equal(manifestVersion('{ "name": "punchcard" }'), '')
+  assert.equal(manifestVersion('not json'), '')
+  assert.equal(manifestVersion('{ "version": 3 }'), '')
+})
+
+describe('bandFrom with version skew', () => {
+  const skew = { plugin: '0.1.0', binary: '0.2.0' }
+  const said = 'plugin 0.1.0 ≠ punchcard 0.2.0 · run punchcard setup'
+  const idle = { envelope: { v: 1, ok: true, outcome: 'ok', data: { running: null, paused: [], unsent: { count: 0 }, authFailedAt: null } } }
+  const running = {
+    envelope: {
+      v: 1, ok: true, outcome: 'ok',
+      data: { running: { key: 'ABC-1', state: 'running', elapsedSeconds: 60 }, paused: [], unsent: { count: 0 }, authFailedAt: null },
+    },
+  }
+  test('shows even when idle, as a warning', () =>
+    assert.deepEqual(bandFrom(idle, '', skew), { tone: 'warning', text: said }))
+  test('follows the timer without changing its tone', () =>
+    assert.deepEqual(bandFrom(running, '', skew), { tone: 'success', text: `▶ ABC-1 0:01 · ${said}` }))
+  test('no skew, no change', () => assert.equal(bandFrom(idle, '', null), null))
+  test('a missing binary says only that', () =>
+    assert.deepEqual(bandFrom({ missing: true }, '', skew), { tone: 'error', text: 'punchcard not found on PATH' }))
+})
 
 describe('branchKey', () => {
   const cases = [
