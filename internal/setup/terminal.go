@@ -78,6 +78,9 @@ type Terminal struct {
 	width int
 	// mark is the wordmark's hole style; zero means tMark.
 	mark lipgloss.Style
+	// dark is whether the terminal's background is dark, as asked once in
+	// NewTerminal; the forms take the brand shade from it. Unknown is dark.
+	dark bool
 	mu   sync.Mutex
 }
 
@@ -85,13 +88,14 @@ type Terminal struct {
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
-	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width}
+	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true}
 	if f, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
 			t.width = min(w, 80)
 		}
 		if fin, ok := in.(*os.File); ok {
-			t.mark = brand(fin, f)
+			t.dark = lipgloss.HasDarkBackground(fin, f)
+			t.mark = brand(t.dark)
 		}
 	}
 	return t
@@ -100,8 +104,11 @@ func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 // theme is Huh's base16 theme with the brand colour where that theme
 // uses cyan, yellow and magenta: titles, the prompt and cursor, the
 // select indicators and the focused button. Descriptions stay grey and
-// errors red, so the wizard reads as one thing with the wordmark.
-func theme(isDark bool) *huh.Styles {
+// errors red, so the wizard reads as one thing with the wordmark. The
+// shade comes from NewTerminal's one query, not Huh's own, which can
+// miss the terminal's answer and fall back to light.
+func (term *Terminal) theme(bool) *huh.Styles {
+	isDark := term.dark
 	t := huh.ThemeBase16(isDark)
 	c := lipgloss.LightDark(isDark)(tui.BrandLight, tui.BrandDark)
 	t.Focused.Title = t.Focused.Title.Foreground(c).Bold(true)
@@ -118,10 +125,9 @@ func theme(isDark bool) *huh.Styles {
 	return t
 }
 
-// brand is the wordmark style for this terminal's background: the brand
-// colour's light shade on a light background, else its dark one.
-func brand(in, out *os.File) lipgloss.Style {
-	c := lipgloss.LightDark(lipgloss.HasDarkBackground(in, out))(tui.BrandLight, tui.BrandDark)
+// brand is the wordmark style for a dark or a light background.
+func brand(dark bool) lipgloss.Style {
+	c := lipgloss.LightDark(dark)(tui.BrandLight, tui.BrandDark)
 	return lipgloss.NewStyle().Foreground(c).Bold(true)
 }
 
@@ -177,7 +183,7 @@ func (t *Terminal) run(field huh.Field) error {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithShowHelp(false).WithWidth(t.width).
 		WithKeyMap(t.keys()).
-		WithTheme(huh.ThemeFunc(theme)).
+		WithTheme(huh.ThemeFunc(t.theme)).
 		WithInput(t.in).
 		WithOutput(t.tty).
 		Run()
