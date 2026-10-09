@@ -67,14 +67,14 @@ func KeychainFor(goos string) Keychain {
 // SystemKeychain is KeychainFor(runtime.GOOS).
 func SystemKeychain() Keychain { return KeychainFor(runtime.GOOS) }
 
-// TokenPath is the 0600 token file beside config.json, or "" when
-// neither XDG_CONFIG_HOME nor HOME is set.
-func TokenPath(getenv func(string) string) string {
-	p := Path(getenv)
-	if p == "" {
-		return ""
+// TokenPath is the 0600 token file beside config.json, or
+// ErrNoConfigDir.
+func TokenPath(getenv func(string) string) (string, error) {
+	p, err := Path(getenv)
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(filepath.Dir(p), "token")
+	return filepath.Join(filepath.Dir(p), "token"), nil
 }
 
 // Tokens is the token lookup: PUNCHCARD_TOKEN, then the Keychain (when
@@ -91,7 +91,8 @@ func (t Tokens) Lookup(email string) (Secret, error) {
 	if v := t.Getenv("PUNCHCARD_TOKEN"); v != "" {
 		return Secret{Value: v, Source: SourceEnv}, nil
 	}
-	file, ferr := readTokenFile(TokenPath(t.Getenv))
+	tokPath, _ := TokenPath(t.Getenv) // no config dir: no token file
+	file, ferr := readTokenFile(tokPath)
 	var kcErr error
 	if t.Keychain != nil {
 		v, err := t.readKeychain(email)

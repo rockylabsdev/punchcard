@@ -142,11 +142,11 @@ func TestKeychainWriteFails(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	r.has("Could not write to the macOS Keychain (security add-generic-password: User interaction is not allowed.)",
-		"saved the token in "+config.TokenPath(r.getenv)+" (readable only by you) instead")
+		"saved the token in "+r.tokenPath()+" (readable only by you) instead")
 	if v, ok := r.tokenFile(); !ok || v != tok {
 		t.Errorf("token file = %q, %v", v, ok)
 	}
-	if fi, _ := os.Stat(config.TokenPath(r.getenv)); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(r.tokenPath()); fi.Mode().Perm() != 0o600 {
 		t.Errorf("token file mode %v", fi.Mode().Perm())
 	}
 }
@@ -169,7 +169,7 @@ func TestLinuxWritesTheFile(t *testing.T) {
 	if v, ok := r.tokenFile(); !ok || v != tok {
 		t.Errorf("token file = %q, %v", v, ok)
 	}
-	r.has("Token saved in " + config.TokenPath(r.getenv))
+	r.has("Token saved in " + r.tokenPath())
 	r.lacks("Keychain")
 }
 
@@ -220,11 +220,11 @@ func TestRerun(t *testing.T) {
 			t.Fatal(err)
 		}
 		r.run("n", "n")
-		r.has("(token in " + config.TokenPath(r.getenv) + ")")
+		r.has("(token in " + r.tokenPath() + ")")
 	})
 	t.Run("a newer config is refused", func(t *testing.T) {
 		r := newRig(t)
-		if err := config.WriteFileAtomic(config.Path(r.getenv), []byte(`{"schemaVersion": 9}`), 0o644); err != nil {
+		if err := config.WriteFileAtomic(r.configPath(), []byte(`{"schemaVersion": 9}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if code := r.run(); code != 65 {

@@ -81,7 +81,7 @@ type Env struct {
 	// TTY: stdin and stdout are both a terminal. Prompts, the picker,
 	// colour and the TUI need it. JSON never depends on it.
 	TTY bool
-	// Store replaces the store at store.Dir(Getenv); tests inject one.
+	// Store replaces store.Open(Getenv, Now); tests inject one.
 	Store *store.Store
 	// NewID makes entry ids; nil means core.NewEntryID.
 	NewID func() string
@@ -124,7 +124,7 @@ func (e Env) withDefaults() Env {
 		e.NewID = core.NewEntryID
 	}
 	if e.Store == nil {
-		e.Store = store.New(store.Dir(e.Getenv), e.Now)
+		e.Store = store.Open(e.Getenv, e.Now)
 	}
 	if e.Keychain == nil {
 		e.Keychain = config.SystemKeychain()
@@ -223,7 +223,9 @@ func (a *app) root() *cobra.Command {
 			return err
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if a.env.TTY && a.env.TUI != nil && !a.out.json {
+			// Without a data directory the TUI has nothing to show: status
+			// reports why (exit 1).
+			if a.env.TTY && a.env.TUI != nil && !a.out.json && a.env.Store.Err() == nil {
 				if firstRun(a.env) {
 					a.env.Setup(a.env) // finished or cancelled, the TUI opens next
 					if err := a.env.Store.Introduce(); err != nil {

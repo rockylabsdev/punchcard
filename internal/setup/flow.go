@@ -99,7 +99,8 @@ func (w wizard) where(s config.Secret) string {
 	if s.Source == config.SourceKeychain {
 		return "Keychain"
 	}
-	return config.TokenPath(w.Getenv)
+	p, _ := config.TokenPath(w.Getenv) // a stored file token implies a config dir
+	return p
 }
 
 // credentials is the re-run fork, then site → email → token → test →
@@ -316,7 +317,8 @@ func (w wizard) save(f form, stored config.Secret, envTok string) error {
 	if err := config.Save(w.Getenv, config.Config{SiteURL: f.site, Email: f.email}); err != nil {
 		return err
 	}
-	w.UI.Say("Saved " + config.Path(w.Getenv))
+	saved, _ := config.Path(w.Getenv) // Save succeeded, so the path exists
+	w.UI.Say("Saved " + saved)
 	token := f.token
 	if token == "" {
 		token = stored.Value
@@ -337,7 +339,7 @@ func (w wizard) save(f form, stored config.Secret, envTok string) error {
 }
 
 func (w wizard) saveToken(email, token string) error {
-	path := config.TokenPath(w.Getenv)
+	path, _ := config.TokenPath(w.Getenv) // config.Save succeeded first, so it exists
 	if w.Keychain == nil {
 		if err := config.WriteTokenFile(w.Getenv, token); err != nil {
 			return err

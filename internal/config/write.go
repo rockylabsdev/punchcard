@@ -12,9 +12,9 @@ import (
 // Save writes config.json atomically (setup is its only writer). The
 // schemaVersion is always this binary's.
 func Save(getenv func(string) string, c Config) error {
-	p := Path(getenv)
-	if p == "" {
-		return errors.New("neither XDG_CONFIG_HOME nor HOME is set")
+	p, err := Path(getenv)
+	if err != nil {
+		return err
 	}
 	c.SchemaVersion = SchemaVersion
 	b, err := json.MarshalIndent(c, "", "  ")
@@ -26,18 +26,18 @@ func Save(getenv func(string) string, c Config) error {
 
 // WriteTokenFile writes the 0600 token fallback beside config.json.
 func WriteTokenFile(getenv func(string) string, token string) error {
-	p := TokenPath(getenv)
-	if p == "" {
-		return errors.New("neither XDG_CONFIG_HOME nor HOME is set")
+	p, err := TokenPath(getenv)
+	if err != nil {
+		return err
 	}
 	return WriteFileAtomic(p, []byte(token+"\n"), 0o600)
 }
 
 // RemoveTokenFile deletes the token fallback; none there is success.
 func RemoveTokenFile(getenv func(string) string) error {
-	p := TokenPath(getenv)
-	if p == "" {
-		return nil
+	p, err := TokenPath(getenv)
+	if err != nil {
+		return nil // no config directory: no token file to remove
 	}
 	if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err

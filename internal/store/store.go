@@ -33,13 +33,20 @@ const (
 // gives up with ErrBusy (the CLI's exit 75).
 const DefaultLockWait = 2 * time.Second
 
+// ErrNoDataDir: neither XDG_DATA_HOME nor HOME is set, so there is no
+// data directory. It is never guessed relative to the working directory.
+var ErrNoDataDir = errors.New("neither XDG_DATA_HOME nor HOME is set, so punchcard has no data directory; set HOME")
+
 // Dir is the data directory: $XDG_DATA_HOME/punchcard, else
-// ~/.local/share/punchcard.
-func Dir(getenv func(string) string) string {
+// ~/.local/share/punchcard, else ErrNoDataDir.
+func Dir(getenv func(string) string) (string, error) {
 	if d := getenv("XDG_DATA_HOME"); d != "" {
-		return filepath.Join(d, "punchcard")
+		return filepath.Join(d, "punchcard"), nil
 	}
-	return filepath.Join(getenv("HOME"), ".local", "share", "punchcard")
+	if h := getenv("HOME"); h != "" {
+		return filepath.Join(h, ".local", "share", "punchcard"), nil
+	}
+	return "", ErrNoDataDir
 }
 
 // Store is the data directory. It holds no state of its own between
@@ -47,6 +54,9 @@ func Dir(getenv func(string) string) string {
 type Store struct {
 	dir string
 	now func() time.Time
+	// err is why there is no directory (Open with no HOME); every call
+	// returns it.
+	err error
 	// LockWait is how long Apply waits for the lock. Zero means
 	// DefaultLockWait.
 	LockWait time.Duration
@@ -56,6 +66,25 @@ type Store struct {
 func New(dir string, now func() time.Time) *Store {
 	return &Store{dir: dir, now: now}
 }
+
+// Open is the store at Dir(getenv). Without a data directory it still
+// returns a store, whose every call fails with ErrNoDataDir, so commands
+// that never touch the store (version, setup) keep working.
+func Open(getenv func(string) string, now func() time.Time) *Store {
+	dir, err := Dir(getenv)
+	return &Store{dir: dir, now: now, err: err}
+}
+
+// lockWait is LockWait, or DefaultLockWait when it is zero.
+func (s *Store) lockWait() time.Duration {
+	if s.LockWait == 0 {
+		return DefaultLockWait
+	}
+	return s.LockWait
+}
+
+// Err is why the store has no directory (ErrNoDataDir), or nil.
+func (s *Store) Err() error { return s.err }
 
 // Dir is the directory the store reads and writes.
 func (s *Store) Dir() string { return s.dir }
@@ -80,11 +109,7 @@ type Result struct {
 // the lock. A refused command writes nothing and returns the core's
 // error; a lock that stays held returns ErrBusy.
 func (s *Store) Apply(cmd core.Command) (Result, error) {
-	wait := s.LockWait
-	if wait == 0 {
-		wait = DefaultLockWait
-	}
-	return s.transact(cmd, wait)
+	return s.transact(cmd, s.lockWait())
 }
 
 // TryApply is Apply for presence writes: it tries the lock once and
@@ -96,6 +121,9 @@ func (s *Store) TryApply(cmd core.Command) (Result, error) {
 }
 
 func (s *Store) transact(cmd core.Command, wait time.Duration) (Result, error) {
+	if s.err != nil {
+		return Result{}, s.err
+	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return Result{}, err
 	}
@@ -127,6 +155,9 @@ func (s *Store) transact(cmd core.Command, wait time.Duration) (Result, error) {
 // writing anything (reads are pure). Atomic saves mean it never sees a
 // half-written file.
 func (s *Store) Read() (core.World, []string, error) {
+	if s.err != nil {
+		return core.World{}, nil, s.err
+	}
 	var notices []string
 	w, err := s.load(s.now(), false, &notices)
 	return w, notices, err
@@ -254,14 +285,13 @@ func (s *Store) replace(name string, b []byte) error {
 // existence is the "already introduced" marker: once the first-run
 // setup has been offered, bare punchcard never offers it again.
 func (s *Store) Introduce() error {
+	if s.err != nil {
+		return s.err
+	}
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	wait := s.LockWait
-	if wait == 0 {
-		wait = DefaultLockWait
-	}
-	l, err := lock(filepath.Join(s.dir, LockFile), wait)
+	l, err := lock(filepath.Join(s.dir, LockFile), s.lockWait())
 	if err != nil {
 		return err
 	}

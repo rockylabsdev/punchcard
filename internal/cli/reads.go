@@ -64,7 +64,7 @@ func (a *app) link(d StatusData) StatusReport {
 	case err == nil:
 		rep.Configured, rep.TokenSource = true, sec.Source
 		if sec.StrayFile {
-			rep.StrayTokenFile = config.TokenPath(a.env.Getenv)
+			rep.StrayTokenFile, _ = config.TokenPath(a.env.Getenv) // a stray file implies a config dir
 		}
 	case errors.As(err, &kc):
 		rep.KeychainError = kc.Error()

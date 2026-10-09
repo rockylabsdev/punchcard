@@ -296,8 +296,24 @@ func (r *rig) config() (config.Config, bool) {
 	return c, err == nil
 }
 
+func (r *rig) tokenPath() string {
+	p, err := config.TokenPath(r.getenv)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return p
+}
+
+func (r *rig) configPath() string {
+	p, err := config.Path(r.getenv)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return p
+}
+
 func (r *rig) tokenFile() (string, bool) {
-	b, err := os.ReadFile(config.TokenPath(r.getenv))
+	b, err := os.ReadFile(r.tokenPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return "", false
 	}

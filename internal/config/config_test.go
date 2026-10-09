@@ -66,19 +66,30 @@ func TestLoadMalformedIsNotSilentlyUnconfigured(t *testing.T) {
 
 func TestPath(t *testing.T) {
 	cases := []struct {
-		env  map[string]string
-		want string
+		env     map[string]string
+		want    string
+		wantErr error
 	}{
-		{map[string]string{"XDG_CONFIG_HOME": "/x", "HOME": "/h"}, "/x/punchcard/config.json"},
-		{map[string]string{"HOME": "/h"}, "/h/.config/punchcard/config.json"},
-		{map[string]string{}, ""}, // never a path relative to the working directory
+		{map[string]string{"XDG_CONFIG_HOME": "/x", "HOME": "/h"}, "/x/punchcard/config.json", nil},
+		{map[string]string{"HOME": "/h"}, "/h/.config/punchcard/config.json", nil},
+		{map[string]string{}, "", config.ErrNoConfigDir}, // never a path relative to the working directory
 	}
 	for _, c := range cases {
-		if got := config.Path(env(c.env)); got != c.want {
-			t.Errorf("Path(%v) = %q, want %q", c.env, got, c.want)
+		got, err := config.Path(env(c.env))
+		if got != c.want || !errors.Is(err, c.wantErr) {
+			t.Errorf("Path(%v) = %q, %v; want %q, %v", c.env, got, err, c.want, c.wantErr)
+		}
+		tok, terr := config.TokenPath(env(c.env))
+		if (tok == "") != (c.want == "") || !errors.Is(terr, c.wantErr) {
+			t.Errorf("TokenPath(%v) = %q, %v", c.env, tok, terr)
 		}
 	}
-	if _, err := config.Load(env(map[string]string{})); !errors.Is(err, config.ErrNotConfigured) {
+	// Unconfigured, and the reason names the missing variables.
+	_, err := config.Load(env(map[string]string{}))
+	if !errors.Is(err, config.ErrNotConfigured) || !errors.Is(err, config.ErrNoConfigDir) {
 		t.Errorf("no HOME: err = %v", err)
+	}
+	if err := config.Save(env(map[string]string{}), config.Config{SiteURL: "s", Email: "e"}); !errors.Is(err, config.ErrNoConfigDir) {
+		t.Errorf("Save with no HOME: err = %v", err)
 	}
 }

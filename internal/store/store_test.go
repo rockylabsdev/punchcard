@@ -27,7 +27,10 @@ func newClock() *clock { return &clock{time.Date(2026, 8, 9, 9, 2, 41, 0, zone)}
 func open(t *testing.T, c *clock) (*store.Store, string) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	dir := store.Dir(os.Getenv)
+	dir, err := store.Dir(os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return store.New(dir, c.now), dir
 }
 
@@ -56,12 +59,32 @@ func write(t *testing.T, path, content string) {
 
 func TestDirFollowsXDGDataHome(t *testing.T) {
 	env := map[string]string{"XDG_DATA_HOME": "/x/data", "HOME": "/home/u"}
-	if got := store.Dir(func(k string) string { return env[k] }); got != "/x/data/punchcard" {
+	if got, _ := store.Dir(func(k string) string { return env[k] }); got != "/x/data/punchcard" {
 		t.Errorf("Dir = %q", got)
 	}
 	delete(env, "XDG_DATA_HOME")
-	if got := store.Dir(func(k string) string { return env[k] }); got != "/home/u/.local/share/punchcard" {
-		t.Errorf("Dir without XDG_DATA_HOME = %q", got)
+	if got, err := store.Dir(func(k string) string { return env[k] }); got != "/home/u/.local/share/punchcard" || err != nil {
+		t.Errorf("Dir without XDG_DATA_HOME = %q, %v", got, err)
+	}
+	delete(env, "HOME")
+	if got, err := store.Dir(func(k string) string { return env[k] }); !errors.Is(err, store.ErrNoDataDir) || got != "" {
+		t.Errorf("Dir with neither = %q, %v; want ErrNoDataDir, never a relative path", got, err)
+	}
+}
+
+func TestOpenWithoutADataDirRefusesEveryCall(t *testing.T) {
+	s := store.Open(func(string) string { return "" }, time.Now)
+	if _, err := s.Apply(core.Touch{Origin: core.OriginHand}); !errors.Is(err, store.ErrNoDataDir) {
+		t.Errorf("Apply: %v", err)
+	}
+	if _, err := s.TryApply(core.Touch{Origin: core.OriginPrompt}); !errors.Is(err, store.ErrNoDataDir) {
+		t.Errorf("TryApply: %v", err)
+	}
+	if _, _, err := s.Read(); !errors.Is(err, store.ErrNoDataDir) {
+		t.Errorf("Read: %v", err)
+	}
+	if err := s.Introduce(); !errors.Is(err, store.ErrNoDataDir) {
+		t.Errorf("Introduce: %v", err)
 	}
 }
 

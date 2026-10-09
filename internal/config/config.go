@@ -29,27 +29,29 @@ var (
 	ErrNotConfigured = errors.New("not connected to Jira")
 	// ErrNewerSchema: the file was written by a newer punchcard.
 	ErrNewerSchema = errors.New("config written by a newer punchcard")
+	// ErrNoConfigDir: neither XDG_CONFIG_HOME nor HOME is set. The path
+	// is never guessed relative to the working directory.
+	ErrNoConfigDir = errors.New("neither XDG_CONFIG_HOME nor HOME is set")
 )
 
-// Path is the config file's path, or "" when neither XDG_CONFIG_HOME
-// nor HOME is set.
-func Path(getenv func(string) string) string {
+// Path is the config file's path, or ErrNoConfigDir.
+func Path(getenv func(string) string) (string, error) {
 	if d := getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "punchcard", "config.json")
+		return filepath.Join(d, "punchcard", "config.json"), nil
 	}
 	if h := getenv("HOME"); h != "" {
-		return filepath.Join(h, ".config", "punchcard", "config.json")
+		return filepath.Join(h, ".config", "punchcard", "config.json"), nil
 	}
-	return ""
+	return "", ErrNoConfigDir
 }
 
-// Load reads and checks the config file. Missing file or fields is
-// ErrNotConfigured; a newer schemaVersion is ErrNewerSchema; anything
-// else (unreadable, malformed) is returned as is.
+// Load reads and checks the config file. Missing file or fields (or no
+// config directory at all) is ErrNotConfigured; a newer schemaVersion is
+// ErrNewerSchema; anything else (unreadable, malformed) is returned as is.
 func Load(getenv func(string) string) (Config, error) {
-	p := Path(getenv)
-	if p == "" {
-		return Config{}, fmt.Errorf("%w: neither XDG_CONFIG_HOME nor HOME is set", ErrNotConfigured)
+	p, err := Path(getenv)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w: %w", ErrNotConfigured, err)
 	}
 	b, err := os.ReadFile(p)
 	if errors.Is(err, fs.ErrNotExist) {

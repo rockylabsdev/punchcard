@@ -41,7 +41,7 @@ func TestTokenFile(t *testing.T) {
 	if err := config.WriteTokenFile(getenv, "tok-1"); err != nil {
 		t.Fatal(err)
 	}
-	p := config.TokenPath(getenv)
+	p, _ := config.TokenPath(getenv)
 	fi, err := os.Stat(p)
 	if err != nil {
 		t.Fatal(err)
