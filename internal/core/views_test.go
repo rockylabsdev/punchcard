@@ -61,8 +61,8 @@ func TestListOrderIsMostRecentActivityFirst(t *testing.T) {
 	added := func(k, clock string) core.TrackedTicket { tk := ticket(k); tk.AddedAt = at(clock); return tk }
 	s := state(
 		ticket("AA-1", entry("EA", hand, seg("09:00", "09:30"))), // last activity 09:30
-		added("BB-2", "10:00"),                                  // added 10:00, never worked
-		ticket("CC-3", entry("EC", hand, seg("08:00", ""))),      // running: activity is now
+		added("BB-2", "10:00"),                              // added 10:00, never worked
+		ticket("CC-3", entry("EC", hand, seg("08:00", ""))), // running: activity is now
 		added("DD-4", "07:00"),
 	)
 	var got []string

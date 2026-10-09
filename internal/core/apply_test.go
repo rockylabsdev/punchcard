@@ -86,11 +86,11 @@ func TestApplyStart(t *testing.T) {
 			want: state(ticket("AA-1", entry("EA", agent, seg("09:00", "")))),
 		},
 		{
-			name: "start A by hand while A runs un-held holds it",
-			w:    world("09:30", ticket("AA-1", entry("EA", agent, seg("09:00", "")))),
-			cmd:  core.Start{Key: "AA-1", Origin: hand, NewEntryID: "X"},
-			now:  "09:30",
-			want: state(ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
+			name:   "start A by hand while A runs un-held holds it",
+			w:      world("09:30", ticket("AA-1", entry("EA", agent, seg("09:00", "")))),
+			cmd:    core.Start{Key: "AA-1", Origin: hand, NewEntryID: "X"},
+			now:    "09:30",
+			want:   state(ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			events: []core.Event{{Kind: core.EventHeld, Key: "AA-1"}},
 		},
 		{
