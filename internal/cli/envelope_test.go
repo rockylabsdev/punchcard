@@ -283,7 +283,7 @@ func TestEnvelopes(t *testing.T) {
 			h.do("09:45", "touch")
 		}, "13:00",
 			[]string{"stop", "--duration", "2h", "--no-sync"}, 0,
-			ok("stop", `{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 7200}}`,
+			ok("stop", `{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 7200, "recovered": true}}`,
 				`[{"kind": "recovered", "key": "AA-1", "at": "2026-08-09T09:45:00.000-0500"}]`)},
 
 		// status

@@ -252,7 +252,7 @@ func (a *app) root() *cobra.Command {
 	root.AddCommand(
 		a.startCmd(), a.pauseCmd(), a.resumeCmd(), a.stopCmd(), a.statusCmd(), a.lsCmd(),
 		a.addCmd(), a.rmCmd(), a.syncCmd("sync", false), a.syncCmd("retry", true), a.setupCmd(),
-		a.versionCmd(), a.touchCmd(),
+		a.versionCmd(), a.touchCmd(), a.logCmd(),
 	)
 	return root
 }

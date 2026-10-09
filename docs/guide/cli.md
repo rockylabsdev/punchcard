@@ -18,6 +18,7 @@ All output below was produced by running the binary in throwaway directories, mo
 | `add KEY...` | Put tickets on the list without starting anything. | as `start` |
 | `rm KEY` | Take a ticket off the list. | no |
 | `sync [KEY]` | Send every pending and failed worklog, or only KEY's. | yes |
+| `log` | Worklogs over a range (this week by default) as Markdown, CSV or JSON. | no |
 | `setup` | The credentials wizard. Needs a terminal. | Test Connection |
 | `version` | Version, contract version, platform. | no |
 | `help [command]` | Help text. `--help` on any command does the same. | no |
@@ -360,6 +361,32 @@ punchcard: setup is interactive; run it in a terminal
 [exit 64]
 ```
 
+### `log`
+
+One row per worklog whose day (the local date its entry started, so a stretch past midnight stays on the day it began) is in the range, by day then start. The range is this week, Monday through today, by default and with `--week`; `--month` is the first of the month through today; `--from DATE` and `--to DATE` (`YYYY-MM-DD`, inclusive) may stand alone, `--from` running through today and `--to` starting this Monday. Two ranges, two formats, a bad date or `--from` after `--to` is usage (exit 64); anything else exits 0, an empty range included. `log` only reads: no tracker, no presence, no write.
+
+```
+$ punchcard log
+## 2026-08-03 Mon · 2h 45m
+
+| key | summary | time | comment |
+|---|---|---|---|
+| AA-1 | Fix the thing | 1:30 | Fixed the formatter |
+| AA-2 | Other thing | 1:15 | Split \| the parser |
+
+## 2026-08-04 Tue · 0h 30m · 1 pending
+
+| key | summary | time | comment |
+|---|---|---|---|
+| AA-3 | Release notes | 0:30 | pending |
+
+**Total: 3h 15m**
+
+Paused: AA-1 0:45, not logged
+```
+
+The Markdown is the default, on a terminal or not; `--md` asks for it by name. `--csv` is RFC 4180 (CRLF, quoted where needed) with the header `date,started,key,summary,minutes,comment,state,remote_id,entry_id,recovered`, `started` as local `HH:MM`, for a spreadsheet or another tracker's import. `--json` is the envelope (see [`data` by command](#data-by-command)). `--csv` or `--md` wins over `PUNCHCARD_JSON=1`.
+
 ### `version`
 
 ```
@@ -453,12 +480,13 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 | `stop` | `{key, entryId, worklog}`. |
 | `stop --dry-run`, exit 6 | `{preview: {key, entryId, worklog, recovered}}`. |
 | `sync` | `{sent: [...], remaining: [...]}`, each `{key, entryId, worklog}`. |
+| `log` | `{rows: [{date, started, key, summary, minutes, comment, state, remoteId, entryId, recovered}], open, range: {from, to}}`. `date` is `YYYY-MM-DD`, `started` a timestamp; absent values are `""`. `open` is the running entry, else the most recently paused one, as a timer, or `null`. |
 | `version` | `{version, contract, schemaVersion, go, platform}`. |
 | exit 4, ambiguous | `{candidates: ["KEY", ...]}`. |
 
 A timer: `{key, summary?, unverified, entryId, state, held, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
 
-A worklog: `{state, startedAt, timeSpentSeconds, comment?, worklogId?, syncedAt?, message?, refusedStatus?, failedAt?}`. `state` is `pending`, `synced` or `failed`, or `local` when there is no tracker (final, never owed or sent); `refusedStatus` is the HTTP status when the tracker answered with a refusal.
+A worklog: `{state, startedAt, timeSpentSeconds, comment?, worklogId?, syncedAt?, message?, refusedStatus?, failedAt?, recovered?}`. `recovered` is `true` when the entry was recovered when it stopped. `state` is `pending`, `synced` or `failed`, or `local` when there is no tracker (final, never owed or sent); `refusedStatus` is the HTTP status when the tracker answered with a refusal.
 
 Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no colon.
 

@@ -117,6 +117,10 @@ type Worklog struct {
 	// refusal; 0 when it could not be reached (or for any other failure).
 	RefusedStatus int       `json:"refusedStatus,omitempty"`
 	FailedAt      Timestamp `json:"failedAt,omitzero"`
+	// Recovered: the entry was recovered when it stopped, so its time was
+	// a correction rather than a measurement. The entry's own flag clears
+	// at stop; this keeps the fact for log. Never sent to the tracker.
+	Recovered bool `json:"recovered,omitempty"`
 }
 
 // Logged reports whether the worklog is done with: synced to the tracker,

@@ -153,6 +153,7 @@ func (a *applier) stop(c Stop) error {
 	if e.Running() {
 		e.Segments[len(e.Segments)-1].EndedAt = a.now
 	}
+	wl.Recovered = e.Recovered
 	e.Worklog = &wl
 	e.Origin = c.Origin
 	e.Recovered = false

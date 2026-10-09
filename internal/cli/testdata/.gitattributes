@@ -1,0 +1,2 @@
+# CSV goldens are RFC 4180, CRLF and all: never convert them.
+*.golden -text

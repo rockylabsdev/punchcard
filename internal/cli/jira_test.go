@@ -151,7 +151,7 @@ func TestReadsNeverCallJira(t *testing.T) {
 	h.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	h.do("09:00", "start", "AA-1") // unverified
 	h.jira = knows("AA-1", "Fix the thing")
-	for _, args := range [][]string{{"status"}, {"status", "--short"}, {"ls"}, {}, {"pause"}, {"resume"}, {"touch", "AA-1", "--origin", "prompt"}, {"touch", "AA-2", "--origin", "prompt"}} {
+	for _, args := range [][]string{{"status"}, {"status", "--short"}, {"ls"}, {}, {"pause"}, {"resume"}, {"touch", "AA-1", "--origin", "prompt"}, {"touch", "AA-2", "--origin", "prompt"}, {"log"}, {"log", "--csv"}, {"log", "--json"}} {
 		h.run(args...)
 	}
 	if calls := h.jira.Calls(); len(calls) != 0 {
