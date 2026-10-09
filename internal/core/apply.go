@@ -57,6 +57,8 @@ const (
 	EventAdded  EventKind = "added"  // start added an untracked ticket
 	EventPaused EventKind = "paused" // another ticket's start paused this one
 	EventHeld   EventKind = "held"   // a start by hand held the running timer
+	// EventRecovered: a stale timer was capped; At is where it was capped.
+	EventRecovered EventKind = "recovered"
 )
 
 // Event is a side effect of a command, reported so nothing happens behind
@@ -64,28 +66,45 @@ const (
 type Event struct {
 	Kind EventKind `json:"kind"`
 	Key  string    `json:"key"`
+	At   Timestamp `json:"at,omitzero"`
 }
 
 // Apply is the one transition: it takes the world as read fresh, a
 // command and the current time, and returns the next world and the side
 // effects. It never mutates w.
+//
+// Order inside one transition: recover a stale timer first (capped at
+// the old lastSeen), then apply the command, then record presence if
+// the origin is presence. A refused command returns w unchanged, with no
+// events: recovery is deferred to the next change, which loses nothing
+// because lastSeen did not move.
 func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 	a := &applier{w: w.clone(), now: At(now)}
+	a.recover()
+	recovered := len(a.events) > 0
 	var err error
+	var origin Origin
 	switch c := cmd.(type) {
 	case Start:
-		err = a.start(c)
+		origin, err = c.Origin, a.start(c)
 	case Pause:
-		err = a.pause(c)
+		origin = c.Origin
+		if _, e := a.running(); e != nil || !recovered {
+			err = a.pause(c)
+		} // else: recovery already paused it, which is what was asked.
 	case Resume:
+		origin = c.Origin
 		err = a.resume(c)
 	case Stop:
-		err = a.stop(c)
+		origin, err = c.Origin, a.stop(c)
 	default:
 		err = fmt.Errorf("%w: unknown command %T", ErrUsage, cmd)
 	}
 	if err != nil {
 		return w, nil, err
+	}
+	if origin.IsPresence() {
+		a.w.Heartbeat = RecordPresence(a.w.Heartbeat, now)
 	}
 	return a.w, a.events, nil
 }
