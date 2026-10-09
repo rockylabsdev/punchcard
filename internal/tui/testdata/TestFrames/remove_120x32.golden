@@ -1,0 +1,32 @@
+╭─[1] Tickets · today 1h 22m─────────────────────────────────────────────╮╭─Remove PUN-142?────────────────────────────╮
+│›▶ PUN-142       Wire flock on the side state.lock             0:15:34  ││PUN-142 Wire flock on the side state.lock   │
+│ ‖ PUN-138       Stop dialog: duration parsing and the live p…     12m  ││                                            │
+│ · OPS-77        Rotate staging certs                              15m ○││✗ its unsent 15m would be lost: it never    │
+│ · PUN-120       Spike: Bubble Tea v2 layout                       40m ✗││reaches Jira                                │
+│ · DATA-9        ? unverified — Jira not reached yet                 —  ││                                            │
+│ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││y removes it from your list · any other key │
+│                                                                        ││keeps it                                    │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+│                                                                        ││                                            │
+╰────────────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────╯
+╭─[3] Jira · logged today 0m · owed 55m────────────────────────────────────────────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                                                            │
+│ ✗ failed — 503 · r            PUN-120       40m   07:45                                                              │
+│ ○ not sent yet · r            OPS-77        15m   08:01                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                                                        
+ y remove  any key keep it                                                                                              

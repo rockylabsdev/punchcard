@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 22m────────────────────╮╭─Stop PUN-142────────────────╮
+│›▶ PUN-142       Wire flock on the s… 0:15:34  ││PUN-142 Wire flock on the si…│
+│ ‖ PUN-138       Stop dialog: durati…     12m  ││measured 0:15:34 across 2    │
+│ · OPS-77        Rotate staging certs     15m ○││stretches                    │
+│ · PUN-120       Spike: Bubble Tea v…     40m ✗││                             │
+│ · DATA-9        ? unverified — Jira…       —  ││Duration                     │
+│ · PLATFORM-4410 Investigate intermi…       —  ││  15m                        │
+│                                               ││Comment                      │
+│                                               ││  optional                   │
+│                                               ││                             │
+│                                               ││→ sends 15m to Jira as one   │
+│                                               ││worklog                      │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Jira · logged today 0m · owed 55m────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                    │
+│ ✗ failed — 503 · r            PUN-120       40m   07:45                      │
+│ ○ not sent yet · r            OPS-77        15m   08:01                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                
+ enter stop & send  tab field  esc cancel — keep timer                          

@@ -1,0 +1,12 @@
+{
+  "name": "punchcard",
+  "owner": { "name": "Jamey Smith" },
+  "description": "Punchcard: Jira time tracking from the terminal",
+  "plugins": [
+    {
+      "name": "punchcard",
+      "description": "Band above the prompt, /punch, and a gate on agent stops",
+      "source": { "source": "git-subdir", "url": "j-dsmith/punchcard", "path": "plugin", "ref": "v0.1.0" }
+    }
+  ]
+}

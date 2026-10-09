@@ -16,8 +16,14 @@ build/
 # Local API token — hardcoded CredentialStore impl, slices 2–7 (see ticket 02)
 Punchcard/Credentials/LocalSecrets.swift
 
+# Claude Code lays the mod API's types here when it loads the plugin from disk
+plugin/.claude-plugin/types/
+
 # OS cruft
 .DS_Store
 
 # Jira spike credentials — see docs/jira-api/spike-env.example
 docs/jira-api/.spike-env
+
+# GoReleaser output (release --snapshot writes here)
+dist/

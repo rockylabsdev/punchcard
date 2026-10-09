@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 25m────────────────────╮╭─Stop PUN-142────────────────╮
+│›! PUN-142  Wire flock on the side s…     45m  ││PUN-142 Wire flock on the si…│
+│ · PUN-120  Spike: Bubble Tea v2 lay…     40m  ││measured 0:45:00 across 2    │
+│ · DATA-9   ? unverified — Jira not …       —  ││stretches                    │
+│                                               ││! recovered — capped at      │
+│                                               ││06:50, your last presence;   │
+│                                               ││how long did you work?       │
+│                                               ││                             │
+│                                               ││Duration                     │
+│                                               ││  e.g. 1h 20m                │
+│                                               ││Comment                      │
+│                                               ││  optional                   │
+│                                               ││                             │
+│                                               ││type the time you actually   │
+│                                               ││worked                       │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Jira · logged today 40m · owed 0m · last sync 05:46──────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                    │
+│ ✓ logged 05:46                PUN-120       40m   05:45                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ enter stop & send  tab field  esc cancel — keep timer                          
