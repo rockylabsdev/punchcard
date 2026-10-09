@@ -131,3 +131,31 @@ func TestTwoGoroutinesWritingTogetherLoseNothing(t *testing.T) {
 		t.Errorf("tracked %d tickets, want 2: one writer overwrote the other", n)
 	}
 }
+
+func TestSyncLockIsTakenWithoutWaitingAndIsNotTheStateLock(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	release, err := s.LockSync()
+	if err != nil {
+		t.Fatalf("first LockSync: %v", err)
+	}
+	t0 := time.Now()
+	if _, err := s.LockSync(); !errors.Is(err, store.ErrSyncBusy) {
+		t.Errorf("second LockSync: err = %v, want ErrSyncBusy", err)
+	}
+	if waited := time.Since(t0); waited > 100*time.Millisecond {
+		t.Errorf("second LockSync waited %v; it must not wait", waited)
+	}
+	if _, err := s.Apply(start("PUNCH-12")); err != nil {
+		t.Errorf("Apply while sync.lock is held: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, store.SyncLockFile)); err != nil {
+		t.Errorf("sync.lock not in the data dir: %v", err)
+	}
+	release()
+	again, err := s.LockSync()
+	if err != nil {
+		t.Fatalf("LockSync after release: %v", err)
+	}
+	again()
+}

@@ -39,9 +39,12 @@ type Resume struct {
 // *AmbiguousError). Duration zero means "use the measured elapsed";
 // either way it is truncated to the minute and refused under one minute
 // (ErrTooShort). Stop clears Recovered. It does not gate on origin: the
-// CLI owns needs_confirmation for agents.
+// CLI owns needs_confirmation for agents. EntryID, when set, pins the
+// stop to the entry the caller previewed: if the target is another entry
+// (that one was stopped meanwhile), Stop refuses with ErrNoTimer.
 type Stop struct {
 	Key      string
+	EntryID  string
 	Duration time.Duration
 	Comment  string
 	Origin   Origin
