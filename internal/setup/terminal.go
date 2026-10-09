@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"os"
 	"sync"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"golang.org/x/term"
 )
 
 // Wordmark is PUNCHCARD in block letters, shown above the wizard.
@@ -34,14 +36,24 @@ var (
 // stderr unless told otherwise, so every form gets out explicitly.
 type Terminal struct {
 	in  io.Reader
-	out io.Writer // colour-downsampled to the terminal's profile
-	mu  sync.Mutex
+	tty io.Writer // the terminal itself, for Huh (Bubble Tea sizes it)
+	out io.Writer // our own lines, colour-downsampled to its profile
+	// width is the forms' width: the terminal's, capped. Huh panics on
+	// a terminal that reports no size, so unknown is 72.
+	width int
+	mu    sync.Mutex
 }
 
 // NewTerminal is the wizard's UI on in and out. environ decides the
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
-	return &Terminal{in: in, out: colorprofile.NewWriter(out, environ)}
+	width := 72
+	if f, ok := out.(*os.File); ok {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w >= 20 {
+			width = min(w, 80)
+		}
+	}
+	return &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width}
 }
 
 // Begin prints the wordmark and opens the gutter.
@@ -94,11 +106,11 @@ func (t *Terminal) keys() *huh.KeyMap {
 
 func (t *Terminal) run(field huh.Field) error {
 	err := huh.NewForm(huh.NewGroup(field)).
-		WithShowHelp(false).
+		WithShowHelp(false).WithWidth(t.width).
 		WithKeyMap(t.keys()).
 		WithTheme(huh.ThemeFunc(huh.ThemeBase16)).
 		WithInput(t.in).
-		WithOutput(t.out).
+		WithOutput(t.tty).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return ErrAborted

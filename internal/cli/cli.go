@@ -226,6 +226,9 @@ func (a *app) root() *cobra.Command {
 			if a.env.TTY && a.env.TUI != nil && !a.out.json {
 				if firstRun(a.env) {
 					a.env.Setup(a.env) // finished or cancelled, the TUI opens next
+					if err := a.env.Store.Introduce(); err != nil {
+						a.out.notices([]string{"could not write state.json: " + err.Error()})
+					}
 				}
 				a.code = a.env.TUI(a.env)
 				return nil

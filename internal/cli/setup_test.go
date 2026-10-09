@@ -65,6 +65,9 @@ func TestFirstRun(t *testing.T) {
 			if got := strings.Join(order, " "); got != want || r.code != 0 {
 				t.Errorf("ran %q exit %d, want %q", got, r.code, want)
 			}
+			if _, err := os.Stat(filepath.Join(h.dir, "state.json")); c.wizard && err != nil {
+				t.Errorf("no state.json after the first run: the wizard would be offered again (%v)", err)
+			}
 		})
 	}
 }

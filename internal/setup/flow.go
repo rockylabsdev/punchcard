@@ -302,7 +302,7 @@ func (w wizard) test(f form, stored config.Secret, envTok string) (jira.Account,
 			"is refused like a wrong one. Make a classic token at "+link(TokenPage))
 		return acct, stepToken
 	case errors.Is(err, jira.ErrBadSite), errors.Is(err, jira.ErrUnreachable):
-		w.UI.Say("✗ "+f.site+" is not a reachable Jira Cloud site", "  "+err.Error())
+		w.UI.Say("✗ "+f.site+" is not a reachable Jira Cloud site", "  "+strings.TrimPrefix(err.Error(), jira.ErrBadSite.Error()+": "))
 		return acct, stepSite
 	}
 	w.UI.Say("✗ Test Connection failed: " + err.Error())

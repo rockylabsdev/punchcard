@@ -249,3 +249,29 @@ func (s *Store) replace(name string, b []byte) error {
 	}
 	return nil
 }
+
+// Introduce writes a first-run state.json if there is none. Its
+// existence is the "already introduced" marker: once the first-run
+// setup has been offered, bare punchcard never offers it again.
+func (s *Store) Introduce() error {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return err
+	}
+	wait := s.LockWait
+	if wait == 0 {
+		wait = DefaultLockWait
+	}
+	l, err := lock(filepath.Join(s.dir, LockFile), wait)
+	if err != nil {
+		return err
+	}
+	defer l.unlock()
+	if _, err := os.Stat(filepath.Join(s.dir, StateFile)); !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	b, err := encode(core.NewState())
+	if err != nil {
+		return err
+	}
+	return s.replace(StateFile, b)
+}
