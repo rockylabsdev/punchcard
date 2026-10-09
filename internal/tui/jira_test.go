@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 )
@@ -251,6 +252,26 @@ func TestABrokenConfigIsNotConnected(t *testing.T) {
 	hs.openErr = errors.New("config.json: invalid character")
 	hs.open("09:12:00", 120, 32)
 	if got := statusText(hs); got != "Not connected to Jira · worklogs wait here, nothing is lost" {
+		t.Errorf("status line = %q", got)
+	}
+}
+
+// A Keychain that cannot be read is not connected, and the banner names
+// the Keychain; a rejected token still outranks it.
+func TestABrokenKeychainNamesTheKeychain(t *testing.T) {
+	kc := &config.KeychainError{Err: config.ErrKeychainTimeout}
+	hs := owing(t)
+	hs.openErr = kc
+	hs.open("09:12:00", 120, 32)
+	if got := statusText(hs); got != "Keychain error: timed out reading the token · worklogs wait here, nothing is lost" {
+		t.Errorf("status line = %q", got)
+	}
+
+	hs = owing(t)
+	hs.setup("08:20:00", core.RecordAuthFailure{})
+	hs.openErr = kc
+	hs.open("09:12:00", 120, 32)
+	if got := statusText(hs); !strings.HasPrefix(got, "✗ Jira rejected the token") {
 		t.Errorf("status line = %q", got)
 	}
 }

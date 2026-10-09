@@ -57,7 +57,10 @@ func (m Model) toasting() bool {
 // banner is the worst condition that holds now; ok is false when
 // nothing is wrong. The switch order is the priority, worst first:
 //
-//	token rejected (authFailedAt) > not connected > failed worklogs
+//	token rejected (authFailedAt) > Keychain error > not connected > failed worklogs
+//
+// A Keychain error is a kind of not connected (the probe wraps it as
+// ErrNotConfigured), so it sits just above that case to name the cause.
 //
 // A new condition is one case at its rank. Facts about Jira's
 // configuration arrive through the probe as m.link.err; "not connected"
@@ -72,10 +75,13 @@ func (m Model) banner() (text string, st lipgloss.Style, ok bool) {
 			failed++
 		}
 	}
+	var kc *config.KeychainError
 	switch {
 	case !s.AuthFailedAt.IsZero():
 		return gFailed + " Jira rejected the token at " + m.when(s.AuthFailedAt.Time) +
 			" · " + worklogs(owed) + " waiting", sFail, true
+	case m.link.known && errors.As(m.link.err, &kc):
+		return "Keychain error: " + kc.Err.Error() + " · worklogs wait here, nothing is lost", sWarn, true
 	case m.notConnected():
 		return "Not connected to Jira · worklogs wait here, nothing is lost", sWarn, true
 	case failed > 0:

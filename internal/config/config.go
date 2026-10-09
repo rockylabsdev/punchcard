@@ -70,4 +70,3 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	return c, nil
 }
-
