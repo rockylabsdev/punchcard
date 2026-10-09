@@ -33,6 +33,7 @@ type entry struct {
 	sync      syncState
 	syncErr   string
 	stoppedAt time.Time
+	sentAt    time.Time
 }
 
 func (e *entry) elapsed(now time.Time) time.Duration {
@@ -267,7 +268,7 @@ func seed(now time.Time, scenario int) *store {
 
 	ops77 := &ticket{key: "OPS-77", summary: "Rotate staging certs", activity: ago(now, 200)}
 	ops77.entries = []*entry{
-		{segs: []segment{{ago(now, 330), ago(now, 300)}}, stopped: true, sendDur: 30 * time.Minute, sync: syncSynced, comment: "renewed *.staging", stoppedAt: ago(now, 300)},
+		{segs: []segment{{ago(now, 330), ago(now, 300)}}, stopped: true, sendDur: 30 * time.Minute, sync: syncSynced, comment: "renewed *.staging", stoppedAt: ago(now, 300), sentAt: ago(now, 299)},
 		{segs: []segment{{ago(now, 215), ago(now, 200)}}, stopped: true, sendDur: 15 * time.Minute, sync: syncPending, stoppedAt: ago(now, 200)},
 	}
 	pun120 := &ticket{key: "PUN-120", summary: "Spike: Bubble Tea v2 layout at 80×24", activity: ago(now, 400)}
@@ -282,7 +283,7 @@ func seed(now time.Time, scenario int) *store {
 
 	if scenario == scRecovered {
 		// PUN-138 was running overnight; first presence capped it at lastSeen.
-		pun138.entries[0] = &entry{segs: []segment{{ago(now, 260), ago(now, 188)}, {ago(now, 900), ago(now, 790)}}, recovered: true, cappedAt: ago(now, 790)}
+		pun138.entries[0] = &entry{segs: []segment{{ago(now, 400), ago(now, 330)}, {ago(now, 300), ago(now, 240)}}, recovered: true, cappedAt: ago(now, 240)}
 		pun138.activity = ago(now, 30)
 	}
 	return s
