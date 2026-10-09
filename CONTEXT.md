@@ -42,6 +42,10 @@ The record submitted to Jira for a completed stretch of work — the body of the
 
 A `Worklog` is what Jira stores; a `TimeEntry` is what Punchcard measured. They are not the same thing: the duration is editable at stop time, and is truncated to the minute before it becomes a `Worklog`.
 
+### Today
+
+The local calendar day that contains now. **Time today** for a ticket is the part of its segments that falls inside that day: a segment that spans midnight is split there, and only the part after midnight counts toward today. A worklog's day is the local date it started, which is its entry's first segment start. Yesterday's time is never recounted and today's never carries over.
+
 ### Running / Paused / Stopped
 
 - **Running** — the timer is accruing against exactly one `TrackedTicket`. At most one ticket may be running at a time.
