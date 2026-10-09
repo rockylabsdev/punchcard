@@ -4,213 +4,197 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/spf13/cobra"
 )
 
-// runTimer handles start, pause, resume and status in plain text. The
-// full --json contract for them is slice 3's.
-func runTimer(o output, cmd string, args []string) int {
-	now := o.env.Now
-	if now == nil {
-		now = time.Now
-	}
-	st := store.New(store.Dir(o.env.Getenv), now)
-	origin := originFrom(o.env.Getenv)
+// The timer commands: start, pause, resume and the hidden touch. Each
+// builds one core command and sends it through the store seam; data is
+// the world after the change (StatusData).
 
-	var c core.Command
-	switch cmd {
-	case "status":
-		if len(args) > 0 {
-			return o.usage(cmd, "status takes no arguments")
-		}
-		return status(o, st, now())
-	case "pause":
-		if len(args) > 0 {
-			return o.usage(cmd, "pause takes no arguments")
-		}
-		c = core.Pause{Origin: origin}
-	case "start":
-		if len(args) != 1 {
-			return o.usage(cmd, "start needs one ticket key (the picker comes with the TUI)")
-		}
-		c = core.Start{Key: args[0], Unverified: true, Origin: origin, NewEntryID: core.NewEntryID()}
-	case "resume":
-		if len(args) > 1 {
-			return o.usage(cmd, "resume takes at most one ticket key")
-		}
-		r := core.Resume{Origin: origin, NewEntryID: core.NewEntryID()}
-		if len(args) == 1 {
-			r.Key = args[0]
-		}
-		c = r
+func (a *app) startCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "start [KEY]",
+		Short: "Start the timer on a ticket, pausing any other (no KEY: pick from recents)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var key string
+			if len(args) == 1 {
+				key = args[0]
+			} else {
+				k, err := a.pick("start")
+				if err != nil || k == "" {
+					return err // "" is a cancelled picker: a.code stays 0
+				}
+				key = k
+			}
+			n, err := a.newTicket(key)
+			if err != nil {
+				a.code = a.failure("start", err)
+				return nil
+			}
+			a.change("start", core.Start{Key: key, Summary: n.Summary, Unverified: n.Unverified,
+				Origin: a.origin, NewEntryID: a.env.NewID()})
+			return nil
+		},
 	}
+}
 
-	res, err := st.Apply(c)
-	notify(o, res.Notices)
+func (a *app) pauseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pause",
+		Short: "Pause the running timer (the entry stays open)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			a.change("pause", core.Pause{Origin: a.origin})
+			return nil
+		},
+	}
+}
+
+func (a *app) resumeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume [KEY]",
+		Short: "Resume the most recently paused entry; resume KEY is start KEY",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := core.Resume{Origin: a.origin, NewEntryID: a.env.NewID()}
+			if len(args) == 1 {
+				n, err := a.newTicket(args[0])
+				if err != nil {
+					a.code = a.failure("resume", err)
+					return nil
+				}
+				a.change("resume", core.Start{Key: args[0], Summary: n.Summary, Unverified: n.Unverified,
+					Origin: a.origin, NewEntryID: c.NewEntryID})
+				return nil
+			}
+			a.change("resume", c)
+			return nil
+		},
+	}
+}
+
+// touchCmd is the mod's presence call: presence, and focus on KEY (or
+// the key in --cwd's git branch). It never waits for the lock.
+func (a *app) touchCmd() *cobra.Command {
+	var cwd string
+	c := &cobra.Command{
+		Use:    "touch [KEY]",
+		Short:  "Record presence, and focus on KEY or the --cwd branch's key",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := ""
+			switch {
+			case len(args) == 1:
+				key = args[0]
+			case cwd != "":
+				key = branchKey(cwd)
+			}
+			t := core.Touch{Key: key, Unverified: true, Origin: a.origin, NewEntryID: a.env.NewID()}
+			res, err := a.env.Store.TryApply(t)
+			a.out.notices(res.Notices)
+			switch {
+			case errors.Is(err, store.ErrBusy):
+				a.code = a.out.ok("touch", nil, nil, "") // presence skips when busy
+			case err != nil:
+				a.code = a.failure("touch", err)
+			default:
+				a.done("touch", res, snapshot(res.World, res.Now), a.eventLines(res))
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&cwd, "cwd", "", "take the key from this directory's git branch")
+	return c
+}
+
+// change applies a timer command and reports the world after it.
+func (a *app) change(name string, c core.Command) {
+	res, err := a.apply(c)
 	if err != nil {
-		return failure(o, cmd, err)
+		a.code = a.failure(name, err)
+		return
 	}
+	d := snapshot(res.World, res.Now)
+	human := a.eventLines(res)
+	loc := res.Now.Location()
+	switch {
+	case d.Running != nil:
+		human += a.out.timerLine(*d.Running, loc, res.Now)
+	case name == "pause":
+		if tm, ok := lastPaused(res.World, res); ok {
+			human += a.out.timerLine(tm, loc, res.Now)
+		}
+	}
+	a.done(name, res, d, human)
+}
+
+func (a *app) eventLines(res store.Result) string {
 	var b strings.Builder
 	for _, e := range res.Events {
-		b.WriteString(describe(e, res.Now.Location()))
+		b.WriteString(a.out.describe(e, res.Now.Location()))
 	}
-	switch t, e, ok := core.Running(res.World.State); {
-	case ok:
-		fmt.Fprintf(&b, "▶ %s running  %s\n", t.Key, clock(core.Elapsed(e, res.Now)))
-	case cmd == "pause":
-		if t, e, ok := lastPaused(res.World.State); ok {
-			fmt.Fprintf(&b, "⏸ %s paused  %s\n", t.Key, clock(core.Elapsed(e, res.Now)))
-		}
-	}
-	return o.ok(cmd, nil, b.String())
+	return b.String()
 }
 
-// originFrom: agent inside Claude Code or another agent, else hand
-// (ADR 0004). --origin arrives with slice 3.
-func originFrom(getenv func(string) string) core.Origin {
-	if getenv("CLAUDECODE") != "" || getenv("AI_AGENT") != "" {
-		return core.OriginAgent
-	}
-	return core.OriginHand
-}
-
-func notify(o output, notices []string) {
-	for _, n := range notices {
-		fmt.Fprintf(o.env.Stderr, "punchcard: %s\n", n)
-	}
-}
-
-// failure maps a core or store error to its exit code (ADR 0004).
-func failure(o output, cmd string, err error) int {
-	switch {
-	case errors.Is(err, core.ErrUsage), errors.Is(err, core.ErrTooShort):
-		return o.fail(cmd, ExitUsage, "usage", err.Error())
-	case errors.Is(err, core.ErrNoTimer), errors.Is(err, core.ErrNotTracked), errors.Is(err, core.ErrUnlogged):
-		return o.fail(cmd, ExitNoTimer, "no_timer", err.Error())
-	case errors.Is(err, core.ErrHeld):
-		// The spec has no code for this yet; slice 3 settles it.
-		return o.fail(cmd, ExitNoTimer, "held", err.Error())
-	case errors.Is(err, store.ErrNewerSchema):
-		return o.fail(cmd, ExitStateUnreadable, "state_unreadable", err.Error()+"; upgrade punchcard")
-	case errors.Is(err, store.ErrBusy):
-		return o.fail(cmd, ExitBusy, "busy", err.Error()+"; try again")
-	default:
-		return o.fail(cmd, ExitInternal, "internal", err.Error())
-	}
-}
-
-func describe(e core.Event, loc *time.Location) string {
-	switch e.Kind {
-	case core.EventAdded:
-		return fmt.Sprintf("+ %s added (not verified with Jira yet)\n", e.Key)
-	case core.EventPaused:
-		return fmt.Sprintf("⏸ %s paused\n", e.Key)
-	case core.EventHeld:
-		return fmt.Sprintf("%s is now held: only you can move it\n", e.Key)
-	case core.EventStarted:
-		return fmt.Sprintf("▶ %s started\n", e.Key)
-	case core.EventRecovered:
-		return fmt.Sprintf("! %s recovered: no presence since %s, so it was capped there; fix the duration at stop\n",
-			e.Key, e.At.In(loc).Format("15:04"))
-	default:
-		return fmt.Sprintf("%s %s\n", e.Kind, e.Key)
-	}
-}
-
-// status prints the world without writing anything.
-func status(o output, st *store.Store, now time.Time) int {
-	w, notices, err := st.Read()
-	notify(o, notices)
-	if err != nil {
-		return failure(o, "status", err)
-	}
-	var b strings.Builder
-	if t, e, ok := core.Running(w.State); ok {
-		if core.Stale(w, now) {
-			r, _ := core.Recover(w, now)
-			capped := core.Elapsed(findEntry(r.State, t.Key, e.ID), now)
-			seen := w.Heartbeat.LastSeen
-			if seen.IsZero() {
-				seen = e.Segments[len(e.Segments)-1].StartedAt
-			}
-			fmt.Fprintf(&b, "! %s stale  %s (capped; %s uncapped)\n", t.Key, clock(capped), clock(core.Elapsed(e, now)))
-			fmt.Fprintf(&b, "  last seen %s (%s ago); the next action will recover it\n",
-				seen.In(now.Location()).Format("15:04"), age(now.Sub(seen.Time)))
-		} else {
-			fmt.Fprintf(&b, "▶ %s running  %s\n", t.Key, clock(core.Elapsed(e, now)))
-		}
-	} else {
-		b.WriteString("Nothing running.\n")
-	}
-	for _, t := range core.ListOrder(w.State, now) {
-		for _, e := range t.Entries {
-			if e.Paused() {
-				fmt.Fprintf(&b, "⏸ %s paused  %s%s\n", t.Key, clock(core.Elapsed(e, now)), recovered(e))
-			}
-		}
-	}
-	if n, total := core.Owed(w.State); n > 0 {
-		fmt.Fprintf(&b, "%d unsent worklog(s), %s\n", n, clock(total))
-	}
-	return o.ok("status", nil, b.String())
-}
-
-func recovered(e core.TimeEntry) string {
-	if e.Recovered {
-		return "  (recovered: check the duration at stop)"
-	}
-	return ""
-}
-
-func findEntry(s core.State, key, id string) core.TimeEntry {
-	for _, t := range s.TrackedTickets {
-		if t.Key == key {
-			for _, e := range t.Entries {
-				if e.ID == id {
-					return e
-				}
-			}
-		}
-	}
-	return core.TimeEntry{}
-}
-
-// lastPaused is the most recently paused entry.
-func lastPaused(s core.State) (core.TrackedTicket, core.TimeEntry, bool) {
-	var bt core.TrackedTicket
-	var be core.TimeEntry
+// lastPaused is the most recently paused timer.
+func lastPaused(w core.World, res store.Result) (Timer, bool) {
+	var best Timer
+	var bestEnd core.Timestamp
 	found := false
-	for _, t := range s.TrackedTickets {
+	for _, t := range w.State.TrackedTickets {
 		for _, e := range t.Entries {
 			if !e.Paused() {
 				continue
 			}
 			end := e.Segments[len(e.Segments)-1].EndedAt
-			if !found || end.After(be.Segments[len(be.Segments)-1].EndedAt.Time) {
-				bt, be, found = t, e, true
+			if !found || end.After(bestEnd.Time) {
+				best, bestEnd, found = timerOf(w, t, e, res.Now), end, true
 			}
 		}
 	}
-	return bt, be, found
+	return best, found
 }
 
-// clock formats a duration as h:mm:ss.
-func clock(d time.Duration) string {
-	d = d.Truncate(time.Second)
-	return fmt.Sprintf("%d:%02d:%02d", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
+// newTicket is what start, resume KEY and add record for a key. Only a
+// ticket new to the list would fetch its summary from Jira (slice 4
+// slots that in here); for now every new key is unverified.
+func (a *app) newTicket(key string) (core.NewTicket, error) {
+	return core.NewTicket{Key: key, Unverified: true}, nil
 }
 
-// age formats how long ago, coarsely: 3h15m, 12m, 40s.
-func age(d time.Duration) string {
-	switch {
-	case d >= time.Hour:
-		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
-	case d >= time.Minute:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	default:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
+// pick asks for a ticket on a TTY, recents (the ls order) first. With no
+// TTY, or with --json (which never prompts), a missing key is usage.
+func (a *app) pick(cmd string) (string, error) {
+	if !a.env.TTY || a.out.json {
+		return "", usageError(cmd + " needs a ticket key when not on a terminal (--json never prompts)")
 	}
+	w, now, err := a.read()
+	if err != nil {
+		a.code = a.failure(cmd, err)
+		return "", nil
+	}
+	var choices []Choice
+	for _, t := range core.ListOrder(w.State, now) {
+		choices = append(choices, Choice{Key: t.Key, Summary: t.Summary})
+	}
+	if len(choices) == 0 {
+		return "", usageError("no tickets yet: punchcard " + cmd + " KEY")
+	}
+	pick := a.env.Pick
+	if pick == nil {
+		pick = a.linePick
+	}
+	key, err := pick(choices)
+	if err != nil {
+		return "", usageError(err.Error())
+	}
+	if key == "" {
+		fmt.Fprintln(a.env.Stderr, "Nothing started.")
+	}
+	return key, nil
 }

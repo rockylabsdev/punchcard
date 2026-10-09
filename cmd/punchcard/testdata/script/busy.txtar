@@ -1,0 +1,16 @@
+# Another punchcard holds state.lock: a change waits about 2 s, then exits 75.
+holdlock $XDG_DATA_HOME/punchcard/state.lock
+exitcode 75 punchcard start AA-1
+stderr 'locked by another punchcard'
+! stdout .
+
+exitcode 75 punchcard pause --json
+stdout '"outcome":"busy"'
+stdout '"ok":false'
+
+# Reads take no lock.
+exec punchcard status
+stdout 'Nothing running'
+
+# Presence skips at once when busy.
+exitcode 0 punchcard touch

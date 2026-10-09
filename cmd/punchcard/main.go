@@ -7,14 +7,21 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/cli"
+	"golang.org/x/term"
 )
 
-func main() {
-	os.Exit(cli.Run(os.Args[1:], cli.Env{
+// run is the whole program; main_test.go re-runs it as `punchcard` in
+// testscript scripts.
+func run() int {
+	return cli.Run(os.Args[1:], cli.Env{
+		Stdin:   os.Stdin,
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 		Getenv:  os.Getenv,
 		Now:     time.Now,
 		Version: cli.BuildVersion(),
-	}))
+		TTY:     term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
+	})
 }
+
+func main() { os.Exit(run()) }

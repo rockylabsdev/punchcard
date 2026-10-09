@@ -1,0 +1,33 @@
+# The plain-text shape of the everyday commands.
+exec punchcard start AA-1
+cmp stdout start.txt
+! stderr .
+
+exec punchcard status
+stdout '^▶ AA-1 running  0:00:0[0-9]  held$'
+
+exec punchcard status --short
+stdout '^▶ AA-1 0:00$'
+
+exec punchcard ls
+stdout '^▶ AA-1  running  0:00:0[0-9]  +\(unverified\)$'
+
+exec punchcard pause
+stdout '^⏸ AA-1 paused  0:00:0[0-9]$'
+
+! exec punchcard rm AA-1
+stderr '^punchcard: ticket has unlogged time: AA-1 has a running or paused entry or an unsent worklog$'
+stderr '^  stop and sync it first, or pass --force to drop the unsent time$'
+
+exec punchcard rm --force AA-1
+stdout '^- AA-1 removed$'
+
+exec punchcard status --short
+! stdout .
+
+exec punchcard version
+stdout '^punchcard \S+ \(contract v1, go1\.\d+'
+
+-- start.txt --
++ AA-1 added (not verified with Jira yet)
+▶ AA-1 running  0:00:00  held
