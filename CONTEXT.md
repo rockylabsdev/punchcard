@@ -34,6 +34,8 @@ A pause does **not** end a `TimeEntry` — it closes the current **segment**. An
 
 One uninterrupted stretch of accrual inside a `TimeEntry`. A segment with no end time is the running one; there is at most one such segment across every writer: the TUI, the CLI, and any agent session. Every change to the state is one indivisible transition that closes any open segment before it opens another, so starting one ticket while another runs pauses the first.
 
+On screen, a segment is a **counted** stretch, and the gap between two segments is a pause, shown as **not counted**. Time cut off by recovery after `lastSeen` is shown the same way, as time away, not counted. "Counted" and "not counted" are display labels for `Segment` and its gaps. They are not separate domain terms.
+
 ### Worklog
 
 The record submitted to Jira for a completed stretch of work — the body of the `POST` to Jira, and the thing whose sync state (pending / synced) the app tracks.
