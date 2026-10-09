@@ -49,6 +49,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.markFailed(c)
 	case RecordAuthFailure:
 		a.w.State.AuthFailedAt = a.now
+	case Verify:
+		err = a.verify(c)
 	default:
 		err = fmt.Errorf("%w: unknown command %T", ErrUsage, cmd)
 	}
@@ -78,6 +80,7 @@ func (a *applier) start(c Start) error {
 	}
 	if t, e := a.running(); e != nil {
 		if t.Key == c.Key {
+			a.track(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}) // confirms only
 			if c.Origin == OriginHand && !e.Held {
 				e.Held, e.Origin = true, OriginHand
 				a.emit(EventHeld, t.Key)
