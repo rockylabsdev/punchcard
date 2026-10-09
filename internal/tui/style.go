@@ -24,7 +24,6 @@ var (
 	BrandLight = lipgloss.Color("#5F8700")
 
 	cRed     = lipgloss.Color("1")
-	cGreen   = lipgloss.Color("2")
 	cYellow  = lipgloss.Color("3")
 	cBlue    = lipgloss.Color("4")
 	cMagenta = lipgloss.Color("5")

@@ -34,9 +34,6 @@ const Wordmark = "" +
 // unpunched ones in a faint grey.
 func (t *Terminal) wordmark() string {
 	mark := t.mark
-	if mark.GetForeground() == nil {
-		mark = tMark
-	}
 	var b strings.Builder
 	for _, r := range Wordmark {
 		switch r {
@@ -76,7 +73,8 @@ type Terminal struct {
 	// width is the forms' width: the terminal's, capped. Huh panics on
 	// a terminal that reports no size, so unknown is 72.
 	width int
-	// mark is the wordmark's hole style; zero means tMark.
+	// mark is the wordmark's hole style: tMark until the terminal says
+	// its background is light.
 	mark lipgloss.Style
 	// dark is whether the terminal's background is dark, as asked once in
 	// NewTerminal; the forms take the brand shade from it. Unknown is dark.
@@ -88,7 +86,7 @@ type Terminal struct {
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
-	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true}
+	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true, mark: tMark}
 	if f, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
 			t.width = min(w, 80)
