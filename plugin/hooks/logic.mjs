@@ -108,8 +108,9 @@ export function bandFrom(poll, hereKey) {
   const paused = Array.isArray(d.paused) ? d.paused : []
   const unsent = d.unsent?.count ?? 0
   const authFailed = Boolean(d.authFailedAt)
+  const keychainBroken = !authFailed && Boolean(d.keychainError) // one slot: the worse wins
   const shown = d.running ?? paused[0]
-  if (!shown && unsent === 0 && !authFailed) return null
+  if (!shown && unsent === 0 && !authFailed && !keychainBroken) return null
 
   /** @type {string[]} */
   const parts = []
@@ -128,6 +129,10 @@ export function bandFrom(poll, hereKey) {
   if (authFailed) {
     parts.push('Jira auth failed')
     tone = 'error'
+  }
+  if (keychainBroken) {
+    parts.push('Keychain error')
+    if (tone !== 'error') tone = 'warning'
   }
   const runningKey = d.running?.key ?? ''
   if (hereKey && hereKey !== runningKey) parts.push(`here: ${hereKey}`)
