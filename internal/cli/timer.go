@@ -79,12 +79,12 @@ func (a *app) resumeCmd() *cobra.Command {
 }
 
 // touchCmd is the mod's presence call: presence, and focus on KEY (or
-// the key in --cwd's git branch). It never waits for the lock.
+// --cwd's key, as status --cwd reports it). It never waits for the lock.
 func (a *app) touchCmd() *cobra.Command {
 	var cwd string
 	c := &cobra.Command{
 		Use:    "touch [KEY]",
-		Short:  "Record presence, and focus on KEY or the --cwd branch's key",
+		Short:  "Record presence, and focus on KEY or --cwd's key",
 		Hidden: true,
 		Args:   cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,7 +93,11 @@ func (a *app) touchCmd() *cobra.Command {
 			case len(args) == 1:
 				key = a.key(args[0])
 			case cwd != "":
-				key = branchKey(cwd)
+				here, notices := resolveHere(cwd, a.env.Grammar())
+				a.out.notices(notices)
+				if here != nil {
+					key = here.Key
+				}
 			}
 			// Presence never asks the tracker: a new key with one is unverified.
 			t := core.Touch{Key: key, Unverified: a.env.HasTracker(), Origin: a.origin, NewEntryID: a.env.NewID(),
@@ -111,7 +115,7 @@ func (a *app) touchCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cwd, "cwd", "", "take the key from this directory's git branch")
+	c.Flags().StringVar(&cwd, "cwd", "", "take the key from this directory (its .punchcard, else its git branch)")
 	return c
 }
 

@@ -7,13 +7,13 @@ import {
   KEEP,
   SUBMIT,
   bandFrom,
-  branchKey,
   clock,
   editPresenceDue,
   eventText,
   gateNeedsDialog,
   gateQuestion,
   gateVerdict,
+  hereKey,
   isGatedStop,
   manifestVersion,
   needsDuration,
@@ -29,6 +29,7 @@ import {
   versionSkew,
   worklogDuration,
 } from '../hooks/logic.mjs'
+import * as logic from '../hooks/logic.mjs'
 
 describe('versionSkew', () => {
   const cases = [
@@ -65,29 +66,19 @@ describe('bandFrom with version skew', () => {
     },
   }
   test('shows even when idle, as a warning', () =>
-    assert.deepEqual(bandFrom(idle, '', skew), { tone: 'warning', text: said }))
+    assert.deepEqual(bandFrom(idle, skew), { tone: 'warning', text: said }))
   test('follows the timer without changing its tone', () =>
-    assert.deepEqual(bandFrom(running, '', skew), { tone: 'success', text: `▶ ABC-1 0:01 · ${said}` }))
-  test('no skew, no change', () => assert.equal(bandFrom(idle, '', null), null))
+    assert.deepEqual(bandFrom(running, skew), { tone: 'success', text: `▶ ABC-1 0:01 · ${said}` }))
+  test('no skew, no change', () => assert.equal(bandFrom(idle, null), null))
   test('a missing binary says only that', () =>
-    assert.deepEqual(bandFrom({ missing: true }, '', skew), { tone: 'error', text: 'punchcard not found on PATH' }))
+    assert.deepEqual(bandFrom({ missing: true }, skew), { tone: 'error', text: 'punchcard not found on PATH' }))
 })
 
-describe('branchKey', () => {
-  const cases = [
-    ['feature/ABC-123-thing', 'ABC-123'],
-    ['ABC-123', 'ABC-123'],
-    ['jds/PROJ2-9', 'PROJ2-9'],
-    ['fix/AB-1-and-CD-2', 'AB-1'],
-    ['main', ''],
-    ['feature/abc-123', ''],
-    ['A-1', ''], // one letter is no project key
-    ['1AB-2', 'AB-2'],
-    ['', ''],
-  ]
-  for (const [branch, want] of cases) {
-    test(`${JSON.stringify(branch)} -> ${JSON.stringify(want)}`, () => assert.equal(branchKey(branch), want))
-  }
+// The binary alone knows what a directory's key is (its .punchcard, else
+// its branch); the mod has no key rule of its own to disagree with it.
+test('the mod exports no key rule', () => {
+  assert.equal(logic.KEY_PATTERN, undefined)
+  assert.equal(logic.branchKey, undefined)
 })
 
 describe('submitTouch', () => {
@@ -154,31 +145,31 @@ const status = (data) => ({
 describe('bandFrom', () => {
   const cases = [
     ['idle with nothing owed shows no band', status({}), '', null],
-    ['idle on a keyed branch names the ticket and the next action', status({}), 'DEF-9',
+    ['idle in a keyed directory names the ticket and the next action', status({}), 'DEF-9',
       { tone: 'subtle', text: 'DEF-9 not running · /punch start' }],
     ['running', status({ running: timer({ summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · Fix login' }],
     ['running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · held · Fix login' }],
-    ['another ticket running: grey, says where the time goes and what this branch is for', status({ running: timer() }), 'DEF-9',
-      { tone: 'subtle', text: 'timer on ABC-123 1:12 · this branch is DEF-9' }],
+    ['another ticket running: grey, says where the time goes and what this session is for', status({ running: timer() }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · here: DEF-9' }],
     ['another ticket running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), 'DEF-9',
-      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · this branch is DEF-9' }],
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · here: DEF-9' }],
     ['another ticket running, worklogs owed: the debt still warns', status({ running: timer(), unsent: { count: 1, seconds: 60 } }), 'DEF-9',
-      { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · this branch is DEF-9' }],
+      { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · here: DEF-9' }],
     ['another ticket recovered: still red here', status({ running: timer({ recovered: true }) }), 'DEF-9',
-      { tone: 'error', text: '! ABC-123 recovered · fix at stop · this branch is DEF-9' }],
-    ['a branch with no ticket: green, nothing to compare', status({ running: timer() }), '',
+      { tone: 'error', text: '! ABC-123 recovered · fix at stop · here: DEF-9' }],
+    ['a directory with no ticket: green, nothing to compare', status({ running: timer() }), '',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
-    ['nothing extra on the running ticket\'s own branch', status({ running: timer() }), 'ABC-123',
+    ['nothing extra in the running ticket\'s own directory', status({ running: timer() }), 'ABC-123',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
     ['paused', status({ paused: [timer({ state: 'paused', elapsedSeconds: 600 })] }), '',
       { tone: 'warning', text: '⏸ ABC-123 0:10' }],
-    ['several paused, the first on this branch', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
+    ['several paused, the first the session\'s', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
       { tone: 'warning', text: '⏸ ABC-123 1:12 · +1 paused' }],
     ['paused on another ticket', status({ paused: [timer({ state: 'paused' })] }), 'DEF-9',
-      { tone: 'warning', text: '⏸ ABC-123 1:12 · this branch is DEF-9' }],
-    ['idle and owed on a keyed branch', status({ unsent: { count: 1, seconds: 300 } }), 'DEF-9',
+      { tone: 'warning', text: '⏸ ABC-123 1:12 · here: DEF-9' }],
+    ['idle and owed in a keyed directory', status({ unsent: { count: 1, seconds: 300 } }), 'DEF-9',
       { tone: 'warning', text: '1 unsent · DEF-9 not running · /punch start' }],
     ['recovered', status({ running: timer({ recovered: true }) }), '',
       { tone: 'error', text: '! ABC-123 recovered · fix at stop' }],
@@ -211,8 +202,26 @@ describe('bandFrom', () => {
     ['not JSON', { envelope: null }, '', { tone: 'error', text: 'punchcard: status gave no JSON' }],
     ['timed out', { failed: 'timed out' }, '', { tone: 'error', text: 'punchcard: timed out' }],
   ]
+  // The case's here is what status --cwd reported for the session.
+  const at = (poll, here) =>
+    poll.envelope?.data ? { envelope: { ...poll.envelope, data: { ...poll.envelope.data, here: here ? { key: here, source: 'file' } : null } } } : poll
   for (const [name, poll, here, want] of cases) {
-    test(name, () => assert.deepEqual(bandFrom(poll, here), want))
+    test(name, () => assert.deepEqual(bandFrom(at(poll, here)), want))
+  }
+})
+
+describe('hereKey', () => {
+  const cases = [
+    ['from a .punchcard', status({ here: { key: 'payroll', source: 'file' } }), 'payroll'],
+    ['from the branch', status({ here: { key: 'ABC-123', source: 'branch' } }), 'ABC-123'],
+    ['the directory names none', status({ here: null }), ''],
+    ['an older binary that does not say', status({}), ''],
+    ['no JSON', { envelope: null }, ''],
+    ['binary missing', { missing: true }, ''],
+    ['timed out', { failed: 'timed out' }, ''],
+  ]
+  for (const [name, poll, want] of cases) {
+    test(name, () => assert.equal(hereKey(poll), want))
   }
 })
 
@@ -323,7 +332,7 @@ describe('parsePunch', () => {
   const cases = [
     ['start', 'ABC-1', { verb: 'start', argv: ['start', 'ABC-1'] }],
     ['start DEF-2', 'ABC-1', { verb: 'start', argv: ['start', 'DEF-2'] }],
-    ['start', '', { error: 'This branch names no ticket: use /punch start KEY.' }],
+    ['start', '', { error: 'No ticket here (no .punchcard, and the branch names none): use /punch start KEY.' }],
     ['pause', '', { verb: 'pause', argv: ['pause'] }],
     ['resume', 'ABC-1', { verb: 'resume', argv: ['resume'] }],
     ['resume DEF-2', '', { verb: 'resume', argv: ['resume', 'DEF-2'] }],

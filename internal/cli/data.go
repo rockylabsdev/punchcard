@@ -53,6 +53,10 @@ type StatusData struct {
 type StatusReport struct {
 	StatusData
 	Tracker config.Tracker `json:"tracker"` // none|jira
+	// Here is --cwd's key: a *Here, which is null when the directory
+	// names none. Absent without --cwd (a nil interface), since there is
+	// no directory to answer for.
+	Here any `json:"here,omitempty"`
 	// Configured and the rest are present only with Jira.
 	Configured  *bool         `json:"configured,omitempty"`
 	TokenSource config.Source `json:"tokenSource,omitempty"` // env|keychain|file

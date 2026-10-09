@@ -2,17 +2,16 @@
 // module (register.tsx) does the I/O and calls these; test/logic.test.mjs
 // runs them under `node --test`.
 
-/** A Jira ticket key anywhere in a branch name (feature/ABC-123-thing). */
-export const KEY_PATTERN = /[A-Z][A-Z0-9]+-\d+/
-
 /**
- * The ticket key a git branch names, or "" when it names none.
- * @param {string} branch
+ * This session's key as the last `status --json --cwd` reported it
+ * (`data.here`: the directory's .punchcard, else its branch), or "" for
+ * none. The binary owns the rule; the mod has none of its own.
+ * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @returns {string}
  */
-export function branchKey(branch) {
-  const m = KEY_PATTERN.exec(String(branch ?? ''))
-  return m ? m[0] : ''
+export function hereKey(poll) {
+  const k = poll?.envelope?.data?.here?.key
+  return typeof k === 'string' ? k : ''
 }
 
 /** The prompt origins that are the person's own submit (spec: composer, bridge). */
@@ -21,7 +20,7 @@ const PERSON = new Set(['composer', 'bridge'])
 /**
  * The punchcard argv a submitted prompt runs, or null for none. The
  * person's own prompt is presence and focus from the session directory's
- * branch; a slash command is presence only, so `/punch pause` is never
+ * key; a slash command is presence only, so `/punch pause` is never
  * undone by a focus from the same Enter.
  * @param {{ kind: string }} origin
  * @param {string} text
@@ -130,15 +129,14 @@ export function versionSkew(plugin, binary) {
  * poll is what the last `status --json` came to: `{ missing: true }` when
  * punchcard could not be started, `{ envelope }` when it answered (the
  * envelope null when its stdout was not one), `{ failed: message }` when
- * it timed out or similar. hereKey is this session's branch key ("" for
- * none): idle, the band names it and the next action; with another
- * ticket shown, it says what this branch is for.
+ * it timed out or similar. Its `here` is this session's key (see
+ * hereKey): idle, the band names it and the next action; with another
+ * ticket shown, it says what this session is for.
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
- * @param {string} hereKey
  * @param {Skew | null} [skew] plugin and binary versions when they differ
  * @returns {Band | null}
  */
-export function bandFrom(poll, hereKey, skew = null) {
+export function bandFrom(poll, skew = null) {
   if (poll.missing) return { tone: 'error', text: 'punchcard not found on PATH' }
   if (poll.failed !== undefined) return { tone: 'error', text: `punchcard: ${poll.failed}` }
   const env = poll.envelope
@@ -146,6 +144,7 @@ export function bandFrom(poll, hereKey, skew = null) {
   if (!env.ok) return { tone: 'error', text: `punchcard: ${env.error?.message ?? env.outcome}` }
 
   const d = env.data ?? {}
+  const here = hereKey(poll)
   const paused = Array.isArray(d.paused) ? d.paused : []
   const unsent = d.unsent?.count ?? 0
   // One slot for Jira, the worse wins: token rejected, then a Keychain
@@ -154,16 +153,16 @@ export function bandFrom(poll, hereKey, skew = null) {
   const keychainBroken = !authFailed && Boolean(d.keychainError)
   const notConnected = !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
-  if (!shown && !hereKey && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
+  if (!shown && !here && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
   /** @type {string[]} */
   const parts = []
   /** @type {Band['tone']} */
   let tone = 'subtle'
-  // A timer running on another ticket than this session's branch is
+  // A timer running on another ticket than this session's is
   // counting somewhere else: the band steps back to grey and says where,
   // so only the session being billed is green.
-  const elsewhere = Boolean(hereKey && shown && shown.key !== hereKey)
+  const elsewhere = Boolean(here && shown && shown.key !== here)
   if (shown) {
     const t = timerParts(shown, elsewhere)
     parts.push(...t.parts)
@@ -188,8 +187,8 @@ export function bandFrom(poll, hereKey, skew = null) {
   }
   // This session's ticket, when it is not the one shown: idle, the next
   // action; otherwise a reminder of what this directory is for.
-  if (hereKey && !shown) parts.push(`${hereKey} not running`, '/punch start')
-  else if (hereKey && shown.key !== hereKey) parts.push(`this branch is ${hereKey}`)
+  if (here && !shown) parts.push(`${here} not running`, '/punch start')
+  else if (here && shown.key !== here) parts.push(`here: ${here}`)
   if (skew) {
     parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
     if (tone === 'subtle') tone = 'warning'
@@ -201,7 +200,7 @@ export function bandFrom(poll, hereKey, skew = null) {
  * The band's words for one timer.
  * @param {any} t a Timer from `status --json`
  * @param {boolean} [elsewhere] it runs on another ticket than this
- *   session's branch: shown as "timer on KEY", in the subtle tone
+ *   session's key: shown as "timer on KEY", in the subtle tone
  * @returns {{ tone: Band['tone'], parts: string[] }}
  */
 function timerParts(t, elsewhere = false) {
@@ -357,8 +356,8 @@ export const PUNCH_USAGE = 'Usage: /punch start [KEY] | pause | resume [KEY] | s
  */
 
 /**
- * What `/punch <args>` asks for. start with no key takes this branch's key
- * (hereKey); with neither it is refused, since an unkeyed session needs an
+ * What `/punch <args>` asks for. start with no key takes this session's
+ * key (hereKey); with neither it is refused, since an unkeyed session needs an
  * explicit key. stop takes an optional duration and `-m`, the comment
  * being the rest of the line (quotes optional).
  * @param {string} args
@@ -372,7 +371,7 @@ export function parsePunch(args, hereKey) {
     case 'start': {
       if (rest.length > 1) return { error: PUNCH_USAGE }
       const key = rest[0] ?? hereKey
-      if (!key) return { error: 'This branch names no ticket: use /punch start KEY.' }
+      if (!key) return { error: 'No ticket here (no .punchcard, and the branch names none): use /punch start KEY.' }
       return { verb: 'start', argv: ['start', key] }
     }
     case 'pause':

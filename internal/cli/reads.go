@@ -19,19 +19,21 @@ import (
 
 func (a *app) statusCmd() *cobra.Command {
 	var shortForm bool
+	var cwd string
 	c := &cobra.Command{
 		Use:   "status",
 		Short: "Show the running ticket, paused tickets and unsent worklogs",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.status(shortForm)
+			return a.status(shortForm, cwd)
 		},
 	}
 	c.Flags().BoolVar(&shortForm, "short", false, "one line for a shell prompt; nothing when idle; always exits 0")
+	c.Flags().StringVar(&cwd, "cwd", "", "also report this directory's key (its .punchcard, else its git branch) as here")
 	return c
 }
 
-func (a *app) status(shortForm bool) error {
+func (a *app) status(shortForm bool, cwd string) error {
 	w, now, err := a.read()
 	if err != nil {
 		if shortForm && !a.out.json {
@@ -50,6 +52,11 @@ func (a *app) status(shortForm bool) error {
 		return nil
 	}
 	rep := a.link(d)
+	if cwd != "" {
+		here, notices := resolveHere(cwd, a.env.Grammar())
+		a.out.notices(notices)
+		rep.Here = here
+	}
 	a.code = a.out.ok("status", rep, nil, a.out.statusText(rep, now))
 	return nil
 }

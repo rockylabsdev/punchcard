@@ -149,7 +149,8 @@ func (e Env) withDefaults() Env {
 func Run(args []string, env Env) int {
 	env = env.withDefaults()
 	a := &app{env: env}
-	a.out = output{env: env, json: wantJSON(args, env.Getenv), color: env.TTY && env.Getenv("NO_COLOR") == ""}
+	a.out = output{env: env, json: wantJSON(args, env.Getenv), color: env.TTY && env.Getenv("NO_COLOR") == "",
+		noticed: new([]string)}
 	root := a.root()
 	root.SetArgs(append([]string{}, args...)) // never nil: cobra would read os.Args
 	root.SetIn(env.Stdin)
@@ -241,7 +242,7 @@ func (a *app) root() *cobra.Command {
 				a.code = a.env.TUI(a.env)
 				return nil
 			}
-			return a.status(false)
+			return a.status(false, "")
 		},
 	}
 	root.PersistentFlags().BoolVar(&jsonFlag, "json", false, "print one JSON envelope on stdout (also PUNCHCARD_JSON=1)")
