@@ -31,7 +31,7 @@ const Wordmark = "" +
 	"#.....##..#..#..##..#..#..##..#..#.#..#.###."
 
 // wordmark is Wordmark styled: punched holes in the brand colour,
-// unpunched ones in the gutter grey.
+// unpunched ones in a faint grey.
 func (t *Terminal) wordmark() string {
 	mark := t.mark
 	if mark.GetForeground() == nil {
@@ -41,9 +41,9 @@ func (t *Terminal) wordmark() string {
 	for _, r := range Wordmark {
 		switch r {
 		case '#':
-			b.WriteString(mark.Render("⬤"))
+			b.WriteString(mark.Render("●"))
 		case '.':
-			b.WriteString(tGutter.Render("·"))
+			b.WriteString(tGrid.Render("·"))
 		default:
 			b.WriteRune(r)
 		}
@@ -53,6 +53,9 @@ func (t *Terminal) wordmark() string {
 
 var (
 	tGutter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	// tGrid is the wordmark's unpunched holes: barely there, so the
+	// punched ones carry the letters.
+	tGrid = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 	// tMark is the wordmark's holes: the brand colour, in its dark-background
 	// shade until NewTerminal asks the terminal (see brand).
 	tMark  = lipgloss.NewStyle().Foreground(tui.BrandDark).Bold(true)
