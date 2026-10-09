@@ -63,14 +63,15 @@ The mod polls `punchcard status --json` every 10 seconds, and right after any of
 | `… · Jira auth failed` | Jira rejected the token. Run `punchcard setup`. |
 | `… · Keychain error: <cause>` | The Keychain could not be read and there is no token file. |
 | `… · Jira not connected` | No credentials. Timers still work; worklogs wait. |
-| `… · this branch is DEF-9` | This session's branch names a ticket other than the one shown. |
+| `timer on ABC-123 1:12 · … · this branch is DEF-9` | Grey. The timer is running, but on another session's ticket. Only the session whose branch is the running ticket gets the green `▶` band. |
+| `⏸ ABC-123 0:40 · … · this branch is DEF-9` | Paused on another ticket than this session's. |
 | `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's branch names DEF-9. |
 | `… · plugin 0.1.0 ≠ punchcard 0.2.0 · run punchcard setup` | The plugin and the binary come from different releases. |
 | `punchcard not found on PATH` | Claude Code cannot run `punchcard`. Presence does nothing until it can. |
 | `punchcard: status timed out` | A status call took over 5 seconds. |
 | `punchcard: status gave no JSON` | The binary answered, but not with the envelope. |
 
-The colour follows the worst thing on the line: green while running, yellow when paused or when something waits, red for recovered, stale, an auth failure or a missing binary.
+The colour follows the worst thing on the line: green while running on this session's ticket (or in a session whose branch names none), grey while running on another session's ticket, yellow when paused or when something waits, red for recovered, stale, an auth failure or a missing binary. So with several sessions open, exactly one band is green: the one whose ticket is being timed.
 
 ## `/punch`
 

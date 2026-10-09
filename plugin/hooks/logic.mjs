@@ -160,8 +160,12 @@ export function bandFrom(poll, hereKey, skew = null) {
   const parts = []
   /** @type {Band['tone']} */
   let tone = 'subtle'
+  // A timer running on another ticket than this session's branch is
+  // counting somewhere else: the band steps back to grey and says where,
+  // so only the session being billed is green.
+  const elsewhere = Boolean(hereKey && shown && shown.key !== hereKey)
   if (shown) {
-    const t = timerParts(shown)
+    const t = timerParts(shown, elsewhere)
     parts.push(...t.parts)
     tone = t.tone
     if (!d.running && paused.length > 1) parts.push(`+${paused.length - 1} paused`)
@@ -196,20 +200,26 @@ export function bandFrom(poll, hereKey, skew = null) {
 /**
  * The band's words for one timer.
  * @param {any} t a Timer from `status --json`
+ * @param {boolean} [elsewhere] it runs on another ticket than this
+ *   session's branch: shown as "timer on KEY", in the subtle tone
  * @returns {{ tone: Band['tone'], parts: string[] }}
  */
-function timerParts(t) {
+function timerParts(t, elsewhere = false) {
   if (t.recovered) return { tone: 'error', parts: [`! ${t.key} recovered`, 'fix at stop'] }
   if (t.state === 'stale') return { tone: 'error', parts: [`! ${t.key} stale ${clock(t.elapsedSeconds)}`] }
   const parts = []
   if (t.state === 'paused') {
     parts.push(`⏸ ${t.key} ${clock(t.elapsedSeconds)}`)
+  } else if (elsewhere) {
+    parts.push(`timer on ${t.key} ${clock(t.elapsedSeconds)}`)
+    if (t.held) parts.push('held')
   } else {
     parts.push(`▶ ${t.key} ${clock(t.elapsedSeconds)}`)
     if (t.held) parts.push('held')
   }
   if (t.summary) parts.push(t.summary)
-  return { tone: t.state === 'paused' ? 'warning' : 'success', parts }
+  const tone = t.state === 'paused' ? 'warning' : elsewhere ? 'subtle' : 'success'
+  return { tone, parts }
 }
 
 /**
