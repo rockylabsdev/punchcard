@@ -1,15 +1,15 @@
 ╭─[1] Tickets · today 1h 22m─────────────────────────────────────────────╮╭─[2] PUN-142────────────────────────────────╮
 │›▶ PUN-142       Wire flock on the side state.lock             0:15:34  ││Wire flock on the side state.lock           │
 │ ‖ PUN-138       Stop dialog: duration parsing and the live p…     12m  ││                                            │
-│ · OPS-77        Rotate staging certs                              15m ○││                                            │
-│ · PUN-120       Spike: Bubble Tea v2 layout                       40m ✗││                                            │
+│ · OPS-77        Rotate staging certs                              15m ○││▶ RUNNING                            0:15:34│
+│ · PUN-120       Spike: Bubble Tea v2 layout                       40m ✗││  stop sends this as one worklog — x        │
 │ · DATA-9        ? unverified — Jira not reached yet                 —  ││                                            │
-│ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││                                            │
+│ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││ 08:58–now   0:14:34 counted                │
+│                                                                        ││ 08:15–08:58 ‖ paused 43m, not counted      │
+│                                                                        ││ 08:14–08:15      1m counted                │
 │                                                                        ││                                            │
-│                                                                        ││                                            │
-│                                                                        ││                                            │
-│                                                                        ││                                            │
-│                                                                        ││                                            │
+│                                                                        ││WORKLOGS TODAY                              │
+│                                                                        ││  nothing yet                               │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
@@ -29,4 +29,4 @@
 │ the Jira strip is not built yet                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
                                                                                                                         
- space pause  j/k move  q quit                                                                                          
+ space pause  x stop…  a add  d remove  j/k move  q quit                                                                

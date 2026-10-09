@@ -8,6 +8,7 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/cli"
 	"github.com/j-dsmith/punchcard/internal/tui"
+	"github.com/j-dsmith/punchcard/internal/worklog"
 	"golang.org/x/term"
 )
 
@@ -32,6 +33,7 @@ func run() int {
 func openTUI(e cli.Env) int {
 	return tui.Run(tui.Options{
 		Store: e.Store, Now: e.Now, NewID: e.NewID,
+		Sender: worklog.Sender{Store: e.Store, Jira: e.Jira}, Jira: e.Jira,
 		Stdin: e.Stdin, Stdout: e.Stdout, Stderr: e.Stderr,
 	})
 }

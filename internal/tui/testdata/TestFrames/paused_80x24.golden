@@ -2,17 +2,17 @@
 │›‖ PUN-142       Wire flock on the s…     22m  ││Wire flock on the side       │
 │ ‖ PUN-138       Stop dialog: durati…     12m  ││state.lock                   │
 │ · OPS-77        Rotate staging certs     15m ○││                             │
-│ · PUN-120       Spike: Bubble Tea v…     40m ✗││                             │
-│ · DATA-9        ? unverified — Jira…       —  ││                             │
-│ · PLATFORM-4410 Investigate intermi…       —  ││                             │
+│ · PUN-120       Spike: Bubble Tea v…     40m ✗││‖ PAUSED                  22m│
+│ · DATA-9        ? unverified — Jira…       —  ││  stop sends this as one     │
+│ · PLATFORM-4410 Investigate intermi…       —  ││  worklog — x                │
 │                                               ││                             │
+│                                               ││ 08:20–08:41     21m counted │
+│                                               ││ 08:15–08:20 ‖ paused 5m     │
+│                                               ││             not counted     │
+│                                               ││ 08:14–08:15      1m counted │
 │                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
+│                                               ││WORKLOGS TODAY               │
+│                                               ││  nothing yet                │
 │                                               ││                             │
 │                                               ││                             │
 │                                               ││                             │
@@ -21,4 +21,4 @@
 │ the Jira strip is not built yet                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
                                                                                 
- space resume  j/k move  q quit                                                 
+ space resume  x stop…  a add  d remove  j/k move  q quit                       

@@ -28,7 +28,32 @@ func (m Model) frame() string {
 
 	lines := append(body, jira...)
 	lines = append(lines, status, keys)
-	return fitFrame(lines, w, h)
+	base := fitFrame(lines, w, h)
+	if m.dlg == nil || bodyH == 0 || w == 0 {
+		return base
+	}
+	// A dialog is laid over [2] at exactly its size; a window too narrow
+	// for [2] gets it over the whole body instead. Nothing underneath
+	// moves.
+	x, dw := lw, w-lw
+	if dw < minDialogWidth {
+		x, dw = 0, w
+	}
+	top := strings.Join(pane(m.dlg.title(), m.dlg.body(m, dw-2), dw, bodyH, true), "\n")
+	return overlay(base, top, x, 0, w, h)
+}
+
+// minDialogWidth is the narrowest [2] a dialog is laid over.
+const minDialogWidth = 30
+
+// overlay composites top over base at (x, y) with Lip Gloss's
+// compositor, keeping the frame exactly w×h.
+func overlay(base, top string, x, y, w, h int) string {
+	out := lipgloss.NewCompositor(
+		lipgloss.NewLayer(base),
+		lipgloss.NewLayer(top).X(x).Y(y).Z(1),
+	).Render()
+	return fitFrame(strings.Split(out, "\n"), w, h)
 }
 
 // ticketsWidth is [1]'s share: about 62%, never under 44 columns while
@@ -103,18 +128,6 @@ func pane(title string, body []string, w, h int, focused bool) []string {
 	return out
 }
 
-// ticketPane is [2] Ticket: what happened on the selected ticket. This
-// slice shows its full summary; the headline, stretches and WORKLOGS
-// TODAY arrive with the Ticket pane slice, as do the stop and add
-// dialogs, which take this pane over.
-func (m Model) ticketPane(w, h int) []string {
-	t, ok := m.selected()
-	if !ok {
-		return pane("[2] Ticket", nil, w, h, false)
-	}
-	return pane("[2] "+t.Key, wrap(summaryText(t), w-2), w, h, false)
-}
-
 // jiraStrip is [3] Jira: logged today, owed and the last sync, at most
 // maxRows rows. A placeholder until the Jira strip slice.
 func (m Model) jiraStrip(w, maxRows int) []string {
@@ -136,6 +149,9 @@ type binding struct{ key, label string }
 
 // bindings are the keys that apply now.
 func (m Model) bindings() []binding {
+	if m.dlg != nil {
+		return m.dlg.bindings()
+	}
 	var bs []binding
 	rows := m.rows()
 	sel, ok := m.selected()
@@ -148,10 +164,17 @@ func (m Model) bindings() []binding {
 			label = "resume"
 		}
 		bs = append(bs, binding{"space", label})
+		if stateOf(sel) != stateIdle {
+			bs = append(bs, binding{"x", "stop…"})
+		}
 	}
 	// p pauses from any row; on the running row space already says so.
 	if len(rows) > 0 && stateOf(rows[0]) == stateRunning && (!ok || sel.Key != rows[0].Key) {
 		bs = append(bs, binding{"p", "pause"})
+	}
+	bs = append(bs, binding{"a", "add"})
+	if ok {
+		bs = append(bs, binding{"d", "remove"})
 	}
 	if len(rows) > 1 {
 		bs = append(bs, binding{"j/k", "move"})

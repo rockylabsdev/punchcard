@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 22m────────────────────╮╭─Remove PUN-142?─────────────╮
+│›▶ PUN-142       Wire flock on the s… 0:15:34  ││PUN-142 Wire flock on the si…│
+│ ‖ PUN-138       Stop dialog: durati…     12m  ││                             │
+│ · OPS-77        Rotate staging certs     15m ○││✗ its unsent 15m would be    │
+│ · PUN-120       Spike: Bubble Tea v…     40m ✗││lost: it never reaches Jira  │
+│ · DATA-9        ? unverified — Jira…       —  ││                             │
+│ · PLATFORM-4410 Investigate intermi…       —  ││y removes it from your list ·│
+│                                               ││any other key keeps it       │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Jira─────────────────────────────────────────────────────────────────────╮
+│ the Jira strip is not built yet                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ y remove  any key keep it                                                      
