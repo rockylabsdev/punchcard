@@ -107,9 +107,18 @@ func TestApplyTouch(t *testing.T) {
 			lastSeen: at("09:30"),
 		},
 		{
-			name:     "focus never moves a held timer, and does not vouch for it",
+			// The user's own prompt is presence in any session (CONTEXT.md),
+			// even one on another ticket; only the move is refused.
+			name:     "focus never moves a held timer, but the prompt is still presence",
 			w:        heldA(),
 			cmd:      core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
+			want:     heldA().State,
+			lastSeen: at("09:30"),
+		},
+		{
+			name:     "an agent's touch on another ticket while held is not presence",
+			w:        heldA(),
+			cmd:      core.Touch{Key: "BB-2", Origin: agent, NewEntryID: "EB"},
 			want:     heldA().State,
 			lastSeen: at("09:00"),
 		},
