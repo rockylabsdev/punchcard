@@ -68,7 +68,7 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %s has schemaVersion %d", ErrNewerSchema, p, c.SchemaVersion)
 	}
 	if c.SiteURL == "" || c.Email == "" {
-		return Config{}, fmt.Errorf("%w: %s needs siteUrl and email", ErrNotConfigured, p)
+		return Config{}, fmt.Errorf("%w: %s needs siteUrl and email (run punchcard setup)", ErrNotConfigured, p)
 	}
 	return c, nil
 }

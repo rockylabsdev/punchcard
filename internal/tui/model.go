@@ -8,10 +8,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
 // Store is the seam to the data directory: *store.Store in the binary, a
@@ -313,19 +313,21 @@ func sendStop(s Sender, c core.Stop) tea.Cmd {
 	}
 }
 
-// sendProblem says why a stopped worklog is still owed.
+// sendProblem says why a stopped worklog is still owed, in the TUI's
+// words for worklog.Why's classification.
 func sendProblem(err error) string {
-	var api *jira.APIError
-	switch {
-	case errors.Is(err, config.ErrNotConfigured):
+	switch worklog.Why(err) {
+	case worklog.ProblemNotConfigured:
 		return "Jira is not set up"
-	case errors.Is(err, jira.ErrUnauthorized):
+	case worklog.ProblemAuthFailed:
 		return "Jira rejected the token"
-	case errors.Is(err, jira.ErrUnreachable):
+	case worklog.ProblemUnreachable:
 		return "Jira not reachable"
-	case errors.As(err, &api):
+	case worklog.ProblemRejected:
+		var api *jira.APIError
+		errors.As(err, &api)
 		return "Jira answered " + api.Error()
-	case errors.Is(err, store.ErrSyncBusy):
+	case worklog.ProblemBusy:
 		return "another punchcard is sending"
 	}
 	return err.Error()

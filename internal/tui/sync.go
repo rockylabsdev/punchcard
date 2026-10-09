@@ -2,10 +2,8 @@ package tui
 
 import (
 	"context"
-	"errors"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
@@ -49,7 +47,7 @@ func (m Model) synced(s syncMsg) (Model, tea.Cmd) {
 	switch {
 	case s.err == nil:
 		m = m.happened(m.now, core.OriginHand, "sent "+worklogs(sent)+" to Jira")
-	case errors.Is(s.err, config.ErrNotConfigured):
+	case worklog.Why(s.err) == worklog.ProblemNotConfigured:
 		m = m.notify("Jira is not set up · " + worklogs(len(s.rep.Remaining)) + " wait here")
 	default:
 		text := sendProblem(s.err) + " · " + worklogs(len(s.rep.Remaining)) + " still owed · nothing is lost"
