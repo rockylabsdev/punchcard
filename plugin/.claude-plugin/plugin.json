@@ -1,0 +1,9 @@
+{
+  "name": "punchcard",
+  "version": "0.1.0",
+  "description": "Punchcard in Claude Code: your prompts keep the timer on the branch's ticket, a band shows whether you are on the clock, /punch acts by hand, and an agent's stop always asks you first",
+  "author": { "name": "Jamey Smith" },
+  "homepage": "https://github.com/j-dsmith/punchcard",
+  "repository": "https://github.com/j-dsmith/punchcard",
+  "types": "./types/index.d.ts"
+}
