@@ -39,6 +39,8 @@ var scenarios = []struct {
 	{"recovered", recoveredDay, nil},
 	{"stop", runningDay, []string{"x"}},
 	{"stop_recovered", recoveredDay, []string{"x"}},
+	{"add", runningDay, []string{"a", "down", "down"}},
+	{"remove", runningDay, []string{"d"}},
 }
 
 func runningDay(hs *harness) {

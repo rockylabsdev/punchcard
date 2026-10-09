@@ -232,4 +232,57 @@ func parseDuration(s string) (time.Duration, bool) {
 	return d, true
 }
 
-func (m Model) openRemove() Model { return m }
+// removeDialog is d: y removes the ticket, any other key keeps it. When
+// the ticket holds time not yet in Jira it says how much would be lost,
+// and only then does the remove force past core's refusal.
+type removeDialog struct {
+	ticket, summary string
+	unsent          time.Duration // open entry plus unsent worklogs, when opened
+	owes            bool
+}
+
+func (m Model) openRemove() Model {
+	t, ok := m.selected()
+	if !ok {
+		return m
+	}
+	d := removeDialog{ticket: t.Key, summary: summaryText(t)}
+	for _, e := range t.Entries {
+		switch {
+		case e.Worklog == nil:
+			d.unsent += core.Elapsed(e, m.now)
+			d.owes = true
+		case e.Worklog.State != core.WorklogSynced:
+			d.unsent += time.Duration(e.Worklog.TimeSpentSeconds) * time.Second
+			d.owes = true
+		}
+	}
+	m.dlg = d
+	return m
+}
+
+func (d removeDialog) title() string { return "Remove " + d.ticket + "?" }
+
+func (d removeDialog) bindings() []binding {
+	return []binding{{"y", "remove"}, {"any key", "keep it"}}
+}
+
+func (d removeDialog) tick(Model) dialog { return d }
+
+func (d removeDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
+	m.dlg = nil
+	if k.String() != "y" {
+		return m, nil
+	}
+	return m.enqueue(intent{kind: intentRemove, key: d.ticket, force: d.owes, say: "removed " + d.ticket})
+}
+
+func (d removeDialog) body(m Model, w int) []string {
+	lines := []string{fit(sBold.Render(d.ticket)+" "+sDim.Render(d.summary), w), ""}
+	if d.owes {
+		lines = append(lines, wrap(sFail.Render(gFailed+" its unsent "+hm(d.unsent)+" would be lost: it never reaches Jira"), w)...)
+		lines = append(lines, "")
+	}
+	lines = append(lines, wrap(sBold.Render("y")+sDim.Render(" removes it from your list · any other key keeps it"), w)...)
+	return lines
+}

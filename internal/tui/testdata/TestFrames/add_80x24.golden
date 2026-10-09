@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 22m────────────────────╮╭─Add ticket──────────────────╮
+│›▶ PUN-142       Wire flock on the s… 0:15:34  ││Ticket key                   │
+│ ‖ PUN-138       Stop dialog: durati…     12m  ││› PUN-123                    │
+│ · OPS-77        Rotate staging certs     15m ○││enter adds it · ↓ picks a    │
+│ · PUN-120       Spike: Bubble Tea v…     40m ✗││recent one                   │
+│ · DATA-9        ? unverified — Jira…       —  ││                             │
+│ · PLATFORM-4410 Investigate intermi…       —  ││recent                       │
+│                                               ││  PUN-142 Wire flock on the …│
+│                                               ││› PUN-138 Stop dialog: durat…│
+│                                               ││  OPS-77 Rotate staging certs│
+│                                               ││  PUN-120 Spike: Bubble Tea …│
+│                                               ││  DATA-9                     │
+│                                               ││  PLATFORM-4410 Investigate …│
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Jira─────────────────────────────────────────────────────────────────────╮
+│ the Jira strip is not built yet                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ enter add  ↑↓ recents  esc cancel                                              

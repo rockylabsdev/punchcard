@@ -147,3 +147,35 @@ func TestStopWithNothingOpen(t *testing.T) {
 	frameLacks(t, hs, "Stop PUN-1")
 	frameHas(t, hs, "nothing to stop on PUN-1 — space starts it")
 }
+
+// A dialog is laid over [2]: everything outside it stays put, and at a
+// width too narrow for [2] it covers the body without resizing it.
+func TestDialogsNeverMoveTheFrame(t *testing.T) {
+	for _, sz := range [][2]int{{80, 24}, {120, 32}, {60, 16}} {
+		for _, k := range []string{"x", "a", "d"} {
+			hs := newHarness(t)
+			runningDay(hs)
+			hs.open("09:00:00", sz[0], sz[1])
+			before := strings.Split(hs.frame(), "\n")
+			hs.key(k)
+			after := strings.Split(hs.frame(), "\n")
+			if len(after) != len(before) {
+				t.Fatalf("%dx%d %s: %d lines, was %d", sz[0], sz[1], k, len(after), len(before))
+			}
+			x := ticketsWidth(sz[0])
+			if sz[0]-x < minDialogWidth {
+				x = 0
+			}
+			bodyH := len(before) - 5         // above the Jira strip (3), status and keys
+			for i := range len(before) - 2 { // the status and key bar change
+				b, a := []rune(before[i]), []rune(after[i])
+				if i < bodyH {
+					b, a = b[:x], a[:x]
+				}
+				if string(b) != string(a) {
+					t.Errorf("%dx%d %s: line %d moved:\n%s\n%s", sz[0], sz[1], k, i, string(b), string(a))
+				}
+			}
+		}
+	}
+}
