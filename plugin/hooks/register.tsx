@@ -18,12 +18,12 @@ import {
   SEND,
   SUBMIT,
   bandFrom,
-  branchKey,
   editPresenceDue,
   eventText,
   gateNeedsDialog,
   gateQuestion,
   gateVerdict,
+  hereKey,
   manifestVersion,
   needsDuration,
   parseEnvelope,
@@ -68,12 +68,19 @@ function toastEvents($: EngineInterface, r: Ran) {
   for (const e of r.envelope?.events ?? []) $.ui.toast(eventText(e))
 }
 
-// hereKey is the ticket key in the session directory's git branch, or "".
-async function hereKey($: EngineInterface): Promise<string> {
+// status asks for the session directory: the timers and, as here, the
+// directory's key (its .punchcard, else its branch). The binary owns the
+// key rule; the mod never works one out itself.
+async function status($: EngineInterface): Promise<Ran> {
+  return run($, ['status', '--cwd', await $.session.cwd()], 'prompt')
+}
+
+// here is the session directory's key, asked fresh ("" for none, or when
+// punchcard did not answer), so a /punch start right after a cd or a
+// checkout uses the new answer rather than the last poll's.
+async function here($: EngineInterface): Promise<string> {
   try {
-    const cwd = await $.session.cwd()
-    const r = await $.process.run(['git', '-C', cwd, 'symbolic-ref', '--short', '-q', 'HEAD'], { timeoutMs: QUICK_MS })
-    return r.exitCode === 0 ? branchKey(r.stdout.trim()) : ''
+    return hereKey({ envelope: (await status($)).envelope })
   } catch {
     return ''
   }
@@ -111,19 +118,18 @@ async function skew($: EngineInterface): Promise<Skew | null> {
   return versionSkew(await ownVersion($), binaryVersion)
 }
 
-// refresh polls status --json and redraws the band.
+// refresh polls status and redraws the band.
 async function refresh($: EngineInterface) {
   if (polling) return
   polling = true
   try {
-    const here = await hereKey($)
     let next: Band | null
     try {
-      const r = await run($, ['status'], 'prompt')
-      next = bandFrom({ envelope: r.envelope }, here, await skew($))
+      const r = await status($)
+      next = bandFrom({ envelope: r.envelope }, await skew($))
     } catch (err) {
       const msg = String((err as Error)?.message ?? err)
-      next = /time ?out|timed out/i.test(msg) ? bandFrom({ failed: 'status timed out' }, here) : bandFrom({ missing: true }, here)
+      next = /time ?out|timed out/i.test(msg) ? bandFrom({ failed: 'status timed out' }) : bandFrom({ missing: true })
     }
     await update($, band, () => next)
   } finally {
@@ -173,7 +179,7 @@ async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; mes
 
 // punch answers /punch <args> with origin hand, so a start holds.
 async function punch($: EngineInterface, args: string): Promise<string> {
-  const a = parsePunch(args, await hereKey($))
+  const a = parsePunch(args, await here($))
   if ('error' in a) return a.error
   try {
     if (a.verb === 'stop') return await stop($, a)

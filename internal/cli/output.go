@@ -17,6 +17,9 @@ type Envelope struct {
 	Data    any          `json:"data"`
 	Events  []core.Event `json:"events"`
 	Error   *Error       `json:"error"`
+	// Notices are what stderr also said: a corrupt file moved aside, a
+	// .punchcard that names no key. Absent when there are none.
+	Notices []string `json:"notices,omitempty"`
 }
 
 // Error is the envelope's error member.
@@ -38,6 +41,9 @@ type output struct {
 	env   Env
 	json  bool
 	color bool
+	// noticed collects this invocation's notices for the envelope; every
+	// copy of output shares it.
+	noticed *[]string
 }
 
 // ok reports success (exit 0) with data for the envelope and human text.
@@ -96,6 +102,9 @@ func saysAlready(msg, hint string) bool {
 
 func (o output) envelope(e Envelope) {
 	e.V = ContractVersion
+	if o.noticed != nil {
+		e.Notices = *o.noticed
+	}
 	if e.Events == nil {
 		e.Events = []core.Event{}
 	}
@@ -106,9 +115,13 @@ func (o output) envelope(e Envelope) {
 	fmt.Fprintf(o.env.Stdout, "%s\n", b)
 }
 
-// notices are store messages (a corrupt file moved aside): always stderr,
-// so they never break the envelope on stdout.
+// notices are messages beside the result (a corrupt file moved aside, a
+// .punchcard that names no key): always on stderr, so they never break
+// the envelope on stdout, and in the envelope's notices too.
 func (o output) notices(ns []string) {
+	if o.noticed != nil {
+		*o.noticed = append(*o.noticed, ns...)
+	}
 	for _, n := range ns {
 		fmt.Fprintf(o.env.Stderr, "punchcard: %s\n", n)
 	}
