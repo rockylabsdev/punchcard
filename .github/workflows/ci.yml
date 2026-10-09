@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml calls this workflow as its gate before GoReleaser runs.
+  workflow_call:
 
 permissions:
   contents: read

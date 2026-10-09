@@ -1,0 +1,39 @@
+name: Release
+
+# A v* tag (pushed after scripts/release.sh) builds and publishes a release:
+# the CI workflow runs first as the gate, then GoReleaser builds the four
+# targets, uploads the tarballs to the GitHub release and pushes the formula
+# to j-dsmith/homebrew-tap (ADR 0007). Nothing is signed or notarised.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # GITHUB_TOKEN creates the release and uploads the tarballs
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  goreleaser:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # GoReleaser needs the history and tags for its changelog
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot push to another repository: a PAT with
+          # Contents read/write on j-dsmith/homebrew-tap only.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

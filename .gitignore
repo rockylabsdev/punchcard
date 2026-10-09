@@ -24,3 +24,6 @@ plugin/.claude-plugin/types/
 
 # Jira spike credentials — see docs/jira-api/spike-env.example
 docs/jira-api/.spike-env
+
+# GoReleaser output (release --snapshot writes here)
+dist/
