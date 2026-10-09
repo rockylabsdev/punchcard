@@ -9,6 +9,9 @@ import (
 // NormalizeSite turns whatever was pasted (a bare host, a full URL, a
 // board URL from the address bar, a bare Atlassian site name) into
 // https://<host>. A name with no dot is taken as <name>.atlassian.net.
+// http:// is upgraded to https://, except on localhost, where it is
+// kept for a Jira stand-in (cmd/fakejira); Jira Cloud itself is always
+// https.
 func NormalizeSite(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -36,5 +39,17 @@ func NormalizeSite(s string) (string, error) {
 	if !strings.Contains(host, ".") && !strings.Contains(host, ":") {
 		host += ".atlassian.net"
 	}
+	if u.Scheme == "http" && isLoopback(host) {
+		return "http://" + host, nil
+	}
 	return "https://" + host, nil
+}
+
+// isLoopback: localhost or 127.x, with or without a port.
+func isLoopback(host string) bool {
+	h := host
+	if i := strings.LastIndex(h, ":"); i >= 0 {
+		h = h[:i]
+	}
+	return h == "localhost" || strings.HasPrefix(h, "127.")
 }

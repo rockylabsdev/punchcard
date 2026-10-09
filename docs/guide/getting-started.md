@@ -15,7 +15,7 @@ A build from a clone prints a version like the one above. A release prints `punc
 
 ## 2. Connect it to Jira with `punchcard setup`
 
-You need a Jira Cloud site, the email you sign in to Atlassian with, and a **classic** API token. Make the token at <https://id.atlassian.com/manage-profile/security/api-tokens>. Jira refuses a *scoped* token with the same 401 it gives a wrong one, so make the classic kind.
+You need a Jira Cloud site, the email you sign in to Atlassian with, and a **classic** API token. (No site yet? [Testing without a real Jira](sandbox.md) runs a fake one on localhost.) Make the token at <https://id.atlassian.com/manage-profile/security/api-tokens>. Jira refuses a *scoped* token with the same 401 it gives a wrong one, so make the classic kind.
 
 Run the wizard in a terminal. It needs one: `punchcard setup` in a pipe or with `--json` exits 64.
 

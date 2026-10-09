@@ -9,7 +9,7 @@ Read the [Getting started](getting-started.md) page first if you like, but every
 - **macOS** (Apple Silicon or Intel) or Linux. On Linux the token goes in a file instead of the Keychain; everything else is the same.
 - **Go 1.26 or newer** to build it. `brew install go` gives you a current Go. An older Go from 1.21 up downloads 1.26 by itself when it builds this.
 - **Access to the repository.** It is private. I will add you as a collaborator; you need an SSH key on your GitHub account (`ssh -T git@github.com` should greet you).
-- **A Jira Cloud site** you can log time on, the email you sign in to Atlassian with, and a **classic API token** from <https://id.atlassian.com/manage-profile/security/api-tokens>. Not a scoped token: Jira refuses those with the same error as a wrong one.
+- **A Jira Cloud site** you can log time on (or, to try everything first without one, the fake Jira in [Testing without a real Jira](sandbox.md)), the email you sign in to Atlassian with, and a **classic API token** from <https://id.atlassian.com/manage-profile/security/api-tokens>. Not a scoped token: Jira refuses those with the same error as a wrong one.
 - **One or two throwaway tickets** on that site. Punchcard will post worklogs to them. Delete the worklogs afterwards in Jira: open the ticket, find the work log (the clock icon or the "Work log" tab under Activity), and delete each entry. Punchcard never deletes anything in Jira.
 - **Claude Code** 2.1.29x or newer for the plugin part (`claude --version`), and a git checkout whose branch name contains a ticket key, such as `feature/ABC-123-try-punchcard`.
 

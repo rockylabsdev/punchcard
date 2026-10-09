@@ -14,6 +14,10 @@ func TestNormalizeSite(t *testing.T) {
 		{in: "acme.atlassian.net/browse/PUN-12", want: "https://acme.atlassian.net"},
 		{in: "acme", want: "https://acme.atlassian.net"},
 		{in: "jira.example.com", want: "https://jira.example.com"},
+		// http is kept only on localhost: a Jira stand-in (cmd/fakejira).
+		{in: "http://127.0.0.1:8181", want: "http://127.0.0.1:8181"},
+		{in: "http://localhost:8181/", want: "http://localhost:8181"},
+		{in: "localhost:8181", want: "https://localhost:8181"},
 		{in: "", bad: true},
 		{in: "   ", bad: true},
 		{in: "https://", bad: true},
