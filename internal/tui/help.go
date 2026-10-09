@@ -15,7 +15,7 @@ func (helpDialog) key(m Model, _ tea.KeyPressMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-func (helpDialog) body(_ Model, w int) []string {
+func (helpDialog) body(m Model, w int) []string {
 	key := func(k, what string) string { return "  " + fit(sBold.Render(k), 16) + what }
 	lines := []string{
 		sBold.Render(" Keys"),
@@ -29,7 +29,7 @@ func (helpDialog) body(_ Model, w int) []string {
 		key("q", "quit; timers keep running without the TUI"),
 		"",
 		sBold.Render(" Glyphs"),
-		"  " + sRunning.Render(gRunning) + " running   " + sPaused.Render(gPaused) + " paused   " +
+		"  " + m.pal.running.Render(gRunning) + " running   " + sPaused.Render(gPaused) + " paused   " +
 			sRecov.Render(gRecovered) + " recovered: check the duration at stop",
 		"  " + sDim.Render(gIdle) + " idle   " + sDim.Render(gUnverified) + " not confirmed by Jira yet",
 		"  " + sSync.Render(gPending) + " waiting to be sent   " + sFail.Render(gFailed) + " failed   " +

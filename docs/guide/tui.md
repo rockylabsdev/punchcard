@@ -127,11 +127,11 @@ Every key the TUI acts on is presence (at most one write per 30 seconds). Moving
 
 ## Symbols and colours
 
-The colours are the terminal's own 16-colour theme, so they follow light or dark. Every state also has a symbol, so the screen reads with no colour at all. Blue is reserved for anything about sending to Jira.
+The colours are the terminal's own 16-colour theme, so they follow light or dark. The one exception is Punchcard's brand colour, a chartreuse (`#C8FF00` on a dark background, a darker `#5F8700` on a light one): the running state, the focused pane's border and title, and the cursor. Every state also has a symbol, so the screen reads with no colour at all. Blue is reserved for anything about sending to Jira.
 
 | Symbol | Colour | Meaning |
 | --- | --- | --- |
-| `▶` | green, bold | running |
+| `▶` | chartreuse, bold | running: the brand colour |
 | `‖` | yellow | paused (the CLI prints `⏸` for the same thing) |
 | `!` | magenta, bold | recovered: check the duration at stop |
 | `·` | grey | idle: no open entry |
@@ -139,11 +139,11 @@ The colours are the terminal's own 16-colour theme, so they follow light or dark
 | `○` | blue | a worklog waiting to be sent; also the `r` key everywhere it appears |
 | `✗` | red, bold | a failed worklog, a refusal, the worst banners |
 | `✓` | grey | a worklog in Jira |
-| `›` | — | the cursor |
+| `›` | chartreuse, bold | the cursor |
 | yellow text | — | the "not connected" and Keychain banners |
 | italic text | — | a row's "changed elsewhere" tag |
 
-On a 16-colour terminal the greys fall back to bright black and the row highlight to the terminal's own background, leaving `›` to mark the row.
+On a 16-colour terminal the brand falls back to bright green, the greys to bright black, and the row highlight to the terminal's own background, leaving `›` to mark the row.
 
 ## Dialogs
 

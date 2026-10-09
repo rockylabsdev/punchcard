@@ -135,7 +135,7 @@ func (d addDialog) body(m Model, w int) []string {
 	lines := []string{sBold.Render("Ticket key")}
 	in := d.in
 	in.SetWidth(max(1, w-3))
-	lines = append(lines, gCursor+" "+in.View())
+	lines = append(lines, m.pal.brand.Render(gCursor)+" "+in.View())
 	switch {
 	case d.asking != "":
 		lines = append(lines, wrap(sSync.Render("asking Jira about "+d.asking+"…"), w)...)
@@ -151,7 +151,7 @@ func (d addDialog) body(m Model, w int) []string {
 	lines = append(lines, "", sDim.Render("recent"))
 	for i, t := range rs {
 		if i == d.pick {
-			lines = append(lines, sSel.Render(fit(gCursor+" "+t.Key+" "+t.Summary, w)))
+			lines = append(lines, sSel.Render(fit(m.pal.brand.Render(gCursor)+" "+t.Key+" "+t.Summary, w)))
 			continue
 		}
 		lines = append(lines, fit("  "+t.Key+" "+sDim.Render(t.Summary), w))

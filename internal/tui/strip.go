@@ -32,7 +32,7 @@ func (m Model) jiraStrip(w, maxRows int) []string {
 			body = append(body, more)
 		}
 	}
-	return pane(title, body, w, len(body)+2, false)
+	return m.pane(title, body, w, len(body)+2, false)
 }
 
 const (

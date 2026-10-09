@@ -14,6 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/term"
+	"github.com/j-dsmith/punchcard/internal/tui"
 )
 
 // Wordmark is PUNCHCARD as holes in a punched card: a 4×7 dot matrix
@@ -29,14 +30,18 @@ const Wordmark = "" +
 	"#....#..#.#..#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
 	"#.....##..#..#..##..#..#..##..#..#.#..#.###."
 
-// wordmark is Wordmark styled: punched holes in the mark colour,
+// wordmark is Wordmark styled: punched holes in the brand colour,
 // unpunched ones in the gutter grey.
-func wordmark() string {
+func (t *Terminal) wordmark() string {
+	mark := t.mark
+	if mark.GetForeground() == nil {
+		mark = tMark
+	}
 	var b strings.Builder
 	for _, r := range Wordmark {
 		switch r {
 		case '#':
-			b.WriteString(tMark.Render("●"))
+			b.WriteString(mark.Render("●"))
 		case '.':
 			b.WriteString(tGutter.Render("·"))
 		default:
@@ -48,12 +53,14 @@ func wordmark() string {
 
 var (
 	tGutter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	tMark   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	tTitle  = lipgloss.NewStyle().Bold(true)
-	tDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	tGood   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	tBad    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	tWarn   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	// tMark is the wordmark's holes: the brand colour, in its dark-background
+	// shade until NewTerminal asks the terminal (see brand).
+	tMark  = lipgloss.NewStyle().Foreground(tui.BrandDark).Bold(true)
+	tTitle = lipgloss.NewStyle().Bold(true)
+	tDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	tGood  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	tBad   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	tWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
 // Terminal is the UI on a real terminal: clack-style lines in a gutter,
@@ -66,24 +73,37 @@ type Terminal struct {
 	// width is the forms' width: the terminal's, capped. Huh panics on
 	// a terminal that reports no size, so unknown is 72.
 	width int
-	mu    sync.Mutex
+	// mark is the wordmark's hole style; zero means tMark.
+	mark lipgloss.Style
+	mu   sync.Mutex
 }
 
 // NewTerminal is the wizard's UI on in and out. environ decides the
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
+	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width}
 	if f, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
-			width = min(w, 80)
+			t.width = min(w, 80)
+		}
+		if fin, ok := in.(*os.File); ok {
+			t.mark = brand(fin, f)
 		}
 	}
-	return &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width}
+	return t
+}
+
+// brand is the wordmark style for this terminal's background: the brand
+// colour's light shade on a light background, else its dark one.
+func brand(in, out *os.File) lipgloss.Style {
+	c := lipgloss.LightDark(lipgloss.HasDarkBackground(in, out))(tui.BrandLight, tui.BrandDark)
+	return lipgloss.NewStyle().Foreground(c).Bold(true)
 }
 
 // Begin prints the wordmark and opens the gutter.
 func (t *Terminal) Begin() {
-	t.print("\n" + wordmark() + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
+	t.print("\n" + t.wordmark() + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
 }
 
 // End closes the gutter.

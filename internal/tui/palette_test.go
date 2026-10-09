@@ -65,7 +65,8 @@ func palette(t *testing.T) *harness {
 }
 
 // Each state's symbol has its ANSI slot: the colours are the terminal's
-// own 16, so they follow its theme.
+// own 16, so they follow its theme. Running is the brand colour, which
+// falls back to bright green.
 func TestEachStateHasItsANSISlot(t *testing.T) {
 	hs := palette(t)
 	rs := runs(t, hs)
@@ -73,7 +74,7 @@ func TestEachStateHasItsANSISlot(t *testing.T) {
 		state, glyph string
 		want         []string // exact SGR parameters
 	}{
-		{"running", gRunning, []string{"1", "32"}},
+		{"running", gRunning, []string{"1", "92"}},
 		{"paused", gPaused, []string{"33"}},
 		{"recovered", gRecovered, []string{"1", "35"}},
 		{"failed", gFailed, []string{"1", "31"}},

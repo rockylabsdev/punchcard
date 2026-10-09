@@ -46,7 +46,7 @@ func (m Model) ticketsPane(w, h int) []string {
 		first := max(0, min(m.sel-visible/2, len(body)-visible))
 		body = body[first:]
 	}
-	return pane(title, body, w, h, true)
+	return m.pane(title, body, w, h, true)
 }
 
 // ticketRow: cursor, state symbol, key, summary, one number (time today:
@@ -54,7 +54,7 @@ func (m Model) ticketsPane(w, h int) []string {
 func (m Model) ticketRow(t core.TrackedTicket, w, keyW int, selected bool) string {
 	cur := " "
 	if selected {
-		cur = gCursor
+		cur = m.pal.brand.Render(gCursor)
 	}
 	d := core.TimeToday(t, m.now)
 	num := sDim.Render(hm(d))
@@ -64,7 +64,7 @@ func (m Model) ticketRow(t core.TrackedTicket, w, keyW int, selected bool) strin
 	glyph, key, sum := sDim.Render(gIdle), t.Key, summaryText(t)
 	switch st := m.stateOf(t); {
 	case st == core.TimerRunning:
-		glyph, key, sum, num = sRunning.Render(gRunning), sRunning.Render(t.Key), sRunning.Render(t.Summary), sRunning.Render(clock(d))
+		glyph, key, sum, num = m.pal.running.Render(gRunning), m.pal.running.Render(t.Key), m.pal.running.Render(t.Summary), m.pal.running.Render(clock(d))
 	case recoveredPause(t):
 		glyph, key = sRecov.Render(gRecovered), sRecov.Render(t.Key)
 	case st == core.TimerPaused:
