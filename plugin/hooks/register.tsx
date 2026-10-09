@@ -15,11 +15,11 @@ import {
   DENIED_UNATTENDED,
   HOLD,
   KEEP,
-  SEND,
   SUBMIT,
   bandFrom,
   editPresenceDue,
   eventText,
+  gateLabel,
   gateNeedsDialog,
   gateQuestion,
   gateVerdict,
@@ -31,9 +31,11 @@ import {
   previewArgv,
   replyText,
   stopArgv,
+  stopOptions,
   stopQuestion,
   submitTouch,
   tighten,
+  trackerOf,
   versionSkew,
 } from './logic.mjs'
 
@@ -54,6 +56,7 @@ let polling = false // a status poll is in flight
 let pluginVersion: string | null = null // this plugin's plugin.json version, read once
 let binaryVersion = '' // `punchcard version --json`, '' until known
 let binaryCheckedAt = 0
+let lastTracker = '' // the last status poll's tracker, '' until one answered
 
 // run calls punchcard with --json and an explicit --origin. It rejects
 // only when the binary could not be started or timed out.
@@ -83,6 +86,20 @@ async function here($: EngineInterface): Promise<string> {
     return hereKey({ envelope: (await status($)).envelope })
   } catch {
     return ''
+  }
+}
+
+// tracker is the tracker in effect, asked fresh so a setup run during the
+// session counts; when punchcard does not answer, the last poll's, and ""
+// when there was none. It never throws: the gate's dialog words depend on
+// it, never whether the gate asks.
+async function tracker($: EngineInterface): Promise<string> {
+  try {
+    const t = trackerOf({ envelope: (await status($)).envelope })
+    if (t) lastTracker = t
+    return t || lastTracker
+  } catch {
+    return lastTracker
   }
 }
 
@@ -126,6 +143,7 @@ async function refresh($: EngineInterface) {
     let next: Band | null
     try {
       const r = await status($)
+      lastTracker = trackerOf({ envelope: r.envelope }) || lastTracker
       next = bandFrom({ envelope: r.envelope }, await skew($))
     } catch (err) {
       const msg = String((err as Error)?.message ?? err)
@@ -156,8 +174,8 @@ async function presence($: EngineInterface) {
   }
 }
 
-// stop previews, asks Submit / Keep pending / Cancel, then sends exactly
-// the worklog shown.
+// stop previews, asks Submit / Keep pending / Cancel (no Keep pending
+// without a tracker), then logs exactly the worklog shown.
 async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; message: string }): Promise<string> {
   const p = await run($, previewArgv(a), 'hand')
   const preview = p.envelope?.ok ? p.envelope.data?.preview : undefined
@@ -167,7 +185,8 @@ async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; mes
   }
   let choice = CANCEL
   try {
-    choice = await $.ui.ask(stopQuestion(preview), { header: 'Punchcard', options: [SUBMIT, KEEP, CANCEL] })
+    const options = stopOptions(await tracker($))
+    choice = await $.ui.ask(stopQuestion(preview), { header: 'Punchcard', options })
   } catch {
     choice = CANCEL // dismissed, or no one to ask
   }
@@ -222,8 +241,8 @@ export const register: Register = on => {
 
   // The gate, in two layers (ADR 0005).
   //
-  // 1. tool.check: ask for any Bash command that would send an agent's
-  //    worklog, unless the user's own rules already deny it or ask by
+  // 1. tool.check: ask for any Bash command that would stop an agent's
+  //    timer and log its worklog, unless the user's own rules already deny it or ask by
   //    rule. Never allow (a mod's allow overrides the user's ask rule); a
   //    failure asks too, so the gate fails closed. At tool.check, next(e)
   //    only reads the verdict beneath.
@@ -235,21 +254,25 @@ export const register: Register = on => {
   // 2. tool.call: an `ask` verdict goes to the mode's decider, and in auto
   //    mode that is a classifier, not the person. So where the engine will
   //    not put the call to a person (auto mode, or a mode not yet seen),
-  //    the plugin raises its own dialog and sends only on "Send to Jira".
-  //    With nobody to ask (claude -p) the dialog rejects and the call is
-  //    refused with the timer running. Judged before next, so a failure
-  //    refuses rather than sends.
+  //    the plugin raises its own dialog and lets the call run only on its
+  //    affirmative answer: "Log it" without a tracker, "Send to Jira" with
+  //    Jira. The tracker sets the words, never whether it asks. With nobody
+  //    to ask (claude -p) the dialog rejects and the call is refused with
+  //    the timer running. Judged before next, so a failure refuses rather
+  //    than logs.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     if (!gateVerdict(e.tool, { command: e.command })) return next(e)
     const verdict = await $.tool.check({ tool: 'Bash', input: { command: e.command } })
     if (!gateNeedsDialog(permissionMode, verdict)) return next(e)
+    const t = await tracker($)
+    const yes = gateLabel(t)
     let answer: string
     try {
-      answer = await $.ui.ask(gateQuestion(e.command), { header: 'Punchcard', options: [SEND, HOLD] })
+      answer = await $.ui.ask(gateQuestion(e.command, t), { header: 'Punchcard', options: [yes, HOLD] })
     } catch {
       return { deny: DENIED_UNATTENDED }
     }
-    if (answer !== SEND) return { deny: DENIED_BY_USER }
+    if (answer !== yes) return { deny: DENIED_BY_USER }
     return next(e)
   }).catch(($, e, next) => (next.called ? next(e) : { deny: DENIED_GATE_FAILED }))
 

@@ -14,6 +14,19 @@ export function hereKey(poll) {
   return typeof k === 'string' ? k : ''
 }
 
+/**
+ * The tracker the last `status --json` reported (`data.tracker`: "none"
+ * or "jira"), or "" when it did not say: an older binary, a refusal, or
+ * no answer at all.
+ * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
+ * @returns {string}
+ */
+export function trackerOf(poll) {
+  const env = poll?.envelope
+  const t = env?.ok ? env.data?.tracker : undefined
+  return typeof t === 'string' ? t : ''
+}
+
 /** The prompt origins that are the person's own submit (spec: composer, bridge). */
 const PERSON = new Set(['composer', 'bridge'])
 
@@ -131,7 +144,10 @@ export function versionSkew(plugin, binary) {
  * envelope null when its stdout was not one), `{ failed: message }` when
  * it timed out or similar. Its `here` is this session's key (see
  * hereKey): idle, the band names it and the next action; with another
- * ticket shown, it says what this session is for.
+ * ticket shown, it says what this session is for. With `tracker: none`
+ * the band is the timer alone: nothing can be unsent, connected or
+ * authorised without a tracker, so none of it is shown. Any other
+ * tracker, or none named (an older binary), is Jira's band.
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @param {Skew | null} [skew] plugin and binary versions when they differ
  * @returns {Band | null}
@@ -146,12 +162,13 @@ export function bandFrom(poll, skew = null) {
   const d = env.data ?? {}
   const here = hereKey(poll)
   const paused = Array.isArray(d.paused) ? d.paused : []
-  const unsent = d.unsent?.count ?? 0
+  const jira = d.tracker !== 'none'
+  const unsent = jira ? (d.unsent?.count ?? 0) : 0
   // One slot for Jira, the worse wins: token rejected, then a Keychain
   // error (it names why Jira is not connected), then not connected.
-  const authFailed = Boolean(d.authFailedAt)
-  const keychainBroken = !authFailed && Boolean(d.keychainError)
-  const notConnected = !authFailed && !keychainBroken && d.configured === false
+  const authFailed = jira && Boolean(d.authFailedAt)
+  const keychainBroken = jira && !authFailed && Boolean(d.keychainError)
+  const notConnected = jira && !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
   if (!shown && !here && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
@@ -247,10 +264,10 @@ export function eventText(e) {
 }
 
 /**
- * Whether a Bash command would send an agent's worklog: it names
+ * Whether a Bash command would stop an agent's timer and log its worklog: it names
  * punchcard, stop and --yes anywhere in its raw text. Deliberately loose
  * (any order, any segment of a compound command, any path to the binary,
- * any case): a false match costs one dialog, a miss sends time unread.
+ * any case): a false match costs one dialog, a miss logs time unread.
  * @param {unknown} command
  */
 export function isGatedStop(command) {
@@ -274,7 +291,9 @@ export function gateVerdict(tool, input) {
 
 export const ASK = Object.freeze({
   decision: /** @type {const} */ ('ask'),
-  reason: 'Punchcard: this stops the timer and sends the worklog to Jira. Approve only the worklog you were shown.',
+  // The verdict is given before any tracker is known, so its words hold
+  // for both: logged locally, or sent to the tracker when one is set up.
+  reason: 'Punchcard: this stops the timer and logs the worklog (sending it to the tracker, if one is set up). Approve only the worklog you were shown.',
 })
 
 /**
@@ -315,23 +334,37 @@ export function gateNeedsDialog(mode, verdict) {
   return mode === 'auto' || mode === ''
 }
 
-/** The gate dialog's two answers. */
+/** The gate dialog's affirmative answers, one per tracker, and its other one. */
+export const LOG = 'Log it'
 export const SEND = 'Send to Jira'
 export const HOLD = 'Keep the timer running'
 
 /**
- * The gate dialog's question for a Bash command about to send a worklog.
- * @param {string} command
+ * The gate dialog's affirmative answer: "Log it" with no tracker, "Send
+ * to Jira" otherwise. An unknown tracker (an older binary, or a status
+ * that did not answer) gets Jira's words: every older binary sent to
+ * Jira. The caller compares the answer with this same label.
+ * @param {string | undefined} tracker trackerOf's answer
  */
-export function gateQuestion(command) {
-  return `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?\n\n${String(command ?? '').trim()}`
+export function gateLabel(tracker) {
+  return tracker === 'none' ? LOG : SEND
+}
+
+/**
+ * The gate dialog's question for a Bash command about to stop a timer.
+ * @param {string} command
+ * @param {string | undefined} tracker trackerOf's answer
+ */
+export function gateQuestion(command, tracker) {
+  const does = tracker === 'none' ? 'logs the worklog. Log it?' : 'sends the worklog to Jira. Send it?'
+  return `Punchcard: this command stops the timer and ${does}\n\n${String(command ?? '').trim()}`
 }
 
 /** Why a gated stop was refused, as the model reads it. */
-export const DENIED_BY_USER = 'Punchcard: the user did not approve sending this worklog. The timer is untouched; do not retry.'
+export const DENIED_BY_USER = 'Punchcard: the user did not approve logging this worklog. The timer is untouched; do not retry.'
 export const DENIED_UNATTENDED =
-  'Punchcard: nobody is here to approve sending this worklog, so it was not sent. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
-export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not sent. The timer is untouched.'
+  'Punchcard: nobody is here to approve logging this worklog, so it was not logged. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
+export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not logged. The timer is untouched.'
 
 /**
  * Splits /punch's arguments like a shell would, quotes kept together.
@@ -401,10 +434,21 @@ export function previewArgv(a) {
   return ['stop', '--dry-run', ...(a.duration ? ['--duration', a.duration] : []), ...(a.message ? ['-m', a.message] : [])]
 }
 
-/** The dialog's three answers. */
+/** The dialog's answers. */
 export const SUBMIT = 'Submit'
 export const KEEP = 'Keep pending'
 export const CANCEL = 'Cancel'
+
+/**
+ * The /punch stop dialog's answers. Keep pending (stop now, send later)
+ * means something only with a tracker; without one a worklog is logged
+ * the moment it stops.
+ * @param {string | undefined} tracker trackerOf's answer
+ * @returns {string[]}
+ */
+export function stopOptions(tracker) {
+  return tracker === 'none' ? [SUBMIT, CANCEL] : [SUBMIT, KEEP, CANCEL]
+}
 
 /**
  * The argv that performs the stop the person approved, pinned to the

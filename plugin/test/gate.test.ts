@@ -105,6 +105,43 @@ describe('tool.call gate', () => {
     expect(r.deny).toBeUndefined()
   })
 
+  // The status the gate reads for the tracker: the test's process.run
+  // hook stands for the punchcard binary.
+  const statusSays = (tracker: string) => (_: unknown, e: any) => ({
+    value: {
+      exitCode: 0,
+      stdout: e.argv.includes('status')
+        ? JSON.stringify({ v: 1, ok: true, outcome: 'ok', command: 'status', data: { running: null, paused: [], tracker, here: null }, events: [], error: null })
+        : '',
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  })
+
+  for (const [tracker, label, other] of [
+    ['none', 'Log it', 'Send to Jira'],
+    ['jira', 'Send to Jira', 'Log it'],
+  ] as const) {
+    test(`auto mode, tracker ${tracker}: the dialog offers "${label}", and it runs the command`, async ($, on) => {
+      on('tool.check', () => ({ decision: 'ask' as const }))
+      on('tool.call', { tool: 'Bash' }, () => ran)
+      on('session.cwd', () => ({ value: '/work' }))
+      on('process.run', statusSays(tracker))
+      let options: string[] = []
+      on('tool.call', { tool: 'AskUserQuestion' }, ($, e: any) => {
+        options = e.questions[0].options.map((o: any) => o.label ?? o)
+        return person(label)($, e)
+      })
+      on('classic.SessionStart', () => ({}))
+      await $.classic.SessionStart({ source: 'startup', permission_mode: 'auto' })
+      const r = await $.tool.call({ tool: 'Bash', command: STOP })
+      expect(options).toContain(label)
+      expect(options).not.toContain(other)
+      expect(r.deny).toBeUndefined()
+    })
+  }
+
   test('a dialog nobody answers refuses the command with the timer running', async ($, on) => {
     on('tool.check', () => ({ decision: 'ask' as const }))
     on('tool.call', { tool: 'Bash' }, () => ran)

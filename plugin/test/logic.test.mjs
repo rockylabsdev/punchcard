@@ -11,6 +11,7 @@ import {
   editPresenceDue,
   eventText,
   gateNeedsDialog,
+  gateLabel,
   gateQuestion,
   gateVerdict,
   hereKey,
@@ -22,10 +23,12 @@ import {
   previewArgv,
   replyText,
   stopArgv,
+  stopOptions,
   stopQuestion,
   submitTouch,
   tighten,
   tokenize,
+  trackerOf,
   versionSkew,
   worklogDuration,
 } from '../hooks/logic.mjs'
@@ -196,6 +199,17 @@ describe('bandFrom', () => {
     ['a rejected token outranks not connected', status({ authFailedAt: '2026-10-09T09:00:00.000+0000', configured: false }), '',
       { tone: 'error', text: 'Jira auth failed' }],
     ['connected says nothing', status({ configured: true }), '', null],
+    ['Jira named: the band is as before', status({ tracker: 'jira', running: timer(), configured: false }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · Jira not connected' }],
+    ['no tracker, idle: no band, and not connected is no warning', status({ tracker: 'none' }), '', null],
+    ['no tracker, idle in a keyed directory', status({ tracker: 'none' }), 'payroll',
+      { tone: 'subtle', text: 'payroll not running · /punch start' }],
+    ['no tracker, running: the timer alone', status({ tracker: 'none', running: timer({ key: 'payroll' }) }), 'payroll',
+      { tone: 'success', text: '▶ payroll 1:12' }],
+    ['no tracker: never the Jira words, whatever else is set',
+      status({ tracker: 'none', running: timer(), configured: false, notConfigured: 'x', keychainError: 'macOS Keychain: x',
+        authFailedAt: '2026-10-09T09:00:00.000+0000', unsent: { count: 2, seconds: 600 } }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12' }],
     ['binary missing', { missing: true }, 'ABC-123', { tone: 'error', text: 'punchcard not found on PATH' }],
     ['refusal', { envelope: { ok: false, outcome: 'state_unreadable', error: { message: 'state is newer' } } }, '',
       { tone: 'error', text: 'punchcard: state is newer' }],
@@ -301,10 +315,44 @@ describe('gateNeedsDialog', () => {
   }
 })
 
-test('gateQuestion names the command', () => {
-  const q = gateQuestion('  punchcard stop --yes --duration 1h  ')
-  assert.match(q, /Send it\?/)
-  assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+describe('the gate dialog says what the stop does', () => {
+  const command = '  punchcard stop --yes --duration 1h  '
+  test('no tracker: "Log it"', () => {
+    assert.equal(gateLabel('none'), 'Log it')
+    const q = gateQuestion(command, 'none')
+    assert.match(q, /logs the worklog\. Log it\?/)
+    assert.doesNotMatch(q, /Jira/)
+    assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+  })
+  test('Jira: "Send to Jira"', () => {
+    assert.equal(gateLabel('jira'), 'Send to Jira')
+    const q = gateQuestion(command, 'jira')
+    assert.match(q, /sends the worklog to Jira\. Send it\?/)
+    assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+  })
+  // An older binary reports no tracker, and every older binary sent to
+  // Jira; a poll that failed has no answer, and the stop it guards will
+  // most likely fail the same way. Either way the words are Jira's, so
+  // the label is fixed before the dialog opens.
+  test('unknown: the Jira words', () => {
+    assert.equal(gateLabel(''), 'Send to Jira')
+    assert.equal(gateLabel(undefined), 'Send to Jira')
+    assert.match(gateQuestion(command, ''), /Send it\?/)
+  })
+})
+
+describe('trackerOf', () => {
+  const cases = [
+    ['none', status({ tracker: 'none' }), 'none'],
+    ['jira', status({ tracker: 'jira' }), 'jira'],
+    ['an older binary that does not say', status({}), ''],
+    ['a refusal', { envelope: { ok: false, outcome: 'busy' } }, ''],
+    ['no JSON', { envelope: null }, ''],
+    ['binary missing', { missing: true }, ''],
+  ]
+  for (const [name, poll, want] of cases) {
+    test(name, () => assert.equal(trackerOf(poll), want))
+  }
 })
 
 describe('tighten', () => {
@@ -355,6 +403,11 @@ describe('stop dialog', () => {
   test('previewArgv', () => {
     assert.deepEqual(previewArgv({ verb: 'stop', duration: '', message: '' }), ['stop', '--dry-run'])
     assert.deepEqual(previewArgv({ verb: 'stop', duration: '1h', message: 'x y' }), ['stop', '--dry-run', '--duration', '1h', '-m', 'x y'])
+  })
+  test('stopOptions: keeping a worklog pending means something only with a tracker', () => {
+    assert.deepEqual(stopOptions('jira'), [SUBMIT, KEEP, 'Cancel'])
+    assert.deepEqual(stopOptions(''), [SUBMIT, KEEP, 'Cancel'])
+    assert.deepEqual(stopOptions('none'), [SUBMIT, 'Cancel'])
   })
   test('stopArgv sends exactly what was previewed', () => {
     assert.deepEqual(stopArgv(preview, SUBMIT), ['stop', 'ABC-1', '--yes', '--duration', '72', '-m', 'fixed it'])
