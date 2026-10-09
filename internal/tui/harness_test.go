@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -8,7 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
 // fakeStore is the store seam in memory: the same core.Apply, no files.
@@ -69,17 +72,72 @@ func at(hhmmss string) time.Time {
 // Update, runs the returned command and feeds its message back, with a
 // fixed clock that only the test moves.
 type harness struct {
-	t   *testing.T
-	st  *fakeStore
-	m   Model
-	now time.Time
-	ids int
+	t      *testing.T
+	st     *fakeStore
+	sender *fakeSender
+	jira   *jira.Fake // nil: Jira not configured (set before open)
+	m      Model
+	now    time.Time
+	ids    int
 }
 
 func newHarness(t *testing.T) *harness {
 	hs := &harness{t: t, now: at("09:00:00")}
 	hs.st = &fakeStore{w: core.World{State: core.NewState()}, now: func() time.Time { return hs.now }}
+	hs.sender = &fakeSender{st: hs.st}
 	return hs
+}
+
+// fakeSender is the worklog seam over the fake store: it applies the
+// stop, then marks the worklog synced, or leaves it owed with syncErr.
+type fakeSender struct {
+	st      *fakeStore
+	syncErr error
+	mu      sync.Mutex
+	stops   []core.Stop
+}
+
+func (f *fakeSender) Stop(_ context.Context, c core.Stop) (worklog.StopResult, error) {
+	f.mu.Lock()
+	f.stops = append(f.stops, c)
+	f.mu.Unlock()
+	res, err := f.st.Apply(c)
+	if err != nil {
+		return worklog.StopResult{}, err
+	}
+	r := worklog.StopResult{Key: c.Key, EntryID: c.EntryID, World: res.World, Now: res.Now, SyncErr: f.syncErr}
+	if f.syncErr == nil {
+		res, err = f.st.Apply(core.MarkSynced{Key: c.Key, EntryID: c.EntryID, WorklogID: "W1"})
+		if err != nil {
+			return r, err
+		}
+		r.World = res.World
+	}
+	for _, t := range r.World.State.TrackedTickets {
+		for _, e := range t.Entries {
+			if t.Key == c.Key && e.ID == c.EntryID && e.Worklog != nil {
+				r.Worklog = *e.Worklog
+			}
+		}
+	}
+	return r, nil
+}
+
+func (f *fakeSender) calls() []core.Stop {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]core.Stop(nil), f.stops...)
+}
+
+// frame is the screen as plain text.
+func (hs *harness) frame() string { return plain(hs.m.View().Content) }
+
+// typeText types s one key at a time.
+func (hs *harness) typeText(s string) {
+	hs.t.Helper()
+	for _, r := range s {
+		hs.key(string(r))
+	}
 }
 
 // setup applies commands to the store directly, as another process
@@ -100,7 +158,16 @@ func (hs *harness) setup(when string, cmds ...core.Command) {
 func (hs *harness) open(when string, w, h int) {
 	hs.t.Helper()
 	hs.now = at(when)
-	hs.m = New(hs.st, hs.now, func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) })
+	o := Options{
+		Store:  hs.st,
+		Now:    func() time.Time { return hs.now },
+		NewID:  func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
+		Sender: hs.sender,
+	}
+	if hs.jira != nil {
+		o.Jira = func() (jira.Client, error) { return hs.jira, nil }
+	}
+	hs.m = New(o)
 	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
 	hs.run(hs.m.load())
 }
@@ -162,6 +229,14 @@ func keyPress(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: tea.KeyDown})
 	case "ctrl+c":
 		return tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
+	case "esc":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})
+	case "tab":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab})
+	case "shift+tab":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab, Mod: tea.ModShift})
+	case "backspace":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyBackspace})
 	}
 	r := []rune(k)
 	if len(r) != 1 {

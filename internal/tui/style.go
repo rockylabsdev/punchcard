@@ -47,6 +47,7 @@ const (
 	gUnverified = "?"
 	gPending    = "○"
 	gFailed     = "✗"
+	gSynced     = "✓"
 	gCursor     = "›"
 )
 

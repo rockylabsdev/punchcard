@@ -27,17 +27,41 @@ func plain(frame string) string {
 var scenarios = []struct {
 	name  string
 	build func(hs *harness)
+	keys  []string // pressed once the TUI is open: a dialog scenario
 }{
-	{"empty", func(hs *harness) {}},
-	{"running", func(hs *harness) {
-		day(hs)
-		hs.setup("08:58:00", start("PUN-142", "E-142b"))
-	}},
+	{"empty", func(hs *harness) {}, nil},
+	{"running", runningDay, nil},
 	{"paused", func(hs *harness) {
 		day(hs)
 		hs.setup("08:20:00", start("PUN-142", "E-142b"))
 		hs.setup("08:41:30", pause)
-	}},
+	}, nil},
+	{"recovered", recoveredDay, nil},
+	{"stop", runningDay, []string{"x"}},
+	{"stop_recovered", recoveredDay, []string{"x"}},
+}
+
+func runningDay(hs *harness) {
+	day(hs)
+	hs.setup("08:58:00", start("PUN-142", "E-142b"))
+}
+
+// recoveredDay ran PUN-142 from 06:00 with a pause, and nobody was
+// present after 06:50: at 09:12 the timer is stale and shows recovered,
+// capped at 06:50.
+func recoveredDay(hs *harness) {
+	hs.setup("05:00:00", core.Add{Origin: core.OriginHand, Tickets: []core.NewTicket{
+		{Key: "PUN-142", Summary: "Wire flock on the side state.lock"},
+		{Key: "PUN-120", Summary: "Spike: Bubble Tea v2 layout"},
+		{Key: "DATA-9", Unverified: true},
+	}})
+	hs.setup("05:05:00", start("PUN-120", "E-120"))
+	hs.setup("05:45:00", core.Stop{Origin: core.OriginHand})
+	hs.setup("05:46:00", core.MarkSynced{Key: "PUN-120", EntryID: "E-120", WorklogID: "W1"})
+	hs.setup("06:00:00", start("PUN-142", "E-142"))
+	hs.setup("06:15:00", pause)
+	hs.setup("06:20:00", start("PUN-142", "E-142"))
+	hs.setup("06:50:00", core.Touch{Origin: core.OriginHand})
 }
 
 // day is a morning's list: two stopped worklogs (one failed, one
@@ -71,6 +95,7 @@ func TestFrames(t *testing.T) {
 				sc.build(hs)
 				hs.open("09:00:00", sz.w, sz.h)
 				hs.tick("09:12:34")
+				hs.key(sc.keys...)
 				golden.RequireEqual(t, plain(hs.m.View().Content))
 			})
 		}

@@ -15,13 +15,15 @@ import (
 // ticks and resizes through Update, rendering after each, and checks
 // that nothing panics and every frame is exactly the window's size.
 func TestHeadlessKeyRun(t *testing.T) {
-	keys := []string{"space", "enter", "p", "j", "k", "up", "down", "g", "G", "x", "?"}
+	keys := []string{"space", "enter", "p", "j", "k", "up", "down", "g", "G", "x", "?",
+		"a", "d", "y", "n", "esc", "tab", "shift+tab", "backspace", "1", "h", "m", "P", "U", "N", "-", "4", ":"}
 	sizes := [][2]int{{80, 24}, {120, 32}, {60, 16}, {44, 10}, {30, 6}, {10, 3}, {1, 1}}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
 			hs := newHarness(t)
 			sc.build(hs)
 			hs.open("09:00:00", 80, 24)
+			hs.key(sc.keys...)
 			rng := rand.New(rand.NewPCG(1, 2))
 			w, h := 80, 24
 			for i := range 2000 {
