@@ -39,6 +39,7 @@ func (a *applier) verify(c Verify) error {
 		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
 	}
 	t.Summary, t.Unverified = c.Summary, false
+	a.w.State.AuthFailedAt = Timestamp{} // Jira answered
 	return nil
 }
 

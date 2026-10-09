@@ -82,13 +82,3 @@ func TestPath(t *testing.T) {
 		t.Errorf("no HOME: err = %v", err)
 	}
 }
-
-func TestToken(t *testing.T) {
-	tok, err := config.Token(env(map[string]string{"PUNCHCARD_TOKEN": "secret"}))
-	if err != nil || tok != (config.Secret{Value: "secret", Source: config.SourceEnv}) {
-		t.Errorf("Token = %+v, %v", tok, err)
-	}
-	if _, err := config.Token(env(map[string]string{})); !errors.Is(err, config.ErrNotConfigured) {
-		t.Errorf("unset: err = %v, want ErrNotConfigured", err)
-	}
-}

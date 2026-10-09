@@ -12,6 +12,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
@@ -95,6 +96,10 @@ type Env struct {
 	// Nil means jira.Open(Getenv): the config file plus the token
 	// lookup. Tests inject a *jira.Fake.
 	Jira func() (jira.Client, error)
+	// Keychain is the token lookup's Keychain read (config.Keychain).
+	// Nil means config.SystemKeychain(): /usr/bin/security on macOS, no
+	// Keychain on Linux. Tests always inject a fake.
+	Keychain config.Keychain
 }
 
 // Choice is one ticket offered by the picker.
@@ -116,9 +121,12 @@ func (e Env) withDefaults() Env {
 	if e.Store == nil {
 		e.Store = store.New(store.Dir(e.Getenv), e.Now)
 	}
+	if e.Keychain == nil {
+		e.Keychain = config.SystemKeychain()
+	}
 	if e.Jira == nil {
-		getenv := e.Getenv
-		e.Jira = func() (jira.Client, error) { return jira.Open(getenv) }
+		getenv, kc := e.Getenv, e.Keychain
+		e.Jira = func() (jira.Client, error) { return jira.Open(getenv, kc) }
 	}
 	return e
 }

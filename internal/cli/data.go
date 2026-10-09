@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 )
 
@@ -43,6 +44,22 @@ type StatusData struct {
 	Paused       []Timer        `json:"paused"`
 	Unsent       Owed           `json:"unsent"`
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
+}
+
+// StatusReport is `data` for status alone: the snapshot plus whether
+// Jira is configured, where the token comes from, and what broke. Only
+// status looks this up (it reads the token; touch never does).
+type StatusReport struct {
+	StatusData
+	Configured  bool          `json:"configured"`
+	TokenSource config.Source `json:"tokenSource,omitempty"` // env|keychain|file
+	// StrayTokenFile is the token file's path when the Keychain won.
+	StrayTokenFile string `json:"strayTokenFile,omitempty"`
+	// KeychainError is why the Keychain could not be read (with no
+	// file to fall back on); configured is then false.
+	KeychainError string `json:"keychainError,omitempty"`
+	// NotConfigured says why configured is false, in words.
+	NotConfigured string `json:"notConfigured,omitempty"`
 }
 
 // Ticket is one row of `ls` (and of `add`).

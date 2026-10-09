@@ -49,6 +49,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.markFailed(c)
 	case RecordAuthFailure:
 		a.w.State.AuthFailedAt = a.now
+	case ClearAuthFailure:
+		a.w.State.AuthFailedAt = Timestamp{}
 	case Verify:
 		err = a.verify(c)
 	default:
