@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"os"
+	"strings"
 	"sync"
 
 	"charm.land/bubbles/v2/key"
