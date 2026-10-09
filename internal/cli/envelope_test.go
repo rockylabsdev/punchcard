@@ -366,3 +366,10 @@ var anyMessage = cmp.FilterPath(func(p cmp.Path) bool {
 	}
 	return sa == sb
 }))
+
+func writeFile(t *testing.T, dir, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
