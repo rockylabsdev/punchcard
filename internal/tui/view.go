@@ -41,7 +41,7 @@ func (m Model) frame() string {
 	if _, wide := m.dlg.(helpDialog); wide || dw < minDialogWidth {
 		x, dw = 0, w
 	}
-	top := strings.Join(pane(m.dlg.title(), m.dlg.body(m, dw-2), dw, bodyH, true), "\n")
+	top := strings.Join(m.pane(m.dlg.title(), m.dlg.body(m, dw-2), dw, bodyH, true), "\n")
 	return overlay(base, top, x, 0, w, h)
 }
 
@@ -97,8 +97,8 @@ func joinColumns(left, right []string) []string {
 }
 
 // pane is a rounded box w×h with its title set into the top border.
-// The focused pane's border is the foreground colour, others faint.
-func pane(title string, body []string, w, h int, focused bool) []string {
+// The focused pane's border and title are the brand colour, others faint.
+func (m Model) pane(title string, body []string, w, h int, focused bool) []string {
 	if h <= 0 {
 		return nil
 	}
@@ -111,7 +111,7 @@ func pane(title string, body []string, w, h int, focused bool) []string {
 	}
 	border, tstyle := sFaint, sDim
 	if focused {
-		border, tstyle = sFocus, sBold
+		border, tstyle = m.pal.focus, m.pal.brand
 	}
 	iw := w - 2
 	title = ansi.Truncate(title, max(0, iw-1), "…")

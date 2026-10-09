@@ -15,9 +15,15 @@ import (
 // theme; only greys come from the 256 cube (they fall back to bright
 // black). Blue is reserved for sync. Every state also has a symbol, so
 // the frame reads with no colour at all.
+//
+// The one colour that is Punchcard's own is the brand, a chartreuse: the
+// running state, the focused pane and the cursor. It has a darker shade
+// for light backgrounds, and on 16 colours it falls back to bright green.
 var (
+	BrandDark  = lipgloss.Color("#C8FF00")
+	BrandLight = lipgloss.Color("#5F8700")
+
 	cRed     = lipgloss.Color("1")
-	cGreen   = lipgloss.Color("2")
 	cYellow  = lipgloss.Color("3")
 	cBlue    = lipgloss.Color("4")
 	cMagenta = lipgloss.Color("5")
@@ -54,12 +60,28 @@ func greyFallback(frame string) string {
 
 var sgrPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
+// brandStyles holds the styles that depend on the terminal's background:
+// everything drawn in the brand colour.
+type brandStyles struct {
+	brand   lipgloss.Style // the cursor, the focused pane's title
+	running lipgloss.Style // the running state
+	focus   lipgloss.Style // the focused pane's border
+}
+
+// newPalette picks the brand shade for a dark or a light background.
+func newPalette(dark bool) brandStyles {
+	c := lipgloss.LightDark(dark)(BrandLight, BrandDark)
+	return brandStyles{
+		brand:   lipgloss.NewStyle().Foreground(c).Bold(true),
+		running: lipgloss.NewStyle().Foreground(c).Bold(true),
+		focus:   lipgloss.NewStyle().Foreground(c),
+	}
+}
+
 var (
 	sDim     = lipgloss.NewStyle().Foreground(cDim)
 	sFaint   = lipgloss.NewStyle().Foreground(cFaint)
 	sBold    = lipgloss.NewStyle().Bold(true)
-	sFocus   = lipgloss.NewStyle() // the terminal's own foreground, light or dark
-	sRunning = lipgloss.NewStyle().Foreground(cGreen).Bold(true)
 	sPaused  = lipgloss.NewStyle().Foreground(cYellow)
 	sRecov   = lipgloss.NewStyle().Foreground(cMagenta).Bold(true)
 	sSync    = lipgloss.NewStyle().Foreground(cBlue)

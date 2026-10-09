@@ -22,3 +22,9 @@ Claude Code drives Punchcard through one optional plugin, `punchcard`, installed
 - **Closing, sleeping or deleting a terminal or worktree does nothing to the timer**, in Orca or anywhere else.
 - **No context is injected at session start.** The model-invocable skill teaches the agent the commands and the rules (an agent's stop needs `--yes`; exit 7 means `sync`, never `stop` again).
 - **The mod relies on nothing implicit:** it passes `--origin` on every call, since `CLAUDECODE` is not guaranteed in its child processes.
+
+## Amendment, 2026-10-09: auto mode
+
+A hand check on Claude Code 2.1.292 in **auto mode** (the permission mode whose decider is a classifier) ran an agent's `punchcard stop --yes` with no dialog. The mod API is explicit: an `ask` verdict "puts it to the mode's decider (the dialog, the auto-mode classifier, a headless host)", so the mod's `tool.check` → `ask` is a dialog only in the default and bypass modes. The settings ask rule is documented to force a prompt in every mode, but the user had declined it.
+
+The mod therefore gates in two layers. `tool.check` still answers `ask` (and now keeps an `ask` that cites the user's own rule, rule and all). A `tool.call` hook on the same commands asks the engine's verdict with `$.tool.check` and, where that verdict would not reach a person (auto mode, or a mode not yet seen, with no user rule and no deny), raises its own dialog with `$.ui.ask`, Send to Jira or Keep the timer running, and refuses the call unless the person chose Send. Under `claude -p` that dialog rejects, so the call is refused with the timer running. The permission mode reaches the mod on the classic hook inputs (`SessionStart`, `UserPromptSubmit`). The design's guarantee is unchanged; what changed is that the `ask` verdict alone was never enough to carry it.

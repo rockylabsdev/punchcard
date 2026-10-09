@@ -70,6 +70,9 @@ type Model struct {
 	link link
 	// profile is the terminal's colour profile, for the grey fallback.
 	profile colorprofile.Profile
+	// pal is the brand styles for the terminal's background; dark until
+	// the terminal answers.
+	pal brandStyles
 
 	// Changes made elsewhere (elsewhere.go): seen is state.json's stamp
 	// at the last read; tags are rows' "paused by agent" markers.
@@ -132,13 +135,13 @@ type intent struct {
 // first tick.
 func New(o Options) Model {
 	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick,
-		setup: o.Setup, execProcess: tea.ExecProcess}
+		setup: o.Setup, execProcess: tea.ExecProcess, pal: newPalette(true)}
 }
 
-// Init loads the store, asks whether Jira is set up and starts the
-// clock.
+// Init loads the store, asks whether Jira is set up, asks the terminal
+// its background colour (for the brand's shade) and starts the clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.startup(), m.ticker())
+	return tea.Batch(m.startup(), tea.RequestBackgroundColor, m.ticker())
 }
 
 // startup is Init without the clock: the first read and the probe.
@@ -186,6 +189,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.setupDone(msg)
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
+		return m, nil
+	case tea.BackgroundColorMsg:
+		m.pal = newPalette(msg.IsDark())
 		return m, nil
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {

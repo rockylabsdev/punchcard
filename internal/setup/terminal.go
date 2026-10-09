@@ -14,21 +14,53 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/term"
+	"github.com/j-dsmith/punchcard/internal/tui"
 )
 
-// Wordmark is PUNCHCARD in block letters, shown above the wizard.
+// Wordmark is PUNCHCARD as holes in a punched card: a 4×7 dot matrix
+// per letter, one column between letters. A punched position is '#',
+// an unpunched one '.'; wordmark renders them as a bright and a faint
+// dot, so the unpunched grid reads as the card itself.
 const Wordmark = "" +
-	"█▀█ █ █ █▄ █ █▀▀ █ █ █▀▀ ▄▀█ █▀█ █▀▄\n" +
-	"█▀▀ █▄█ █ ▀█ █▄▄ █▀█ █▄▄ █▀█ █▀▄ █▄▀"
+	"###..#..#.#..#..##..#..#..##...##..###..###.\n" +
+	"#..#.#..#.##.#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
+	"#..#.#..#.##.#.#....#..#.#....#..#.#..#.#..#\n" +
+	"###..#..#.#.##.#....####.#....####.###..#..#\n" +
+	"#....#..#.#.##.#....#..#.#....#..#.#.#..#..#\n" +
+	"#....#..#.#..#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
+	"#.....##..#..#..##..#..#..##..#..#.#..#.###."
+
+// wordmark is Wordmark styled: punched holes in the brand colour,
+// unpunched ones in a faint grey.
+func (t *Terminal) wordmark() string {
+	mark := t.mark
+	var b strings.Builder
+	for _, r := range Wordmark {
+		switch r {
+		case '#':
+			b.WriteString(mark.Render("●"))
+		case '.':
+			b.WriteString(tGrid.Render("·"))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
 
 var (
 	tGutter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	tMark   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	tTitle  = lipgloss.NewStyle().Bold(true)
-	tDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	tGood   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	tBad    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	tWarn   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	// tGrid is the wordmark's unpunched holes: barely there, so the
+	// punched ones carry the letters.
+	tGrid = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	// tMark is the wordmark's holes: the brand colour, in its dark-background
+	// shade until NewTerminal asks the terminal (see brand).
+	tMark  = lipgloss.NewStyle().Foreground(tui.BrandDark).Bold(true)
+	tTitle = lipgloss.NewStyle().Bold(true)
+	tDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	tGood  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	tBad   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	tWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
 // Terminal is the UI on a real terminal: clack-style lines in a gutter,
@@ -41,24 +73,65 @@ type Terminal struct {
 	// width is the forms' width: the terminal's, capped. Huh panics on
 	// a terminal that reports no size, so unknown is 72.
 	width int
-	mu    sync.Mutex
+	// mark is the wordmark's hole style: tMark until the terminal says
+	// its background is light.
+	mark lipgloss.Style
+	// dark is whether the terminal's background is dark, as asked once in
+	// NewTerminal; the forms take the brand shade from it. Unknown is dark.
+	dark bool
+	mu   sync.Mutex
 }
 
 // NewTerminal is the wizard's UI on in and out. environ decides the
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
+	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true, mark: tMark}
 	if f, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
-			width = min(w, 80)
+			t.width = min(w, 80)
+		}
+		if fin, ok := in.(*os.File); ok {
+			t.dark = lipgloss.HasDarkBackground(fin, f)
+			t.mark = brand(t.dark)
 		}
 	}
-	return &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width}
+	return t
+}
+
+// theme is Huh's base16 theme with the brand colour where that theme
+// uses cyan, yellow and magenta: titles, the prompt and cursor, the
+// select indicators and the focused button. Descriptions stay grey and
+// errors red, so the wizard reads as one thing with the wordmark. The
+// shade comes from NewTerminal's one query, not Huh's own, which can
+// miss the terminal's answer and fall back to light.
+func (term *Terminal) theme(bool) *huh.Styles {
+	isDark := term.dark
+	t := huh.ThemeBase16(isDark)
+	c := lipgloss.LightDark(isDark)(tui.BrandLight, tui.BrandDark)
+	t.Focused.Title = t.Focused.Title.Foreground(c).Bold(true)
+	t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(c).Bold(true)
+	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(c)
+	t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(c)
+	t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(c)
+	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(c)
+	t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(c)
+	t.Focused.FocusedButton = t.Focused.FocusedButton.Foreground(lipgloss.Color("0")).Background(c).Bold(true)
+	t.Focused.TextInput.Prompt = t.Focused.TextInput.Prompt.Foreground(c)
+	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(c)
+	t.Group.Title = t.Focused.Title
+	return t
+}
+
+// brand is the wordmark style for a dark or a light background.
+func brand(dark bool) lipgloss.Style {
+	c := lipgloss.LightDark(dark)(tui.BrandLight, tui.BrandDark)
+	return lipgloss.NewStyle().Foreground(c).Bold(true)
 }
 
 // Begin prints the wordmark and opens the gutter.
 func (t *Terminal) Begin() {
-	t.print("\n" + tMark.Render(Wordmark) + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
+	t.print("\n" + t.wordmark() + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
 }
 
 // End closes the gutter.
@@ -108,7 +181,7 @@ func (t *Terminal) run(field huh.Field) error {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithShowHelp(false).WithWidth(t.width).
 		WithKeyMap(t.keys()).
-		WithTheme(huh.ThemeFunc(huh.ThemeBase16)).
+		WithTheme(huh.ThemeFunc(t.theme)).
 		WithInput(t.in).
 		WithOutput(t.tty).
 		Run()

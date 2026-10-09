@@ -19,9 +19,9 @@ import (
 func (m Model) ticketPane(w, h int) []string {
 	t, ok := m.selected()
 	if !ok {
-		return pane("[2] Ticket", nil, w, h, false)
+		return m.pane("[2] Ticket", nil, w, h, false)
 	}
-	return pane("[2] "+t.Key, m.ticketDetail(t, w-2), w, h, false)
+	return m.pane("[2] "+t.Key, m.ticketDetail(t, w-2), w, h, false)
 }
 
 func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
@@ -39,7 +39,7 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 		el := core.Elapsed(e, m.now)
 		switch {
 		case m.stateOf(t) == core.TimerRunning:
-			head(gRunning+" RUNNING", sRunning, clock(el))
+			head(gRunning+" RUNNING", m.pal.running, clock(el))
 		case recoveredPause(t):
 			head(gRecovered+" RECOVERED", sRecov, hm(el))
 		default:
@@ -85,8 +85,8 @@ func (m Model) stretches(e core.TimeEntry, w int) []string {
 		s := e.Segments[i]
 		if s.Open() {
 			d := m.now.Sub(s.StartedAt.Time)
-			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+sRunning.Render("now"), 11)+" "+
-				rfit(sRunning.Render(clock(d)), 7)+" "+sRunning.Render("counted"))
+			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+m.pal.running.Render("now"), 11)+" "+
+				rfit(m.pal.running.Render(clock(d)), 7)+" "+m.pal.running.Render("counted"))
 		} else {
 			d := s.EndedAt.Sub(s.StartedAt.Time)
 			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+hhmm(s.EndedAt), 11)+" "+rfit(hm(d), 7)+" counted")

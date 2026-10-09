@@ -4,7 +4,18 @@ Time tracking against Jira tickets from the terminal. One binary, `punchcard`, g
 
 macOS and Linux, on arm64 and amd64.
 
+**Documentation:** the [user guide](docs/guide/README.md) covers getting started, every command and key, the Claude Code plugin, troubleshooting, and a [testers' guide](docs/guide/testers.md).
+
 ## Install
+
+**Before the first release** there is no tap, no release tarball and no installable plugin. Build from a clone (the repository is private, so you need access and an SSH key on GitHub):
+
+```sh
+git clone git@github.com:j-dsmith/punchcard.git && cd punchcard
+go install ./cmd/punchcard
+```
+
+Or without a clone: `GOPRIVATE=github.com/j-dsmith go install github.com/j-dsmith/punchcard/cmd/punchcard@latest`. Either way, make sure `$(go env GOPATH)/bin` is on your `PATH`. Load the plugin per session with `claude --plugin-dir /path/to/punchcard/plugin` until `punchcard setup` can install it. The rest of this section describes the released install.
 
 ```sh
 brew install j-dsmith/tap/punchcard
@@ -30,7 +41,7 @@ If you have Go installed:
 go install github.com/j-dsmith/punchcard/cmd/punchcard@latest
 ```
 
-Make sure `$(go env GOPATH)/bin` is on your `PATH`. The plugin and Claude Code call the bare `punchcard` on `PATH`.
+Make sure `$(go env GOPATH)/bin` is on your `PATH`. The plugin and Claude Code call the bare `punchcard` on `PATH`. Go 1.26 is required; an older Go downloads it on first build. While the repository is private, set `GOPRIVATE=github.com/j-dsmith` so Go fetches it over git instead of the public proxy.
 
 ### Tarballs downloaded with a browser
 
@@ -57,7 +68,7 @@ rm -rf ~/.local/share/punchcard                   # timers and unsent worklogs
 security delete-generic-password -s punchcard     # macOS Keychain item
 ```
 
-If you set `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, the first two are `$XDG_CONFIG_HOME/punchcard` and `$XDG_DATA_HOME/punchcard`.
+If you set `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, the first two are `$XDG_CONFIG_HOME/punchcard` and `$XDG_DATA_HOME/punchcard`. If `punchcard setup` added the ask rule, it is the `Bash(punchcard stop *--yes*)` entry under `permissions.ask` in `~/.claude/settings.json`. See [Files and troubleshooting](docs/guide/files-and-troubleshooting.md).
 
 ## Releasing
 

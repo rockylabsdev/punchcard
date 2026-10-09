@@ -11,6 +11,8 @@ import {
   clock,
   editPresenceDue,
   eventText,
+  gateNeedsDialog,
+  gateQuestion,
   gateVerdict,
   isGatedStop,
   manifestVersion,
@@ -152,19 +154,32 @@ const status = (data) => ({
 describe('bandFrom', () => {
   const cases = [
     ['idle with nothing owed shows no band', status({}), '', null],
-    ['idle shows no band even on a keyed branch', status({}), 'DEF-9', null],
+    ['idle on a keyed branch names the ticket and the next action', status({}), 'DEF-9',
+      { tone: 'subtle', text: 'DEF-9 not running · /punch start' }],
     ['running', status({ running: timer({ summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · Fix login' }],
     ['running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · held · Fix login' }],
-    ['here: when this session\'s key differs', status({ running: timer() }), 'DEF-9',
-      { tone: 'success', text: '▶ ABC-123 1:12 · here: DEF-9' }],
-    ['no here: on the running ticket\'s own branch', status({ running: timer() }), 'ABC-123',
+    ['another ticket running: grey, says where the time goes and what this branch is for', status({ running: timer() }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · this branch is DEF-9' }],
+    ['another ticket running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · this branch is DEF-9' }],
+    ['another ticket running, worklogs owed: the debt still warns', status({ running: timer(), unsent: { count: 1, seconds: 60 } }), 'DEF-9',
+      { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · this branch is DEF-9' }],
+    ['another ticket recovered: still red here', status({ running: timer({ recovered: true }) }), 'DEF-9',
+      { tone: 'error', text: '! ABC-123 recovered · fix at stop · this branch is DEF-9' }],
+    ['a branch with no ticket: green, nothing to compare', status({ running: timer() }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12' }],
+    ['nothing extra on the running ticket\'s own branch', status({ running: timer() }), 'ABC-123',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
     ['paused', status({ paused: [timer({ state: 'paused', elapsedSeconds: 600 })] }), '',
       { tone: 'warning', text: '⏸ ABC-123 0:10' }],
-    ['several paused', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
-      { tone: 'warning', text: '⏸ ABC-123 1:12 · +1 paused · here: ABC-123' }],
+    ['several paused, the first on this branch', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
+      { tone: 'warning', text: '⏸ ABC-123 1:12 · +1 paused' }],
+    ['paused on another ticket', status({ paused: [timer({ state: 'paused' })] }), 'DEF-9',
+      { tone: 'warning', text: '⏸ ABC-123 1:12 · this branch is DEF-9' }],
+    ['idle and owed on a keyed branch', status({ unsent: { count: 1, seconds: 300 } }), 'DEF-9',
+      { tone: 'warning', text: '1 unsent · DEF-9 not running · /punch start' }],
     ['recovered', status({ running: timer({ recovered: true }) }), '',
       { tone: 'error', text: '! ABC-123 recovered · fix at stop' }],
     ['stale', status({ running: timer({ state: 'stale', elapsedSeconds: 3600 }) }), '',
@@ -259,7 +274,35 @@ describe('gateVerdict', () => {
   })
 })
 
+describe('gateNeedsDialog', () => {
+  const ask = { decision: 'ask' }
+  const byRule = { decision: 'ask', rule: 'Bash(punchcard stop *--yes*)' }
+  const cases = [
+    ['auto mode: the classifier would decide, so the plugin asks', 'auto', ask, true],
+    ['auto mode, allowed beneath: still asks', 'auto', { decision: 'allow' }, true],
+    ["mode not seen yet: fails closed and asks", '', ask, true],
+    ['default mode: the engine puts the ask to the person', 'default', ask, false],
+    ['bypass mode: the ask verdict prompts there', 'bypassPermissions', ask, false],
+    ["the user's own ask rule prompts in every mode", 'auto', byRule, false],
+    ['a deny beneath is refused by the engine', 'auto', { decision: 'deny' }, false],
+    ['no verdict at all, auto: asks', 'auto', null, true],
+  ]
+  for (const [name, mode, verdict, want] of cases) {
+    test(name, () => assert.equal(gateNeedsDialog(mode, verdict), want))
+  }
+})
+
+test('gateQuestion names the command', () => {
+  const q = gateQuestion('  punchcard stop --yes --duration 1h  ')
+  assert.match(q, /Send it\?/)
+  assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+})
+
 describe('tighten', () => {
+  test("an ask by the user's own rule stands, rule and all", () => {
+    const below = { decision: 'ask', rule: 'Bash(punchcard stop *--yes*)', reason: 'rule' }
+    assert.equal(tighten(below), below)
+  })
   test('a deny beneath stands', () => {
     const deny = { decision: 'deny', reason: 'rule' }
     assert.equal(tighten(deny), deny)

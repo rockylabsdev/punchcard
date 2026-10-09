@@ -10,12 +10,19 @@ type Skew = { plugin: string; binary: string } // logic.mjs's Skew
 import {
   ASK,
   CANCEL,
+  DENIED_BY_USER,
+  DENIED_GATE_FAILED,
+  DENIED_UNATTENDED,
+  HOLD,
   KEEP,
+  SEND,
   SUBMIT,
   bandFrom,
   branchKey,
   editPresenceDue,
   eventText,
+  gateNeedsDialog,
+  gateQuestion,
   gateVerdict,
   manifestVersion,
   needsDuration,
@@ -40,8 +47,9 @@ const VERSION_MS = 300_000 // how often to re-read the binary's version (brew up
 type Origin = 'prompt' | 'hand'
 type Ran = { envelope: any; exitCode: number }
 
-// Module state: a reload resets both, which is harmless.
+// Module state: a reload resets these, which is harmless.
 let lastEdit = 0 // when typing last counted as presence
+let permissionMode = '' // the session's, from the classic hook inputs; '' until seen
 let polling = false // a status poll is in flight
 let pluginVersion: string | null = null // this plugin's plugin.json version, read once
 let binaryVersion = '' // `punchcard version --json`, '' until known
@@ -206,14 +214,48 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // The gate: ask for any Bash command that would send an agent's worklog,
-  // unless the user's own rules already deny it. Never allow (a mod's allow
-  // overrides the user's ask rule); a failure asks too, so the gate fails
-  // closed. At tool.check, next(e) only reads the verdict beneath.
+  // The gate, in two layers (ADR 0005).
+  //
+  // 1. tool.check: ask for any Bash command that would send an agent's
+  //    worklog, unless the user's own rules already deny it or ask by
+  //    rule. Never allow (a mod's allow overrides the user's ask rule); a
+  //    failure asks too, so the gate fails closed. At tool.check, next(e)
+  //    only reads the verdict beneath.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     if (!gateVerdict(e.tool, e.input)) return next(e)
     return tighten(await next(e))
   }).catch(() => ({ ...ASK }))
+
+  // 2. tool.call: an `ask` verdict goes to the mode's decider, and in auto
+  //    mode that is a classifier, not the person. So where the engine will
+  //    not put the call to a person (auto mode, or a mode not yet seen),
+  //    the plugin raises its own dialog and sends only on "Send to Jira".
+  //    With nobody to ask (claude -p) the dialog rejects and the call is
+  //    refused with the timer running. Judged before next, so a failure
+  //    refuses rather than sends.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (!gateVerdict(e.tool, { command: e.command })) return next(e)
+    const verdict = await $.tool.check({ tool: 'Bash', input: { command: e.command } })
+    if (!gateNeedsDialog(permissionMode, verdict)) return next(e)
+    let answer: string
+    try {
+      answer = await $.ui.ask(gateQuestion(e.command), { header: 'Punchcard', options: [SEND, HOLD] })
+    } catch {
+      return { deny: DENIED_UNATTENDED }
+    }
+    if (answer !== SEND) return { deny: DENIED_BY_USER }
+    return next(e)
+  }).catch(($, e, next) => (next.called ? next(e) : { deny: DENIED_GATE_FAILED }))
+
+  // The permission mode reaches a mod only on the classic hook inputs.
+  on('classic.SessionStart', ($, e, next) => {
+    permissionMode = e.permission_mode ?? permissionMode
+    return next(e)
+  })
+  on('classic.UserPromptSubmit', ($, e, next) => {
+    permissionMode = e.permission_mode ?? permissionMode
+    return next(e)
+  })
 
   on('command.run', { command: 'punch' }, async ($, e) => ({ text: await punch($, e.args) }))
 

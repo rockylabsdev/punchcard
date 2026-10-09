@@ -131,7 +131,8 @@ export function versionSkew(plugin, binary) {
  * punchcard could not be started, `{ envelope }` when it answered (the
  * envelope null when its stdout was not one), `{ failed: message }` when
  * it timed out or similar. hereKey is this session's branch key ("" for
- * none).
+ * none): idle, the band names it and the next action; with another
+ * ticket shown, it says what this branch is for.
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @param {string} hereKey
  * @param {Skew | null} [skew] plugin and binary versions when they differ
@@ -153,14 +154,18 @@ export function bandFrom(poll, hereKey, skew = null) {
   const keychainBroken = !authFailed && Boolean(d.keychainError)
   const notConnected = !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
-  if (!shown && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
+  if (!shown && !hereKey && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
   /** @type {string[]} */
   const parts = []
   /** @type {Band['tone']} */
   let tone = 'subtle'
+  // A timer running on another ticket than this session's branch is
+  // counting somewhere else: the band steps back to grey and says where,
+  // so only the session being billed is green.
+  const elsewhere = Boolean(hereKey && shown && shown.key !== hereKey)
   if (shown) {
-    const t = timerParts(shown)
+    const t = timerParts(shown, elsewhere)
     parts.push(...t.parts)
     tone = t.tone
     if (!d.running && paused.length > 1) parts.push(`+${paused.length - 1} paused`)
@@ -181,8 +186,10 @@ export function bandFrom(poll, hereKey, skew = null) {
     parts.push('Jira not connected')
     if (tone === 'subtle') tone = 'warning'
   }
-  const runningKey = d.running?.key ?? ''
-  if (hereKey && hereKey !== runningKey) parts.push(`here: ${hereKey}`)
+  // This session's ticket, when it is not the one shown: idle, the next
+  // action; otherwise a reminder of what this directory is for.
+  if (hereKey && !shown) parts.push(`${hereKey} not running`, '/punch start')
+  else if (hereKey && shown.key !== hereKey) parts.push(`this branch is ${hereKey}`)
   if (skew) {
     parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
     if (tone === 'subtle') tone = 'warning'
@@ -193,20 +200,26 @@ export function bandFrom(poll, hereKey, skew = null) {
 /**
  * The band's words for one timer.
  * @param {any} t a Timer from `status --json`
+ * @param {boolean} [elsewhere] it runs on another ticket than this
+ *   session's branch: shown as "timer on KEY", in the subtle tone
  * @returns {{ tone: Band['tone'], parts: string[] }}
  */
-function timerParts(t) {
+function timerParts(t, elsewhere = false) {
   if (t.recovered) return { tone: 'error', parts: [`! ${t.key} recovered`, 'fix at stop'] }
   if (t.state === 'stale') return { tone: 'error', parts: [`! ${t.key} stale ${clock(t.elapsedSeconds)}`] }
   const parts = []
   if (t.state === 'paused') {
     parts.push(`⏸ ${t.key} ${clock(t.elapsedSeconds)}`)
+  } else if (elsewhere) {
+    parts.push(`timer on ${t.key} ${clock(t.elapsedSeconds)}`)
+    if (t.held) parts.push('held')
   } else {
     parts.push(`▶ ${t.key} ${clock(t.elapsedSeconds)}`)
     if (t.held) parts.push('held')
   }
   if (t.summary) parts.push(t.summary)
-  return { tone: t.state === 'paused' ? 'warning' : 'success', parts }
+  const tone = t.state === 'paused' ? 'warning' : elsewhere ? 'subtle' : 'success'
+  return { tone, parts }
 }
 
 /**
@@ -267,15 +280,59 @@ export const ASK = Object.freeze({
 
 /**
  * The gate's answer given the verdict beneath it (the user's rules and
- * mode): a deny stands, anything else becomes ask. The gate only ever
- * tightens.
- * @template {{ decision: string }} T
+ * mode): a deny stands, an ask that cites the user's own rule stands (a
+ * settings ask rule puts the call to the person in every mode, and the
+ * rule must stay visible to gateNeedsDialog), anything else becomes ask.
+ * The gate only ever tightens.
+ * @template {{ decision: string, rule?: string }} T
  * @param {T} below
  * @returns {T | typeof ASK}
  */
 export function tighten(below) {
-  return below?.decision === 'deny' ? below : ASK
+  if (below?.decision === 'deny') return below
+  if (below?.decision === 'ask' && below.rule) return below
+  return ASK
 }
+
+/**
+ * Whether the plugin must put a gated stop to the person itself, with its
+ * own dialog, because the engine will not. An `ask` verdict goes to the
+ * mode's decider: a dialog in the default and bypass modes, a headless
+ * host under -p (which denies), but the auto-mode classifier in auto
+ * mode, which can approve on the person's behalf. Only the person's own
+ * settings ask rule (`verdict.rule`) forces a dialog in every mode.
+ *
+ * So the dialog is raised in auto mode, and when the mode is not known
+ * (fail closed), unless the engine will refuse the call anyway or the
+ * user's rule will ask. `mode` is the session's permission mode as the
+ * classic hook inputs carry it ('' until one has been seen).
+ * @param {string} mode
+ * @param {{ decision?: string, rule?: string } | null | undefined} verdict the
+ *   engine's verdict for the call, from `$.tool.check`
+ */
+export function gateNeedsDialog(mode, verdict) {
+  if (verdict?.decision === 'deny') return false
+  if (verdict?.decision === 'ask' && verdict.rule) return false
+  return mode === 'auto' || mode === ''
+}
+
+/** The gate dialog's two answers. */
+export const SEND = 'Send to Jira'
+export const HOLD = 'Keep the timer running'
+
+/**
+ * The gate dialog's question for a Bash command about to send a worklog.
+ * @param {string} command
+ */
+export function gateQuestion(command) {
+  return `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?\n\n${String(command ?? '').trim()}`
+}
+
+/** Why a gated stop was refused, as the model reads it. */
+export const DENIED_BY_USER = 'Punchcard: the user did not approve sending this worklog. The timer is untouched; do not retry.'
+export const DENIED_UNATTENDED =
+  'Punchcard: nobody is here to approve sending this worklog, so it was not sent. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
+export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not sent. The timer is untouched.'
 
 /**
  * Splits /punch's arguments like a shell would, quotes kept together.
