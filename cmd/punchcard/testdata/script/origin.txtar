@@ -1,0 +1,27 @@
+# Inside Claude Code the origin is agent: it does not hold.
+env CLAUDECODE=1
+exec punchcard start AA-1 --json
+stdout '"origin":"agent"'
+stdout '"held":false'
+
+env CLAUDECODE=
+env AI_AGENT=1
+exec punchcard start AA-1 --json
+stdout '"held":false'
+stdout '"events":\[\]'
+
+# By hand, the same start is a no-op that holds.
+env AI_AGENT=
+exec punchcard start AA-1 --json
+stdout '"events":\[\{"kind":"held","key":"AA-1"\}\]'
+stdout '"origin":"hand"'
+
+# Now an agent cannot move it: exit 4, error code held.
+env CLAUDECODE=1
+exitcode 4 punchcard start AA-2 --json
+stdout '"outcome":"no_timer"'
+stdout '"code":"held"'
+
+# --origin overrides the environment.
+exec punchcard start AA-2 --origin hand
+stdout 'AA-1 paused'

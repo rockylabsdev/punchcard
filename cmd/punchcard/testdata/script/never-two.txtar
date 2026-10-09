@@ -1,0 +1,16 @@
+# Exit 2 blocks a Claude Code hook, so bad usage is 64, never cobra's or flag's 2.
+exitcode 64 punchcard frobnicate
+stderr 'unknown command'
+exitcode 64 punchcard start --bogus
+exitcode 64 punchcard pause AA-1
+exitcode 64 punchcard stop --duration 1:30
+exitcode 64 punchcard stop --duration
+exitcode 64 punchcard add
+exitcode 64 punchcard rm
+exitcode 64 punchcard start
+exitcode 64 punchcard setup
+exitcode 64 punchcard --origin robot status
+exitcode 64 punchcard frobnicate --json
+stdout '"outcome":"usage"'
+exitcode 0 punchcard --help
+exitcode 0 punchcard help start

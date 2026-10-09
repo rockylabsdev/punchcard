@@ -1,0 +1,18 @@
+# stdout here is a pipe, not a TTY; JSON stays off until asked for.
+exec punchcard status
+stdout '^Nothing running\.$'
+! stdout '\{'
+
+exec punchcard
+stdout '^Nothing running\.$'
+
+exec punchcard status --json
+stdout '^\{"v":1,"ok":true,"outcome":"ok","command":"status",'
+
+env PUNCHCARD_JSON=1
+exec punchcard status
+stdout '^\{"v":1,'
+
+env PUNCHCARD_JSON=
+exec punchcard status
+! stdout '\{'
