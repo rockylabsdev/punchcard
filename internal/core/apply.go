@@ -150,6 +150,9 @@ func (a *applier) stop(c Stop) error {
 	if err != nil {
 		return err
 	}
+	if c.EntryID != "" && e.ID != c.EntryID {
+		return fmt.Errorf("%w: entry %s is no longer open", ErrNoTimer, c.EntryID)
+	}
 	wl, err := worklogFor(*e, c.Duration, c.Comment, a.now)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -100,6 +101,9 @@ func PreviewStop(w World, stop Stop, now time.Time) (Preview, error) {
 	t, e, err := a.stopTarget(stop.Key)
 	if err != nil {
 		return Preview{}, err
+	}
+	if stop.EntryID != "" && e.ID != stop.EntryID {
+		return Preview{}, fmt.Errorf("%w: entry %s is no longer open", ErrNoTimer, stop.EntryID)
 	}
 	wl, err := worklogFor(*e, stop.Duration, stop.Comment, a.now)
 	if err != nil {

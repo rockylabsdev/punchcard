@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -46,3 +47,29 @@ func lock(path string, wait time.Duration) (*fileLock, error) {
 
 // unlock releases the flock by closing the descriptor.
 func (l *fileLock) unlock() { l.f.Close() }
+
+// SyncLockFile is the second lock: whoever holds it is the only one
+// POSTing worklogs (ADR 0002).
+const SyncLockFile = "sync.lock"
+
+// ErrSyncBusy: another punchcard holds sync.lock, so it is sending
+// worklogs right now. Nothing was sent.
+var ErrSyncBusy = errors.New("another punchcard is sending worklogs")
+
+// LockSync takes sync.lock without waiting and returns its release.
+// Hold it across a POST and the re-read that decides to send, never
+// state.lock: Apply still works while sync.lock is held, so mark the
+// outcome with Apply before releasing. A held lock is ErrSyncBusy.
+func (s *Store) LockSync() (release func(), err error) {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return nil, err
+	}
+	l, err := lock(filepath.Join(s.dir, SyncLockFile), 0)
+	if errors.Is(err, ErrBusy) {
+		return nil, ErrSyncBusy
+	}
+	if err != nil {
+		return nil, err
+	}
+	return l.unlock, nil
+}

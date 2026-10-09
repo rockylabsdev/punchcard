@@ -44,6 +44,22 @@ func TestApplyStop(t *testing.T) {
 			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:30")), pending("09:00", 5400, "")))),
 		},
 		{
+			name: "a stop pinned to the entry it previewed stops that entry",
+			w:    world("09:30", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
+			cmd:  core.Stop{Key: "AA-1", EntryID: "EA", Origin: hand},
+			now:  "09:30",
+			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:30")), pending("09:00", 1800, "")))),
+		},
+		{
+			name: "a stop pinned to an entry that is no longer open is refused",
+			w: world("09:30", ticket("AA-1",
+				withWorklog(entry("EA", hand, seg("08:00", "08:30")), pending("08:00", 1800, "")),
+				entry("EB", hand, seg("09:00", "")))),
+			cmd: core.Stop{Key: "AA-1", EntryID: "EA", Origin: hand},
+			now: "09:30",
+			err: core.ErrNoTimer,
+		},
+		{
 			name: "under one minute measured is refused",
 			w:    world("09:00", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			cmd:  core.Stop{Origin: hand},

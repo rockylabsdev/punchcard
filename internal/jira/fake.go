@@ -16,6 +16,9 @@ type Fake struct {
 	// Err, when set, is what every call returns instead: ErrUnreachable,
 	// ErrUnauthorized, an *APIError (e.g. a 503), ...
 	Err error
+	// PostErrs, keyed by ticket, is what PostWorklog to that key returns
+	// when Err is nil (e.g. one ticket answers 503 and the rest succeed).
+	PostErrs map[string]error
 	// Account is what TestConnection names.
 	Account Account
 
@@ -70,6 +73,9 @@ func (f *Fake) PostWorklog(ctx context.Context, key string, w Worklog) (string, 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.PostErrs[key]; err != nil {
+		return "", err
+	}
 	id := fmt.Sprintf("W%d", len(f.worklogs)+1)
 	f.worklogs = append(f.worklogs, PostedWorklog{Key: key, ID: id, Worklog: w})
 	return id, nil

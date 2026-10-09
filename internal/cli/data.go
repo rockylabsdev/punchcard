@@ -189,16 +189,6 @@ func listData(w core.World, now time.Time, only []string) ListData {
 	return d
 }
 
-func unsentOf(s core.State, key string) []UnsentWorklog {
-	out := []UnsentWorklog{}
-	for _, u := range core.Unsent(s) {
-		if key == "" || u.Key == key {
-			out = append(out, UnsentWorklog{Key: u.Key, EntryID: u.EntryID, Worklog: u.Worklog})
-		}
-	}
-	return out
-}
-
 func findEntry(s core.State, key, id string) core.TimeEntry {
 	for _, t := range s.TrackedTickets {
 		if t.Key == key {

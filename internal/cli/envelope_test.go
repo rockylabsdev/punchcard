@@ -206,11 +206,11 @@ func TestEnvelopes(t *testing.T) {
 			ok("resume", status(running("AA-7", "ID-1", true, "hand", 0)), `[{"kind": "added", "key": "AA-7"}]`)},
 
 		// stop
-		{"stop without sync is a success with debt", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:30",
+		{"stop unconfigured is a success with debt", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:30",
 			[]string{"stop", "-m", "did it"}, 7,
 			`{"v": 1, "ok": true, "outcome": "sync_pending", "command": "stop",
 			  "data": {"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": ` + nine + `, "timeSpentSeconds": 1800, "comment": "did it"}},
-			  "events": [], "error": {"code": "sync_pending", "message": "*", "hint": "run ` + "`punchcard sync`" + ` later; never stop again"}}`},
+			  "events": [], "error": {"code": "not_configured", "message": "*", "hint": "run ` + "`punchcard sync`" + ` later; never stop again"}}`},
 		{"stop --no-sync leaves it pending and exits 0", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:30",
 			[]string{"stop", "--no-sync", "--duration", "1h30m"}, 0,
 			ok("stop", `{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 5400}}`, noEvents)},
@@ -313,14 +313,13 @@ func TestEnvelopes(t *testing.T) {
 
 		// sync, setup, touch
 		{"sync with nothing owed", nil, "09:00", []string{"sync"}, 0, ok("sync", `{"sent": [], "remaining": []}`, noEvents)},
-		{"sync is a stub that leaves worklogs owed", func(h *harness) {
+		{"sync unconfigured exits 3 and lists what is owed", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.do("09:30", "stop")
 		}, "10:00",
-			[]string{"retry"}, 7,
-			`{"v": 1, "ok": true, "outcome": "sync_pending", "command": "retry",
-			  "data": {"sent": [], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": ` + nine + `, "timeSpentSeconds": 1800}}]},
-			  "events": [], "error": {"code": "sync_pending", "message": "*"}}`},
+			[]string{"retry"}, 3,
+			refused("retry", "not_configured", "not_configured", "run `punchcard setup`",
+				`{"sent": [], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}}]}`)},
 		{"setup needs a terminal", nil, "09:00", []string{"setup"}, 64, refused("setup", "usage", "usage", "see punchcard --help", "null")},
 		{"touch from a prompt moves an un-held timer", func(h *harness) {
 			h.env["CLAUDECODE"] = "1"
