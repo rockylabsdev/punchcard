@@ -1,0 +1,96 @@
+package core_test
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/j-dsmith/punchcard/internal/core"
+)
+
+func TestTimeToday(t *testing.T) {
+	span := func(startDay int, start string, endDay int, end string) core.Segment {
+		s := core.Segment{StartedAt: day(startDay, start)}
+		if end != "" {
+			s.EndedAt = day(endDay, end)
+		}
+		return s
+	}
+	cases := []struct {
+		name string
+		segs []core.Segment
+		now  core.Timestamp
+		want time.Duration
+	}{
+		{"a segment inside today counts whole", []core.Segment{span(9, "09:00", 9, "10:30")}, day(9, "12:00"), 90 * time.Minute},
+		{"a segment over midnight counts only after midnight", []core.Segment{span(8, "23:00", 9, "01:15")}, day(9, "12:00"), 75 * time.Minute},
+		{"a running segment over midnight counts from midnight to now", []core.Segment{span(8, "22:00", 0, "")}, day(9, "00:40"), 40 * time.Minute},
+		{"yesterday is never recounted", []core.Segment{span(8, "09:00", 8, "17:00")}, day(9, "12:00"), 0},
+		{"today never carries over to tomorrow", []core.Segment{span(9, "23:30", 10, "00:10")}, day(9, "23:59"), 29 * time.Minute},
+		{"segments across entries sum", []core.Segment{span(9, "09:00", 9, "09:10"), span(9, "11:00", 0, "")}, day(9, "11:05"), 15 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tk := ticket("AA-1", core.TimeEntry{ID: "E", Segments: tc.segs})
+			if got := core.TimeToday(tk, tc.now.Time); got != tc.want {
+				t.Errorf("TimeToday = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestElapsed(t *testing.T) {
+	e := entry("EA", hand, seg("09:00", "09:20"), seg("09:40", ""))
+	if got, want := core.Elapsed(e, at("10:00").Time), 40*time.Minute; got != want {
+		t.Errorf("Elapsed = %v, want %v", got, want)
+	}
+}
+
+func TestRunning(t *testing.T) {
+	s := state(ticket("AA-1", entry("EA", hand, seg("08:00", "08:30"))), ticket("BB-2", entry("EB", agent, seg("09:00", ""))))
+	tk, e, ok := core.Running(s)
+	if !ok || tk.Key != "BB-2" || e.ID != "EB" {
+		t.Errorf("Running = %s/%s/%v, want BB-2/EB/true", tk.Key, e.ID, ok)
+	}
+	if _, _, ok := core.Running(state(ticket("AA-1"))); ok {
+		t.Error("Running reported a timer on an idle state")
+	}
+}
+
+func TestListOrderIsMostRecentActivityFirst(t *testing.T) {
+	added := func(k, clock string) core.TrackedTicket { tk := ticket(k); tk.AddedAt = at(clock); return tk }
+	s := state(
+		ticket("AA-1", entry("EA", hand, seg("09:00", "09:30"))), // last activity 09:30
+		added("BB-2", "10:00"),                                  // added 10:00, never worked
+		ticket("CC-3", entry("EC", hand, seg("08:00", ""))),      // running: activity is now
+		added("DD-4", "07:00"),
+	)
+	var got []string
+	for _, tk := range core.ListOrder(s, at("11:00").Time) {
+		got = append(got, tk.Key)
+	}
+	diff(t, "order", []string{"CC-3", "BB-2", "AA-1", "DD-4"}, got)
+}
+
+func TestPreviewStop(t *testing.T) {
+	w := world("09:30", ticket("AA-1", entry("EA", hand, seg("09:00", ""))))
+	p, err := core.PreviewStop(w, core.Stop{Origin: agent, Comment: "done"}, at("09:45:30").Time)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diff(t, "preview", core.Preview{Key: "AA-1", EntryID: "EA", Worklog: pending("09:00", 2700, "done")}, p)
+
+	// A stale timer previews its capped elapsed: what stop would really send.
+	stale := world("09:20", ticket("AA-1", entry("EA", agent, seg("09:00", ""))))
+	p, err = core.PreviewStop(stale, core.Stop{Origin: agent}, at("13:00").Time)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diff(t, "stale preview", 1200, p.Worklog.TimeSpentSeconds)
+	diff(t, "preview flags recovery", true, p.Recovered)
+
+	_, err = core.PreviewStop(world("09:00", ticket("AA-1", entry("EA", hand, seg("09:00", "")))), core.Stop{}, at("09:00:30").Time)
+	if !errors.Is(err, core.ErrTooShort) {
+		t.Errorf("err = %v, want ErrTooShort", err)
+	}
+}

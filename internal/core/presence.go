@@ -28,11 +28,11 @@ func RecordPresence(hb Heartbeat, now time.Time) Heartbeat {
 // than StaleAfter. With no lastSeen ever recorded, the open segment's
 // start stands in for it. Reading staleness never changes anything.
 func Stale(w World, now time.Time) bool {
-	t, e := findRunning(w.State)
-	if t == nil {
+	_, e, ok := Running(w.State)
+	if !ok {
 		return false
 	}
-	return now.Sub(effectiveLastSeen(w.Heartbeat, *e).Time) > StaleAfter
+	return now.Sub(effectiveLastSeen(w.Heartbeat, e).Time) > StaleAfter
 }
 
 func effectiveLastSeen(hb Heartbeat, e TimeEntry) Timestamp {
@@ -68,15 +68,15 @@ func (a *applier) recover() {
 	a.events = append(a.events, Event{Kind: EventRecovered, Key: t.Key, At: end})
 }
 
-// findRunning returns copies of the running ticket and entry, or nils.
-func findRunning(s State) (*TrackedTicket, *TimeEntry) {
-	for i := range s.TrackedTickets {
-		t := s.TrackedTickets[i]
+// Running returns the running ticket and entry; ok is false when nothing
+// runs. There is at most one.
+func Running(s State) (t TrackedTicket, e TimeEntry, ok bool) {
+	for _, t := range s.TrackedTickets {
 		for _, e := range t.Entries {
 			if e.Running() {
-				return &t, &e
+				return t, e, true
 			}
 		}
 	}
-	return nil, nil
+	return TrackedTicket{}, TimeEntry{}, false
 }
