@@ -50,7 +50,7 @@ Side effects of the mod's own calls show as one-shot toasts: `⏸ ABC-123 paused
 
 ## The band above the prompt
 
-The mod polls `punchcard status --json` every 10 seconds, and right after any of its own calls, and draws one line above the prompt. Nothing is drawn when you are idle with nothing owed and nothing wrong.
+The mod polls `punchcard status --json` every 10 seconds, and right after any of its own calls, and draws one line above the prompt. Nothing is drawn when you are idle with nothing owed and nothing wrong, in a session whose branch names no ticket.
 
 | Band | Meaning |
 | --- | --- |
@@ -63,7 +63,8 @@ The mod polls `punchcard status --json` every 10 seconds, and right after any of
 | `… · Jira auth failed` | Jira rejected the token. Run `punchcard setup`. |
 | `… · Keychain error: <cause>` | The Keychain could not be read and there is no token file. |
 | `… · Jira not connected` | No credentials. Timers still work; worklogs wait. |
-| `… · here: DEF-9` | This session's branch names a ticket other than the running one. |
+| `… · this branch is DEF-9` | This session's branch names a ticket other than the one shown. |
+| `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's branch names DEF-9. |
 | `… · plugin 0.1.0 ≠ punchcard 0.2.0 · run punchcard setup` | The plugin and the binary come from different releases. |
 | `punchcard not found on PATH` | Claude Code cannot run `punchcard`. Presence does nothing until it can. |
 | `punchcard: status timed out` | A status call took over 5 seconds. |

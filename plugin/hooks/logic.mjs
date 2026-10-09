@@ -131,7 +131,8 @@ export function versionSkew(plugin, binary) {
  * punchcard could not be started, `{ envelope }` when it answered (the
  * envelope null when its stdout was not one), `{ failed: message }` when
  * it timed out or similar. hereKey is this session's branch key ("" for
- * none).
+ * none): idle, the band names it and the next action; with another
+ * ticket shown, it says what this branch is for.
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @param {string} hereKey
  * @param {Skew | null} [skew] plugin and binary versions when they differ
@@ -153,7 +154,7 @@ export function bandFrom(poll, hereKey, skew = null) {
   const keychainBroken = !authFailed && Boolean(d.keychainError)
   const notConnected = !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
-  if (!shown && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
+  if (!shown && !hereKey && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
   /** @type {string[]} */
   const parts = []
@@ -181,8 +182,10 @@ export function bandFrom(poll, hereKey, skew = null) {
     parts.push('Jira not connected')
     if (tone === 'subtle') tone = 'warning'
   }
-  const runningKey = d.running?.key ?? ''
-  if (hereKey && hereKey !== runningKey) parts.push(`here: ${hereKey}`)
+  // This session's ticket, when it is not the one shown: idle, the next
+  // action; otherwise a reminder of what this directory is for.
+  if (hereKey && !shown) parts.push(`${hereKey} not running`, '/punch start')
+  else if (hereKey && shown.key !== hereKey) parts.push(`this branch is ${hereKey}`)
   if (skew) {
     parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
     if (tone === 'subtle') tone = 'warning'
