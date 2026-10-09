@@ -19,6 +19,8 @@ func (h *harness) runTTY(stdin string, tweak func(*cli.Env), args ...string) res
 		Getenv: func(k string) string { return h.env[k] }, Now: func() time.Time { return h.now },
 		Version: "1.2.3", Store: h.st, TTY: true, Jira: h.jiraFn(),
 		Keychain: h.kc.read,
+		// Never the real wizard (Keychain, claude, settings.json).
+		Setup: func(cli.Env) int { h.setups++; return h.setupCode },
 	}
 	if tweak != nil {
 		tweak(&env)
@@ -181,13 +183,6 @@ func TestBarePunchcardOnATTYHandsOffToTheTUI(t *testing.T) {
 	}
 	if r := h.runTTY("", nil); !strings.Contains(r.stdout, "Nothing running") {
 		t.Errorf("no TUI wired: want status, got %q", r.stdout)
-	}
-}
-
-func TestSetupOnATTYIsNotBuiltYet(t *testing.T) {
-	h := newHarness(t)
-	if r := h.runTTY("", nil, "setup"); r.code != 1 || !strings.Contains(r.stderr, "not built yet") {
-		t.Errorf("exit %d stderr %q", r.code, r.stderr)
 	}
 }
 

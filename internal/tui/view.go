@@ -166,7 +166,7 @@ func (m Model) bindings() []binding {
 	if n, _ := core.Owed(m.shown().State); n > 0 {
 		bs = append(bs, binding{"r", "sync " + strconv.Itoa(n)})
 	}
-	return append(bs, binding{"?", "help"}, binding{"q", "quit"})
+	return append(bs, binding{"S", "setup"}, binding{"?", "help"}, binding{"q", "quit"})
 }
 
 // keyBar shows the keys that apply now. r is sync blue, like every

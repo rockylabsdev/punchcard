@@ -5,6 +5,7 @@
 │  x               stop the selected entry: review, then send to Jira          │
 │  a / d           add a ticket / remove the selected one                      │
 │  r               sync: send pending and failed worklogs                      │
+│  S               setup: Jira credentials, the Claude Code plugin             │
 │  j k ↑ ↓ g G     move                                                        │
 │  q               quit; timers keep running without the TUI                   │
 │                                                                              │
@@ -12,7 +13,6 @@
 │  ▶ running   ‖ paused   ! recovered: check the duration at stop              │
 │  · idle   ? not confirmed by Jira yet                                        │
 │  ○ waiting to be sent   ✗ failed   ✓ in Jira                                 │
-│                                                                              │
 │                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─[3] Jira · logged today 0m · owed 55m────────────────────────────────────────╮

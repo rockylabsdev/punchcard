@@ -361,19 +361,3 @@ func syncText(d SyncData) string {
 }
 
 // setupCmd is a stub until the setup slice. It needs a terminal.
-func (a *app) setupCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "setup",
-		Short: "Configure Jira and the Claude Code plugin (needs a terminal)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if !a.env.TTY || a.out.json {
-				return usageError("setup needs a terminal (--json never prompts)")
-			}
-			a.code = a.out.fail("setup", ExitInternal, failure{code: "internal",
-				msg:  "setup is not built yet",
-				hint: "write $XDG_CONFIG_HOME/punchcard/config.toml by hand for now"})
-			return nil
-		},
-	}
-}
