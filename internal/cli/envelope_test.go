@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/cli"
+	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
 	"golang.org/x/sys/unix"
 )
@@ -24,6 +25,16 @@ type harness struct {
 	now time.Time
 	env map[string]string
 	ids int
+	// jira, when set, is the Jira every run talks to. Nil means the
+	// default lookup, which finds no config here: unconfigured.
+	jira *jira.Fake
+}
+
+func (h *harness) jiraFn() func() (jira.Client, error) {
+	if h.jira == nil {
+		return nil
+	}
+	return func() (jira.Client, error) { return h.jira, nil }
 }
 
 func newHarness(t *testing.T) *harness {
@@ -53,6 +64,7 @@ func (h *harness) run(args ...string) result {
 		Now:     func() time.Time { return h.now },
 		Version: "1.2.3",
 		Store:   h.st,
+		Jira:    h.jiraFn(),
 		NewID: func() string {
 			h.ids++
 			return fmt.Sprintf("ID-%d", h.ids)

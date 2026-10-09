@@ -48,9 +48,9 @@ var (
 	// ErrNotFound: a 404, ambiguous between missing and invisible.
 	ErrNotFound = errors.New("not found or not visible to this account")
 	// ErrUnauthorized: a 401 (bad email or token, or a scoped token).
-	ErrUnauthorized = errors.New("Jira rejected the credentials")
+	ErrUnauthorized = errors.New("credentials rejected by Jira")
 	// ErrUnreachable: no HTTP answer (network, DNS, timeout).
-	ErrUnreachable = errors.New("Jira could not be reached")
+	ErrUnreachable = errors.New("could not reach Jira")
 	// ErrBadSite: TestConnection's serverInfo step failed or the site is
 	// not Jira Cloud. It wraps the underlying cause too.
 	ErrBadSite = errors.New("not a reachable Jira Cloud site")

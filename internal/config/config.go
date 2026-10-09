@@ -26,7 +26,7 @@ type Config struct {
 var (
 	// ErrNotConfigured: no config file, a field missing, or no token.
 	// Being unconfigured is treated like being offline.
-	ErrNotConfigured = errors.New("Jira is not configured")
+	ErrNotConfigured = errors.New("not connected to Jira")
 	// ErrNewerSchema: the file was written by a newer punchcard.
 	ErrNewerSchema = errors.New("config written by a newer punchcard")
 )
