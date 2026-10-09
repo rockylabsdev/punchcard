@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/j-dsmith/punchcard/internal/cli"
 )
@@ -13,6 +14,7 @@ func main() {
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 		Getenv:  os.Getenv,
+		Now:     time.Now,
 		Version: cli.BuildVersion(),
 	}))
 }

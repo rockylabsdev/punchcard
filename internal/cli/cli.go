@@ -9,6 +9,7 @@ import (
 	"io"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
 )
@@ -18,8 +19,12 @@ const ContractVersion = 1
 
 // Exit codes from ADR 0004. Exit 2 is never used.
 const (
-	ExitOK    = 0
-	ExitUsage = 64
+	ExitOK              = 0
+	ExitInternal        = 1
+	ExitNoTimer         = 4
+	ExitUsage           = 64
+	ExitStateUnreadable = 65
+	ExitBusy            = 75
 )
 
 // version is set at release time with
@@ -42,7 +47,9 @@ func BuildVersion() string {
 type Env struct {
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
-	Version        string
+	// Now is the clock; nil means time.Now.
+	Now     func() time.Time
+	Version string
 }
 
 // Envelope is the one --json shape on stdout, success or failure.
@@ -85,7 +92,7 @@ func Run(args []string, env Env) int {
 	}
 	o := output{env: env, json: jsonOut}
 	if len(rest) == 0 {
-		return o.usage("", "no command given (only `version` exists yet)")
+		return o.usage("", "no command given")
 	}
 	switch cmd := rest[0]; cmd {
 	case "version":
@@ -100,6 +107,8 @@ func Run(args []string, env Env) int {
 			Platform:      runtime.GOOS + "/" + runtime.GOARCH,
 		}
 		return o.ok(cmd, d, fmt.Sprintf("punchcard %s (contract v%d, %s %s)\n", d.Version, d.Contract, d.Go, d.Platform))
+	case "start", "pause", "resume", "status":
+		return runTimer(o, cmd, rest[1:])
 	default:
 		return o.usage(cmd, fmt.Sprintf("unknown command %q", cmd))
 	}
@@ -123,9 +132,20 @@ func (o output) usage(cmd, msg string) int {
 	if o.json {
 		o.envelope(Envelope{Outcome: "usage", Command: cmd, Error: &Error{Code: "usage", Message: msg}})
 	} else {
-		fmt.Fprintf(o.env.Stderr, "punchcard: %s\nusage: punchcard version [--json]\n", msg)
+		fmt.Fprintf(o.env.Stderr, "punchcard: %s\nusage: punchcard start KEY | pause | resume [KEY] | status | version [--json]\n", msg)
 	}
 	return ExitUsage
+}
+
+// fail reports a refusal or failure: the envelope with --json, else the
+// message on stderr.
+func (o output) fail(cmd string, exit int, code, msg string) int {
+	if o.json {
+		o.envelope(Envelope{Outcome: code, Command: cmd, Error: &Error{Code: code, Message: msg}})
+	} else {
+		fmt.Fprintf(o.env.Stderr, "punchcard: %s\n", msg)
+	}
+	return exit
 }
 
 func (o output) envelope(e Envelope) {
