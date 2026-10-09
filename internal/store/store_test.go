@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,5 +98,92 @@ func TestApplyRoundTripsThroughTheFiles(t *testing.T) {
 	hb := read(t, filepath.Join(dir, "heartbeat.json"))
 	if !strings.Contains(hb, `"lastSeen": "2026-08-09T09:02:41.000-0500"`) {
 		t.Errorf("heartbeat.json:\n%s", hb)
+	}
+}
+
+func TestFirstRunIsAMissingOrEmptyFile(t *testing.T) {
+	for name, content := range map[string]*string{"missing": nil, "zero-byte": new(string)} {
+		t.Run(name, func(t *testing.T) {
+			c := newClock()
+			s, dir := open(t, c)
+			if content != nil {
+				write(t, filepath.Join(dir, store.StateFile), *content)
+				write(t, filepath.Join(dir, store.HeartbeatFile), *content)
+			}
+			w, notices, err := s.Read()
+			if err != nil || len(notices) > 0 {
+				t.Fatalf("Read: %v %v", err, notices)
+			}
+			if d := cmp.Diff(core.World{State: core.NewState()}, w); d != "" {
+				t.Errorf("first run (-want +got):\n%s", d)
+			}
+		})
+	}
+}
+
+func TestACorruptFileIsMovedAsideWithANotice(t *testing.T) {
+	for _, name := range []string{store.StateFile, store.HeartbeatFile} {
+		t.Run(name, func(t *testing.T) {
+			c := newClock()
+			s, dir := open(t, c)
+			write(t, filepath.Join(dir, name), "{not json")
+
+			res, err := s.Apply(start("PUNCH-12"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			backup := filepath.Join(dir, name+".corrupt-20260809T090241.000")
+			if got := read(t, backup); got != "{not json" {
+				t.Errorf("backup holds %q", got)
+			}
+			if len(res.Notices) != 1 || !strings.Contains(res.Notices[0], backup) {
+				t.Errorf("notices %q do not name %s", res.Notices, backup)
+			}
+			if !strings.Contains(read(t, filepath.Join(dir, name)), `"schemaVersion": 1`) {
+				t.Errorf("%s was not rewritten fresh", name)
+			}
+		})
+	}
+}
+
+func TestReadNeverMovesACorruptFile(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	path := filepath.Join(dir, store.StateFile)
+	write(t, path, "{not json")
+	_, notices, err := s.Read()
+	if err != nil || len(notices) != 1 {
+		t.Fatalf("Read: %v %q", err, notices)
+	}
+	if read(t, path) != "{not json" {
+		t.Error("Read changed the corrupt file")
+	}
+}
+
+func TestANewerSchemaIsRefusedAndNothingIsWritten(t *testing.T) {
+	for _, name := range []string{store.StateFile, store.HeartbeatFile} {
+		t.Run(name, func(t *testing.T) {
+			c := newClock()
+			s, dir := open(t, c)
+			newer := `{"schemaVersion": 2, "somethingNew": true}`
+			write(t, filepath.Join(dir, name), newer)
+
+			_, err := s.Apply(start("PUNCH-12"))
+			if !errors.Is(err, store.ErrNewerSchema) {
+				t.Fatalf("Apply err = %v, want ErrNewerSchema", err)
+			}
+			if _, _, err := s.Read(); !errors.Is(err, store.ErrNewerSchema) {
+				t.Errorf("Read err = %v, want ErrNewerSchema", err)
+			}
+			if got := read(t, filepath.Join(dir, name)); got != newer {
+				t.Errorf("%s was changed: %s", name, got)
+			}
+			entries, _ := os.ReadDir(dir)
+			for _, e := range entries {
+				if e.Name() != name && e.Name() != store.LockFile {
+					t.Errorf("unexpected file written: %s", e.Name())
+				}
+			}
+		})
 	}
 }

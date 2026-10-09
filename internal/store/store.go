@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
@@ -93,12 +94,11 @@ func (s *Store) transact(cmd core.Command, wait time.Duration) (Result, error) {
 	}
 	defer l.unlock()
 
-	var res Result
-	in, err := s.load(&res.Notices)
+	res := Result{Now: s.now()}
+	in, err := s.load(res.Now, true, &res.Notices)
 	if err != nil {
 		return res, err
 	}
-	res.Now = s.now()
 	out, events, err := core.Apply(in, cmd, res.Now)
 	if err != nil {
 		res.World = in
@@ -117,16 +117,24 @@ func (s *Store) transact(cmd core.Command, wait time.Duration) (Result, error) {
 // half-written file.
 func (s *Store) Read() (core.World, []string, error) {
 	var notices []string
-	w, err := s.load(&notices)
+	w, err := s.load(s.now(), false, &notices)
 	return w, notices, err
 }
 
-func (s *Store) load(notices *[]string) (core.World, error) {
+// ErrNewerSchema: a file was written by a newer punchcard. It is
+// refused, never reset, and nothing is written (the CLI's exit 65).
+var ErrNewerSchema = errors.New("written by a newer punchcard")
+
+// load reads both files. A missing or empty file is a first run. An
+// undecodable one is reported in notices and treated as a first run;
+// with backup it is also renamed to a timestamped .corrupt- file so
+// the next save does not destroy it. A newer schema is ErrNewerSchema.
+func (s *Store) load(now time.Time, backup bool, notices *[]string) (core.World, error) {
 	w := core.World{State: core.NewState()}
-	if err := s.loadFile(StateFile, &w.State); err != nil {
+	if err := s.loadFile(StateFile, &w.State, now, backup, notices); err != nil {
 		return core.World{}, err
 	}
-	if err := s.loadFile(HeartbeatFile, &w.Heartbeat); err != nil {
+	if err := s.loadFile(HeartbeatFile, &w.Heartbeat, now, backup, notices); err != nil {
 		return core.World{}, err
 	}
 	if w.State.TrackedTickets == nil {
@@ -135,16 +143,39 @@ func (s *Store) load(notices *[]string) (core.World, error) {
 	return w, nil
 }
 
-// loadFile decodes name into v. A missing or empty file leaves v alone.
-func (s *Store) loadFile(name string, v any) error {
-	b, err := os.ReadFile(filepath.Join(s.dir, name))
+// loadFile decodes name into v, leaving v alone on a first run.
+func (s *Store) loadFile(name string, v any, now time.Time, backup bool, notices *[]string) error {
+	path := filepath.Join(s.dir, name)
+	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(bytes.TrimSpace(b)) == 0) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, v)
+	var head struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if json.Unmarshal(b, &head) == nil && head.SchemaVersion > core.SchemaVersion {
+		return fmt.Errorf("%s has schemaVersion %d, this build reads %d: %w", path, head.SchemaVersion, core.SchemaVersion, ErrNewerSchema)
+	}
+	// Decode into a fresh value so a half-decoded file never leaks into v.
+	fresh := reflect.New(reflect.TypeOf(v).Elem())
+	derr := json.Unmarshal(b, fresh.Interface())
+	if derr == nil {
+		reflect.ValueOf(v).Elem().Set(fresh.Elem())
+		return nil
+	}
+	if !backup {
+		*notices = append(*notices, fmt.Sprintf("%s is unreadable (%v); the next change will move it aside and start fresh", path, derr))
+		return nil
+	}
+	dest := path + ".corrupt-" + now.Format("20060102T150405.000")
+	if err := os.Rename(path, dest); err != nil {
+		return fmt.Errorf("moving aside unreadable %s: %w", path, err)
+	}
+	*notices = append(*notices, fmt.Sprintf("%s was unreadable (%v); moved it to %s and started fresh", path, derr, dest))
+	return nil
 }
 
 // save writes the files that changed between in and out: state first,
