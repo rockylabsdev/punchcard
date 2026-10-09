@@ -84,6 +84,14 @@ func (s *Store) Apply(cmd core.Command) (Result, error) {
 	return s.transact(cmd, wait)
 }
 
+// TryApply is Apply for presence writes: it tries the lock once and
+// returns ErrBusy at once if another writer holds it. Skipping is safe
+// because the holder is a transition that records presence itself, or
+// another presence write.
+func (s *Store) TryApply(cmd core.Command) (Result, error) {
+	return s.transact(cmd, 0)
+}
+
 func (s *Store) transact(cmd core.Command, wait time.Duration) (Result, error) {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return Result{}, err

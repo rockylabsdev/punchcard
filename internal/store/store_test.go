@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -98,6 +99,89 @@ func TestApplyRoundTripsThroughTheFiles(t *testing.T) {
 	hb := read(t, filepath.Join(dir, "heartbeat.json"))
 	if !strings.Contains(hb, `"lastSeen": "2026-08-09T09:02:41.000-0500"`) {
 		t.Errorf("heartbeat.json:\n%s", hb)
+	}
+}
+
+func inode(t *testing.T, path string) uint64 {
+	t.Helper()
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fi.Sys().(*syscall.Stat_t).Ino
+}
+
+func TestSaveReplacesTheFileByRename(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	if _, err := s.Apply(start("PUNCH-12")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, store.StateFile)
+	before := inode(t, path)
+	c.t = c.t.Add(time.Minute)
+	if _, err := s.Apply(core.Pause{Origin: core.OriginHand}); err != nil {
+		t.Fatal(err)
+	}
+	if inode(t, path) == before {
+		t.Error("state.json kept its inode: it was rewritten in place, not replaced")
+	}
+	entries, _ := os.ReadDir(dir)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if d := cmp.Diff([]string{store.HeartbeatFile, store.StateFile, store.LockFile}, names); d != "" {
+		t.Errorf("files in the data dir (-want +got):\n%s", d)
+	}
+}
+
+func TestARefusedCommandWritesNothing(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	_, err := s.Apply(core.Pause{Origin: core.OriginHand})
+	if !errors.Is(err, core.ErrNoTimer) {
+		t.Fatalf("err = %v, want ErrNoTimer", err)
+	}
+	for _, name := range []string{store.StateFile, store.HeartbeatFile} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s exists after a refused command", name)
+		}
+	}
+}
+
+func TestAStaleTimerIsRecoveredBeforeTheCommandApplies(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	if _, err := s.Apply(start("PUNCH-12")); err != nil {
+		t.Fatal(err)
+	}
+	lastSeen := c.t.Add(30 * time.Minute)
+	write(t, filepath.Join(dir, store.HeartbeatFile),
+		`{"schemaVersion": 1, "lastSeen": "`+lastSeen.Format(core.TimeLayout)+`"}`)
+
+	c.t = lastSeen.Add(3 * time.Hour)
+	res, err := s.Apply(start("PUNCH-13"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []core.Event{
+		{Kind: core.EventRecovered, Key: "PUNCH-12", At: core.At(lastSeen)},
+		{Kind: core.EventAdded, Key: "PUNCH-13"},
+	}
+	if d := cmp.Diff(want, res.Events); d != "" {
+		t.Errorf("events (-want +got):\n%s", d)
+	}
+	w, _, err := s.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := w.State.TrackedTickets[0].Entries[0]
+	if !e.Recovered || !e.Segments[0].EndedAt.Equal(lastSeen) {
+		t.Errorf("PUNCH-12 on disk was not capped at lastSeen: %+v", e)
+	}
+	if !w.Heartbeat.LastSeen.Equal(c.t) {
+		t.Errorf("lastSeen on disk = %v, want now %v", w.Heartbeat.LastSeen, c.t)
 	}
 }
 
