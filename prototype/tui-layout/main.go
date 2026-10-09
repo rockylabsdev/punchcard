@@ -38,7 +38,7 @@ const (
 
 var scenarioNames = []string{"normal day", "recovered entry", "auth failed (401)", "not configured", "first run, empty"}
 
-var variants = []struct{ key, name string }{{"A", "Panes"}, {"A2", "Panes, refined"}, {"A3", "Panes, quiet"}, {"A4", "Panes + Jira ledger"}, {"B", "Ledger"}, {"C", "Clock"}}
+var variants = []struct{ key, name string }{{"A", "Panes"}, {"A2", "Panes, refined"}, {"A3", "Panes, quiet"}, {"A4", "Panes + Jira ledger"}, {"A5", "Labelled"}, {"B", "Ledger"}, {"C", "Clock"}}
 
 type colourMode struct {
 	name    string
@@ -628,6 +628,8 @@ func (m model) View() tea.View {
 		body = m.viewA3(dw, dh)
 	case "A4":
 		body = m.viewA4(dw, dh)
+	case "A5":
+		body = m.viewA5(dw, dh)
 	case "B":
 		body = m.viewB(dw, dh)
 	default:
@@ -678,7 +680,7 @@ func overlay(base, top string, w, h int) string {
 }
 
 func main() {
-	v := flag.String("variant", "A4", "A, A2, A3, A4, B or C")
+	v := flag.String("variant", "A5", "A, A2, A3, A4, A5, B or C")
 	smoke := flag.Bool("smoke", false, "drive every variant and scenario through a key sequence headlessly")
 	dump := flag.String("dump", "", "print frames at WxH (e.g. 80x24) without colour and exit; for checking layout")
 	flag.Parse()
