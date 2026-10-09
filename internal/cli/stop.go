@@ -1,24 +1,38 @@
 package cli
 
 import (
+	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/worklog"
 	"github.com/spf13/cobra"
 )
 
-// stop, and the stubs that wait for Jira: sync (and hidden retry) and
-// setup.
+// stop and sync, the only commands that POST (through package worklog),
+// and the setup stub.
+
+// stopFlags are stop's switches.
+type stopFlags struct {
+	noSync, yes, dryRun bool
+}
 
 func (a *app) stopCmd() *cobra.Command {
 	var durationFlag, message string
-	var noSync bool
+	var f stopFlags
 	c := &cobra.Command{
 		Use:   "stop [KEY]",
-		Short: "Stop an entry and record its worklog (no KEY: the running entry, else the single paused one)",
+		Short: "Stop an entry and send its worklog to Jira (no KEY: the running entry, else the single paused one)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s := core.Stop{Comment: message, Origin: a.origin}
@@ -32,66 +46,216 @@ func (a *app) stopCmd() *cobra.Command {
 				}
 				s.Duration = d
 			}
-			a.stop(s, noSync)
+			a.stop(s, f)
 			return nil
 		},
 	}
 	c.Flags().StringVar(&durationFlag, "duration", "", "time to log instead of the measured elapsed: 1h30m, 1h, 90m or minutes (1m to 24h)")
 	c.Flags().StringVarP(&message, "message", "m", "", "worklog comment")
-	c.Flags().BoolVar(&noSync, "no-sync", false, "record the worklog as pending without sending it")
+	c.Flags().BoolVar(&f.noSync, "no-sync", false, "record the worklog as pending without sending it")
+	c.Flags().BoolVar(&f.yes, "yes", false, "send without prompting (an agent's stop needs it)")
+	c.Flags().BoolVar(&f.dryRun, "dry-run", false, "show the exact worklog a stop would send, and change nothing")
 	return c
 }
 
-// stop previews the worklog from a fresh read, applies the CLI's own
-// rules, then sends core.Stop pinned to the previewed ticket. Core
-// re-checks everything under the lock.
-func (a *app) stop(s core.Stop, noSync bool) {
+// sender is the worklog seam over this invocation's store and Jira.
+func (a *app) sender() worklog.Sender {
+	return worklog.Sender{Store: a.env.Store, Jira: a.env.Jira}
+}
+
+// stop previews the worklog from a fresh read, applies the CLI's rules
+// (dry run, an agent's proposal, the recovered rule, the TTY prompt),
+// then stops the previewed entry and sends its worklog. Core re-checks
+// everything under the lock.
+func (a *app) stop(s core.Stop, f stopFlags) {
 	w, now, err := a.read()
 	if err != nil {
 		a.code = a.failure("stop", err)
 		return
 	}
+	promptable := a.env.TTY && !a.out.json && !f.yes && !f.dryRun && a.origin != core.OriginAgent
 	p, err := core.PreviewStop(w, s, now)
+	measured := true
+	if errors.Is(err, core.ErrTooShort) && promptable && s.Duration == 0 {
+		// The prompt can still take a duration; preview with a stand-in.
+		probe := s
+		probe.Duration = time.Minute
+		p, err = core.PreviewStop(w, probe, now)
+		measured = false
+	}
 	if err != nil {
 		a.code = a.failure("stop", err)
 		return
 	}
-	// Slice 5 adds, here: the TTY prompt for duration and comment (never
-	// with --json), and origin agent without --yes exiting 6 with this
-	// preview. Until the prompt exists, a recovered entry always needs
-	// --duration.
-	if p.Recovered && s.Duration == 0 {
+	pd := PreviewData{Preview: Preview{Key: p.Key, EntryID: p.EntryID, Worklog: p.Worklog, Recovered: p.Recovered}}
+	switch {
+	case f.dryRun:
+		a.code = a.out.ok("stop", pd, nil, previewText(p, now.Location()))
+		return
+	case a.origin == core.OriginAgent && !f.yes:
+		a.code = a.out.fail("stop", ExitNeedsConfirmation, failure{
+			code: "needs_confirmation",
+			msg:  "an agent's stop is a proposal: " + strings.TrimSuffix(previewText(p, now.Location()), "\n"),
+			hint: "show the user this worklog; only `punchcard stop --yes` sends it",
+			data: pd,
+		})
+		return
+	case p.Recovered && s.Duration == 0 && !promptable:
 		a.code = a.out.fail("stop", ExitNeedsConfirmation, failure{
 			code: "needs_confirmation",
 			msg:  fmt.Sprintf("%s was recovered: its time stops at the last presence, so it needs a duration", p.Key),
 			hint: "rerun with --duration, e.g. --duration 1h30m",
-			data: PreviewData{Preview: Preview{Key: p.Key, EntryID: p.EntryID, Worklog: p.Worklog, Recovered: true}},
+			data: pd,
 		})
 		return
 	}
-	s.Key = p.Key
-	res, err := a.apply(s)
+	if promptable {
+		def := 0
+		if measured {
+			def = p.Worklog.TimeSpentSeconds
+		}
+		var ok bool
+		if s, ok = a.promptStop(s, p, def); !ok {
+			fmt.Fprintln(a.env.Stderr, "punchcard: not stopped; the timer is untouched")
+			a.code = ExitOK
+			return
+		}
+	}
+	s.Key, s.EntryID = p.Key, p.EntryID
+	if f.noSync {
+		res, err := a.apply(s)
+		if err != nil {
+			a.code = a.failure("stop", err)
+			return
+		}
+		wl := findEntry(res.World.State, s.Key, s.EntryID).Worklog
+		d := StopData{Key: s.Key, EntryID: s.EntryID, Worklog: *wl}
+		a.done("stop", res, d, a.eventLines(res)+stoppedLine(s.Key, *wl))
+		return
+	}
+	r, err := a.sender().Stop(context.Background(), s)
+	a.out.notices(r.Notices)
 	if err != nil {
 		a.code = a.failure("stop", err)
 		return
 	}
-	e := findEntry(res.World.State, p.Key, p.EntryID)
-	if e.Worklog == nil { // core stopped some other entry; cannot happen with the key pinned
-		a.code = a.failure("stop", fmt.Errorf("entry %s on %s was not stopped", p.EntryID, p.Key))
-		return
-	}
-	d := StopData{Key: p.Key, EntryID: e.ID, Worklog: *e.Worklog}
-	human := a.eventLines(res) + fmt.Sprintf("■ %s stopped: %s, worklog pending\n", p.Key, worklogDuration(e.Worklog.TimeSpentSeconds))
-	if noSync {
+	d := StopData{Key: r.Key, EntryID: r.EntryID, Worklog: r.Worklog}
+	res := store.Result{World: r.World, Events: r.Events, Now: r.Now}
+	human := a.timerEventLines(res) + stoppedLine(r.Key, r.Worklog)
+	if r.SyncErr == nil {
 		a.done("stop", res, d, human)
 		return
 	}
-	// Slice 5 POSTs here, inline, and returns 0 when Jira takes it.
-	a.code = a.out.partial("stop", d, res.Events, human, failure{
-		code: "sync_pending",
-		msg:  "the worklog is on disk but not sent: sending to Jira is not built yet",
+	code, msg := sendProblem(r.SyncErr)
+	a.code = a.out.partial("stop", d, r.Events, human, failure{
+		code: code,
+		msg:  "the worklog is saved but not sent: " + msg,
 		hint: "run `punchcard sync` later; never stop again",
 	})
+}
+
+// timerEventLines is eventLines without the sync outcomes, which the
+// stop line and the error already report.
+func (a *app) timerEventLines(res store.Result) string {
+	var b strings.Builder
+	for _, e := range res.Events {
+		if e.Kind != core.EventSynced && e.Kind != core.EventSyncFailed {
+			b.WriteString(a.out.describe(e, res.World, res.Now.Location()))
+		}
+	}
+	return b.String()
+}
+
+func stoppedLine(key string, wl core.Worklog) string {
+	outcome := "worklog " + string(wl.State)
+	if wl.State == core.WorklogSynced {
+		outcome = "sent to Jira"
+	}
+	return fmt.Sprintf("■ %s stopped: %s, %s\n", key, worklogDuration(wl.TimeSpentSeconds), outcome)
+}
+
+// previewText is the worklog a stop would send, in words.
+func previewText(p core.Preview, loc *time.Location) string {
+	s := fmt.Sprintf("%s: would send %s, started %s", p.Key, worklogDuration(p.Worklog.TimeSpentSeconds),
+		p.Worklog.StartedAt.In(loc).Format("2006-01-02 15:04"))
+	if p.Worklog.Comment != "" {
+		s += fmt.Sprintf(", comment %q", p.Worklog.Comment)
+	}
+	if p.Recovered {
+		s += " (recovered: capped at the last presence)"
+	}
+	return s + "\n"
+}
+
+// promptStop asks on the terminal for the duration (prefilled with the
+// --duration value, else def seconds of measured time; no default under
+// a minute) and an optional comment (prefilled with -m). It returns
+// false when stdin ends before a duration is given.
+func (a *app) promptStop(s core.Stop, p core.Preview, def int) (core.Stop, bool) {
+	in := bufio.NewReader(a.env.Stdin)
+	if s.Duration != 0 {
+		def = int(s.Duration / time.Second)
+	}
+	if p.Recovered {
+		fmt.Fprintf(a.env.Stderr, "%s was recovered: its time stops at the last presence. Correct the duration if needed.\n", p.Key)
+	}
+	label := "Duration: "
+	if def > 0 {
+		label = fmt.Sprintf("Duration [%s]: ", worklogDuration(def))
+	}
+	for {
+		fmt.Fprintf(a.env.Stderr, "%s %s", p.Key, label)
+		line, err := in.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if line == "" && errors.Is(err, io.EOF) {
+			return s, false
+		}
+		if line == "" && def > 0 {
+			s.Duration = time.Duration(def) * time.Second
+			break
+		}
+		if line == "" {
+			continue
+		}
+		d, perr := parseDuration(line)
+		if perr == nil {
+			s.Duration = d
+			break
+		}
+		fmt.Fprintf(a.env.Stderr, "  %s\n", strings.TrimPrefix(perr.Error(), "--duration "))
+		if errors.Is(err, io.EOF) {
+			return s, false
+		}
+	}
+	label = "Comment (optional): "
+	if s.Comment != "" {
+		label = fmt.Sprintf("Comment [%s]: ", s.Comment)
+	}
+	fmt.Fprint(a.env.Stderr, label)
+	if line, _ := in.ReadString('\n'); strings.TrimSpace(line) != "" {
+		s.Comment = strings.TrimSpace(line)
+	}
+	return s, true
+}
+
+// sendProblem names why a worklog was not sent: the envelope's
+// error.code and a message.
+func sendProblem(err error) (code, msg string) {
+	var api *jira.APIError
+	switch {
+	case errors.Is(err, config.ErrNotConfigured):
+		return "not_configured", err.Error() + " (run `punchcard setup`)"
+	case errors.Is(err, jira.ErrUnauthorized):
+		return "auth_failed", "Jira rejected the credentials (a scoped API token is refused too)"
+	case errors.Is(err, jira.ErrUnreachable):
+		return "unreachable", err.Error()
+	case errors.As(err, &api):
+		return "sync_failed", err.Error()
+	case errors.Is(err, store.ErrSyncBusy):
+		return "sync_busy", err.Error()
+	default:
+		return "sync_pending", err.Error()
+	}
 }
 
 var durationPattern = regexp.MustCompile(`^(?:([0-9]+)h)?(?:([0-9]+)m)?$`)
@@ -115,8 +279,9 @@ func parseDuration(s string) (time.Duration, error) {
 	return d, nil
 }
 
-// syncCmd is a stub until the worklog slice: it lists what is owed and
-// sends nothing. Exit 0 when nothing is owed, else 7.
+// syncCmd sends every pending and failed worklog (KEY's only, with a
+// key), one at a time: 0 all sent, 7 some remain, 8 on a 401, 3
+// unconfigured, 75 while another punchcard is sending.
 func (a *app) syncCmd(name string, hidden bool) *cobra.Command {
 	return &cobra.Command{
 		Use:    name + " [KEY]",
@@ -131,28 +296,68 @@ func (a *app) syncCmd(name string, hidden bool) *cobra.Command {
 					return usageError(fmt.Sprintf("%q is not a ticket key", key))
 				}
 			}
-			w, _, err := a.read()
-			if err != nil {
-				a.code = a.failure(name, err)
-				return nil
-			}
-			d := SyncData{Sent: []UnsentWorklog{}, Remaining: unsentOf(w.State, key)}
-			if len(d.Remaining) == 0 {
-				a.code = a.out.ok(name, d, nil, "Nothing to send.\n")
-				return nil
-			}
-			human := ""
-			for _, u := range d.Remaining {
-				human += fmt.Sprintf("%s %s %s %s\n", u.Key, worklogDuration(u.Worklog.TimeSpentSeconds), u.Worklog.State,
-					u.Worklog.StartedAt.Format("2006-01-02"))
-			}
-			a.code = a.out.partial(name, d, nil, human, failure{
-				code: "sync_pending",
-				msg:  fmt.Sprintf("%d worklog(s) not sent: sending to Jira is not built yet", len(d.Remaining)),
-			})
+			a.sync(name, key)
 			return nil
 		},
 	}
+}
+
+func (a *app) sync(name, key string) {
+	rep, err := a.sender().Sync(context.Background(), key)
+	a.out.notices(rep.Notices)
+	d := SyncData{Sent: unsentData(rep.Sent), Remaining: unsentData(rep.Remaining)}
+	human := syncText(d)
+	var api *jira.APIError
+	switch {
+	case err == nil && len(d.Remaining) == 0:
+		a.code = a.out.ok(name, d, rep.Events, human)
+	case errors.Is(err, config.ErrNotConfigured):
+		a.code = a.out.fail(name, ExitNotConfigured, failure{code: "not_configured", msg: err.Error(),
+			hint: "run `punchcard setup`", data: d})
+	case errors.Is(err, jira.ErrUnauthorized):
+		a.code = a.out.fail(name, ExitAuthFailed, failure{code: "auth_failed",
+			msg:  "Jira rejected the credentials; the worklogs stay pending",
+			hint: "check the email and API token with `punchcard setup`; a scoped token is refused too", data: d})
+	case errors.Is(err, store.ErrSyncBusy):
+		a.code = a.out.fail(name, ExitBusy, failure{code: "busy", msg: err.Error(),
+			hint: "it may be sending these; try again in a moment", data: d})
+	case err == nil, errors.Is(err, jira.ErrUnreachable), errors.As(err, &api):
+		code, msg := "sync_pending", fmt.Sprintf("%d worklog(s) still owed", len(d.Remaining))
+		if err != nil {
+			code, msg = sendProblem(err)
+		}
+		a.code = a.out.partial(name, d, rep.Events, human, failure{code: code, msg: msg,
+			hint: "run `punchcard sync` again later"})
+	default:
+		a.code = a.failure(name, err)
+	}
+}
+
+func unsentData(us []core.UnsentWorklog) []UnsentWorklog {
+	out := []UnsentWorklog{}
+	for _, u := range us {
+		out = append(out, UnsentWorklog{Key: u.Key, EntryID: u.EntryID, Worklog: u.Worklog})
+	}
+	return out
+}
+
+func syncText(d SyncData) string {
+	if len(d.Sent) == 0 && len(d.Remaining) == 0 {
+		return "Nothing to send.\n"
+	}
+	var b strings.Builder
+	for _, u := range d.Sent {
+		fmt.Fprintf(&b, "✓ %s %s sent (%s)\n", u.Key, worklogDuration(u.Worklog.TimeSpentSeconds), u.Worklog.StartedAt.Format("2006-01-02"))
+	}
+	for _, u := range d.Remaining {
+		switch u.Worklog.State {
+		case core.WorklogFailed:
+			fmt.Fprintf(&b, "✗ %s %s failed: %s\n", u.Key, worklogDuration(u.Worklog.TimeSpentSeconds), u.Worklog.Message)
+		default:
+			fmt.Fprintf(&b, "○ %s %s not sent yet\n", u.Key, worklogDuration(u.Worklog.TimeSpentSeconds))
+		}
+	}
+	return b.String()
 }
 
 // setupCmd is a stub until the setup slice. It needs a terminal.
