@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/jira"
 )
 
 // plain renders a frame through a colour-profile writer forced to NoTTY,
@@ -24,10 +26,12 @@ func plain(frame string) string {
 
 // scenarios are the named states the goldens pin, each built through the
 // store the way the CLI would build it.
+// Jira is configured (a jira.Fake that takes everything) unless the
+// build sets hs.unconfigured.
 var scenarios = []struct {
 	name  string
 	build func(hs *harness)
-	keys  []string // pressed once the TUI is open: a dialog scenario
+	keys  []string // pressed once the TUI is open (see play)
 }{
 	{"empty", func(hs *harness) {}, nil},
 	{"running", runningDay, nil},
@@ -41,6 +45,37 @@ var scenarios = []struct {
 	{"stop_recovered", recoveredDay, []string{"x"}},
 	{"add", runningDay, []string{"a", "down", "down"}},
 	{"remove", runningDay, []string{"d"}},
+	// r against a Jira that cannot be reached: once the toast has gone,
+	// the banner holds the status line.
+	{"sync_failure", func(hs *harness) {
+		runningDay(hs)
+		hs.jira = &jira.Fake{Err: jira.ErrUnreachable}
+	}, []string{"r", "wait"}},
+	{"not_configured", func(hs *harness) {
+		runningDay(hs)
+		hs.unconfigured = true
+	}, nil},
+	{"help", runningDay, []string{"?"}},
+}
+
+// configure gives a scenario its Jira: a Fake that takes everything,
+// unless the build chose one or chose none.
+func (hs *harness) configure() {
+	if hs.jira == nil && !hs.unconfigured {
+		hs.jira = &jira.Fake{}
+	}
+}
+
+// play presses keys; "wait" lets the toast time out instead.
+func (hs *harness) play(keys ...string) {
+	hs.t.Helper()
+	for _, k := range keys {
+		if k == "wait" {
+			hs.tick(hs.now.Add(toastFor + time.Second).Format("15:04:05"))
+			continue
+		}
+		hs.key(k)
+	}
 }
 
 func runningDay(hs *harness) {
@@ -95,9 +130,10 @@ func TestFrames(t *testing.T) {
 			t.Run(fmt.Sprintf("%s_%dx%d", sc.name, sz.w, sz.h), func(t *testing.T) {
 				hs := newHarness(t)
 				sc.build(hs)
+				hs.configure()
 				hs.open("09:00:00", sz.w, sz.h)
 				hs.tick("09:12:34")
-				hs.key(sc.keys...)
+				hs.play(sc.keys...)
 				golden.RequireEqual(t, plain(hs.m.View().Content))
 			})
 		}

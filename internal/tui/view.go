@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/j-dsmith/punchcard/internal/core"
 )
 
 // frame is the settled lazygit-style layout, top to bottom:
@@ -36,7 +38,7 @@ func (m Model) frame() string {
 	// for [2] gets it over the whole body instead. Nothing underneath
 	// moves.
 	x, dw := lw, w-lw
-	if dw < minDialogWidth {
+	if _, wide := m.dlg.(helpDialog); wide || dw < minDialogWidth {
 		x, dw = 0, w
 	}
 	top := strings.Join(pane(m.dlg.title(), m.dlg.body(m, dw-2), dw, bodyH, true), "\n")
@@ -128,22 +130,6 @@ func pane(title string, body []string, w, h int, focused bool) []string {
 	return out
 }
 
-// jiraStrip is [3] Jira: logged today, owed and the last sync, at most
-// maxRows rows. A placeholder until the Jira strip slice.
-func (m Model) jiraStrip(w, maxRows int) []string {
-	rows := []string{sFaint.Render(" the Jira strip is not built yet")}
-	return pane("[3] Jira", rows[:min(len(rows), maxRows)], w, len(rows)+2, false)
-}
-
-// statusLine holds one slot. For now it is the last refusal or notice;
-// the banner, toasts and the last event with its origin replace it.
-func (m Model) statusLine(w int) string {
-	if m.status == "" {
-		return ""
-	}
-	return fit(" "+sBold.Render(m.status), w)
-}
-
 // binding is one entry on the key bar.
 type binding struct{ key, label string }
 
@@ -176,17 +162,23 @@ func (m Model) bindings() []binding {
 	if ok {
 		bs = append(bs, binding{"d", "remove"})
 	}
-	if len(rows) > 1 {
-		bs = append(bs, binding{"j/k", "move"})
+	// Movement is in help: the bar keeps room for what changes things.
+	if n, _ := core.Owed(m.shown().State); n > 0 {
+		bs = append(bs, binding{"r", "sync " + strconv.Itoa(n)})
 	}
-	return append(bs, binding{"q", "quit"})
+	return append(bs, binding{"?", "help"}, binding{"q", "quit"})
 }
 
-// keyBar shows the keys that apply now.
+// keyBar shows the keys that apply now. r is sync blue, like every
+// other mention of sync.
 func (m Model) keyBar(w int) string {
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 8)
 	for _, b := range m.bindings() {
-		parts = append(parts, sBold.Render(b.key)+" "+sDim.Render(b.label))
+		k := sBold.Render(b.key)
+		if b.key == "r" {
+			k = sSyncKey.Render(b.key)
+		}
+		parts = append(parts, k+" "+sDim.Render(b.label))
 	}
 	return fit(" "+strings.Join(parts, "  "), w)
 }

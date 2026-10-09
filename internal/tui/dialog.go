@@ -72,7 +72,7 @@ func (m Model) openStop() Model {
 	}
 	e, open := openEntry(t)
 	if !open {
-		m.status = "nothing to stop on " + t.Key + " — space starts it"
+		m = m.notify("nothing to stop on " + t.Key + " — space starts it")
 		return m
 	}
 	d := stopDialog{ticket: t.Key, entryID: e.ID, summary: t.Summary, recovered: e.Recovered,
@@ -145,7 +145,7 @@ func (d stopDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		m.dlg = nil
-		m.status = "sending " + hm(dur) + " for " + d.ticket + " to Jira…"
+		m = m.notify("sending " + hm(dur) + " for " + d.ticket + " to Jira…")
 		return m.enqueue(intent{kind: intentStop, stop: core.Stop{
 			Key: d.ticket, EntryID: d.entryID, Duration: dur,
 			Comment: strings.TrimSpace(d.comment.Value()), Origin: core.OriginHand,

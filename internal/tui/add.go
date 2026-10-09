@@ -97,7 +97,7 @@ func (d addDialog) submit(m Model) (Model, tea.Cmd) {
 	t, tracked := m.tracked(key)
 	if tracked && !t.Unverified {
 		m.dlg = nil
-		m.status = key + " is already on your list"
+		m = m.notify(key + " is already on your list")
 		for i, r := range m.rows() {
 			if r.Key == key {
 				m.sel, m.selKey = i, key

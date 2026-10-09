@@ -14,11 +14,11 @@
 │                                               ││                             │
 │                                               ││                             │
 │                                               ││                             │
-│                                               ││                             │
-│                                               ││                             │
 ╰───────────────────────────────────────────────╯╰─────────────────────────────╯
-╭─[3] Jira─────────────────────────────────────────────────────────────────────╮
-│ the Jira strip is not built yet                                              │
+╭─[3] Jira · logged today 0m · owed 55m────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                    │
+│ ✗ failed — 503 · r            PUN-120       40m   07:45                      │
+│ ○ not sent yet · r            OPS-77        15m   08:01                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-                                                                                
+ ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                
  enter stop & send  tab field  esc cancel — keep timer                          

@@ -63,7 +63,7 @@ func (m Model) fetched(f fetchMsg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 	if f.notice != "" {
-		m.status = f.notice
+		m = m.notify(f.notice)
 	}
 	if f.authFailed {
 		m, cmd = m.enqueue(intent{kind: intentAuthFailure})

@@ -1,0 +1,32 @@
+╭─Help─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Keys                                                                                                                 │
+│  space / enter   start · pause · resume the selected ticket                                                          │
+│  p               pause whatever is running, from any row                                                             │
+│  x               stop the selected entry: review, then send to Jira                                                  │
+│  a / d           add a ticket / remove the selected one                                                              │
+│  r               sync: send pending and failed worklogs                                                              │
+│  j k ↑ ↓ g G     move                                                                                                │
+│  q               quit; timers keep running without the TUI                                                           │
+│                                                                                                                      │
+│ Glyphs                                                                                                               │
+│  ▶ running   ‖ paused   ! recovered: check the duration at stop                                                      │
+│  · idle   ? not confirmed by Jira yet                                                                                │
+│  ○ waiting to be sent   ✗ failed   ✓ in Jira                                                                         │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─[3] Jira · logged today 0m · owed 55m────────────────────────────────────────────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                                                            │
+│ ✗ failed — 503 · r            PUN-120       40m   07:45                                                              │
+│ ○ not sent yet · r            OPS-77        15m   08:01                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                                                        
+ any key close                                                                                                          

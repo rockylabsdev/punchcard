@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,22 +21,51 @@ var (
 	cYellow  = lipgloss.Color("3")
 	cBlue    = lipgloss.Color("4")
 	cMagenta = lipgloss.Color("5")
-	cFg      = lipgloss.Color("7")
 	cDim     = lipgloss.Color("244")
 	cFaint   = lipgloss.Color("238")
 	cSelBg   = lipgloss.Color("236")
 )
 
+// greyFallback rewrites the 256-cube greys for a 16-colour terminal,
+// whose nearest match would be white (244) or black (238, 236): a grey
+// foreground becomes bright black, a grey background (the selection)
+// the terminal's own, leaving the cursor › to mark the row.
+func greyFallback(frame string) string {
+	return sgrPattern.ReplaceAllStringFunc(frame, func(seq string) string {
+		params := strings.Split(seq[2:len(seq)-1], ";")
+		out := make([]string, 0, len(params))
+		for i := 0; i < len(params); i++ {
+			if i+2 < len(params) && (params[i] == "38" || params[i] == "48") && params[i+1] == "5" {
+				if n, err := strconv.Atoi(params[i+2]); err == nil && n >= 232 {
+					if params[i] == "38" {
+						out = append(out, "90")
+					} else {
+						out = append(out, "49")
+					}
+					i += 2
+					continue
+				}
+			}
+			out = append(out, params[i])
+		}
+		return "\x1b[" + strings.Join(out, ";") + "m"
+	})
+}
+
+var sgrPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
 var (
 	sDim     = lipgloss.NewStyle().Foreground(cDim)
 	sFaint   = lipgloss.NewStyle().Foreground(cFaint)
 	sBold    = lipgloss.NewStyle().Bold(true)
-	sFocus   = lipgloss.NewStyle().Foreground(cFg)
+	sFocus   = lipgloss.NewStyle() // the terminal's own foreground, light or dark
 	sRunning = lipgloss.NewStyle().Foreground(cGreen).Bold(true)
 	sPaused  = lipgloss.NewStyle().Foreground(cYellow)
 	sRecov   = lipgloss.NewStyle().Foreground(cMagenta).Bold(true)
 	sSync    = lipgloss.NewStyle().Foreground(cBlue)
+	sSyncKey = lipgloss.NewStyle().Foreground(cBlue).Bold(true)
 	sFail    = lipgloss.NewStyle().Foreground(cRed).Bold(true)
+	sWarn    = lipgloss.NewStyle().Foreground(cYellow) // not connected: worklogs wait
 	sSel     = lipgloss.NewStyle().Background(cSelBg)
 )
 
