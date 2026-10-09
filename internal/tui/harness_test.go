@@ -1,0 +1,195 @@
+package tui
+
+import (
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/store"
+)
+
+// fakeStore is the store seam in memory: the same core.Apply, no files.
+// It records every command it was asked to apply.
+type fakeStore struct {
+	mu   sync.Mutex
+	w    core.World
+	now  func() time.Time
+	cmds []core.Command
+	busy bool // Apply and TryApply refuse with store.ErrBusy
+}
+
+func (f *fakeStore) Read() (core.World, []string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.w, nil, nil
+}
+
+func (f *fakeStore) Apply(c core.Command) (store.Result, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cmds = append(f.cmds, c)
+	if f.busy {
+		return store.Result{}, store.ErrBusy
+	}
+	now := f.now()
+	out, events, err := core.Apply(f.w, c, now)
+	if err != nil {
+		return store.Result{World: f.w, Now: now}, err
+	}
+	f.w = out
+	return store.Result{World: out, Events: events, Now: now}, nil
+}
+
+func (f *fakeStore) TryApply(c core.Command) (store.Result, error) { return f.Apply(c) }
+
+// commands returns what the model asked for, then forgets it.
+func (f *fakeStore) commands() []core.Command {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c := f.cmds
+	f.cmds = nil
+	return c
+}
+
+var zone = time.FixedZone("UTC-5", -5*3600)
+
+// at is a wall-clock time on the test day, in UTC-5.
+func at(hhmmss string) time.Time {
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", "2026-08-09 "+hhmmss, zone)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+// harness drives a Model the way the Bubble Tea loop would: it calls
+// Update, runs the returned command and feeds its message back, with a
+// fixed clock that only the test moves.
+type harness struct {
+	t   *testing.T
+	st  *fakeStore
+	m   Model
+	now time.Time
+	ids int
+}
+
+func newHarness(t *testing.T) *harness {
+	hs := &harness{t: t, now: at("09:00:00")}
+	hs.st = &fakeStore{w: core.World{State: core.NewState()}, now: func() time.Time { return hs.now }}
+	return hs
+}
+
+// setup applies commands to the store directly, as another process
+// would, at the given time.
+func (hs *harness) setup(when string, cmds ...core.Command) {
+	hs.t.Helper()
+	hs.now = at(when)
+	for _, c := range cmds {
+		if _, err := hs.st.Apply(c); err != nil {
+			hs.t.Fatalf("setup %T: %v", c, err)
+		}
+	}
+	hs.st.commands()
+}
+
+// open builds the model at time when, sizes it and loads the store, as
+// Run does at startup.
+func (hs *harness) open(when string, w, h int) {
+	hs.t.Helper()
+	hs.now = at(when)
+	hs.m = New(hs.st, hs.now, func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) })
+	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
+	hs.run(hs.m.load())
+}
+
+// send delivers one message and everything it causes, except that the
+// next tick is never run (it would sleep a second).
+func (hs *harness) send(msg tea.Msg) {
+	hs.t.Helper()
+	next, cmd := hs.m.Update(msg)
+	hs.m = next.(Model)
+	if _, ok := msg.(tickMsg); ok {
+		return
+	}
+	hs.run(cmd)
+}
+
+func (hs *harness) run(cmd tea.Cmd) {
+	hs.t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			hs.run(c)
+		}
+		return
+	}
+	if msg != nil {
+		hs.send(msg)
+	}
+}
+
+// tick moves the clock to when and delivers the tick, as Bubble Tea
+// does each second.
+func (hs *harness) tick(when string) {
+	hs.t.Helper()
+	hs.now = at(when)
+	hs.send(tickMsg(hs.now))
+}
+
+func (hs *harness) key(keys ...string) {
+	hs.t.Helper()
+	for _, k := range keys {
+		hs.send(keyPress(k))
+	}
+}
+
+// keyPress builds the message Bubble Tea sends for a named key.
+func keyPress(k string) tea.KeyPressMsg {
+	switch k {
+	case "space":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeySpace, Text: " "})
+	case "enter":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	case "up":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyUp})
+	case "down":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyDown})
+	case "ctrl+c":
+		return tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
+	}
+	r := []rune(k)
+	if len(r) != 1 {
+		panic("unknown key " + k)
+	}
+	return tea.KeyPressMsg(tea.Key{Code: r[0], Text: k})
+}
+
+// running is the key of the running ticket on disk, or "".
+func (hs *harness) running() string {
+	w, _, _ := hs.st.Read()
+	t, _, ok := core.Running(w.State)
+	if !ok {
+		return ""
+	}
+	return t.Key
+}
+
+func add(keys ...string) core.Command {
+	var ts []core.NewTicket
+	for _, k := range keys {
+		ts = append(ts, core.NewTicket{Key: k, Summary: "Summary of " + k})
+	}
+	return core.Add{Tickets: ts, Origin: core.OriginHand}
+}
+
+func start(key, id string) core.Command {
+	return core.Start{Key: key, Origin: core.OriginHand, NewEntryID: id}
+}
+
+var pause = core.Pause{Origin: core.OriginHand}
