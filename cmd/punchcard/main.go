@@ -1,5 +1,5 @@
 // Command punchcard times work against Jira tickets: one binary, a CLI
-// and (later) a TUI over one core.
+// and a TUI over one core.
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/cli"
+	"github.com/j-dsmith/punchcard/internal/tui"
 	"golang.org/x/term"
 )
 
@@ -21,6 +22,17 @@ func run() int {
 		Now:     time.Now,
 		Version: cli.BuildVersion(),
 		TTY:     term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
+		TUI:     openTUI,
+	})
+}
+
+// openTUI is bare `punchcard` on a terminal. The CLI hands over its
+// environment (store, clock, ids already defaulted); the TUI package
+// never imports the CLI.
+func openTUI(e cli.Env) int {
+	return tui.Run(tui.Options{
+		Store: e.Store, Now: e.Now, NewID: e.NewID,
+		Stdin: e.Stdin, Stdout: e.Stdout, Stderr: e.Stderr,
 	})
 }
 

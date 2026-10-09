@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 29m────────────────────╮╭─[2] PUN-142─────────────────╮
+│›‖ PUN-142       Wire flock on the s…     22m  ││Wire flock on the side       │
+│ ‖ PUN-138       Stop dialog: durati…     12m  ││state.lock                   │
+│ · OPS-77        Rotate staging certs     15m ○││                             │
+│ · PUN-120       Spike: Bubble Tea v…     40m ✗││                             │
+│ · DATA-9        ? unverified — Jira…       —  ││                             │
+│ · PLATFORM-4410 Investigate intermi…       —  ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Jira─────────────────────────────────────────────────────────────────────╮
+│ the Jira strip is not built yet                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ space resume  j/k move  q quit                                                 
