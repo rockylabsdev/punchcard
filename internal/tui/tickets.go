@@ -82,6 +82,9 @@ func (m Model) ticketRow(t core.TrackedTicket, w, keyW int, selected bool) strin
 	case stateRecovered:
 		glyph, key = sRecov.Render(gRecovered), sRecov.Render(t.Key)
 	}
+	if tg := m.tagged(t.Key); tg != "" {
+		sum = sChanged.Render(tg) + sDim.Render(" · ") + sum
+	}
 	const numW = 8
 	sumW := w - 2 - 1 - keyW - numW - 2
 	row := cur + glyph + " " + fit(key, keyW) + fit(sum, sumW) + rfit(num, numW) + " " + syncMarker(t)

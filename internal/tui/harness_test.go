@@ -24,12 +24,32 @@ type fakeStore struct {
 	now  func() time.Time
 	cmds []core.Command
 	busy bool // Apply and TryApply refuse with store.ErrBusy
+	// writes counts the changes applied: the fake's Stamp.
+	writes int
+	nreads int
 }
 
 func (f *fakeStore) Read() (core.World, []string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.nreads++
 	return f.w, nil, nil
+}
+
+// Stamp moves on every applied change, as state.json's would.
+func (f *fakeStore) Stamp() (store.Stamp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return store.Stamp{Inode: uint64(f.writes)}, nil
+}
+
+// reads returns how many times the store was read, then forgets it.
+func (f *fakeStore) reads() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := f.nreads
+	f.nreads = 0
+	return n
 }
 
 func (f *fakeStore) Apply(c core.Command) (store.Result, error) {
@@ -45,6 +65,7 @@ func (f *fakeStore) Apply(c core.Command) (store.Result, error) {
 		return store.Result{World: f.w, Now: now}, err
 	}
 	f.w = out
+	f.writes++
 	return store.Result{World: out, Events: events, Now: now}, nil
 }
 
@@ -227,19 +248,17 @@ func (hs *harness) open(when string, w, h int) {
 	}
 	hs.sender.jira = hs.jira
 	hs.m = New(o)
+	hs.m.ticker = func() tea.Cmd { return nil } // the test moves the clock
 	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
 	hs.run(hs.m.startup())
 }
 
-// send delivers one message and everything it causes, except that the
-// next tick is never run (it would sleep a second).
+// send delivers one message and everything it causes. The next tick is
+// never scheduled (open stubs the ticker): only the test moves time.
 func (hs *harness) send(msg tea.Msg) {
 	hs.t.Helper()
 	next, cmd := hs.m.Update(msg)
 	hs.m = next.(Model)
-	if _, ok := msg.(tickMsg); ok {
-		return
-	}
 	hs.run(cmd)
 }
 

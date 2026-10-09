@@ -35,11 +35,7 @@ var scenarios = []struct {
 }{
 	{"empty", func(hs *harness) {}, nil},
 	{"running", runningDay, nil},
-	{"paused", func(hs *harness) {
-		day(hs)
-		hs.setup("08:20:00", start("PUN-142", "E-142b"))
-		hs.setup("08:41:30", pause)
-	}, nil},
+	{"paused", pausedDay, nil},
 	{"recovered", recoveredDay, nil},
 	{"stop", runningDay, []string{"x"}},
 	{"stop_recovered", recoveredDay, []string{"x"}},
@@ -56,6 +52,20 @@ var scenarios = []struct {
 		hs.unconfigured = true
 	}, nil},
 	{"help", runningDay, []string{"?"}},
+	// An agent starts a ticket while the TUI is open: the next tick
+	// tags the row and the status line says who.
+	{"changed_elsewhere", pausedDay, []string{"agent starts OPS-77"}},
+}
+
+// outside are changes another process makes, by name, for play.
+var outside = map[string]core.Command{
+	"agent starts OPS-77": core.Start{Key: "OPS-77", Origin: core.OriginAgent, NewEntryID: "E-77b"},
+}
+
+func pausedDay(hs *harness) {
+	day(hs)
+	hs.setup("08:20:00", start("PUN-142", "E-142b"))
+	hs.setup("08:41:30", pause)
 }
 
 // configure gives a scenario its Jira: a Fake that takes everything,
@@ -66,12 +76,19 @@ func (hs *harness) configure() {
 	}
 }
 
-// play presses keys; "wait" lets the toast time out instead.
+// play presses keys; "wait" lets the toast time out instead, and a
+// name from outside is that change made elsewhere, then a tick.
 func (hs *harness) play(keys ...string) {
 	hs.t.Helper()
 	for _, k := range keys {
 		if k == "wait" {
 			hs.tick(hs.now.Add(toastFor + time.Second).Format("15:04:05"))
+			continue
+		}
+		if c, ok := outside[k]; ok {
+			next := hs.now.Add(time.Second).Format("15:04:05")
+			hs.setup(next, c)
+			hs.tick(next)
 			continue
 		}
 		hs.key(k)
