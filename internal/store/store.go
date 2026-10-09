@@ -60,6 +60,9 @@ func New(dir string, now func() time.Time) *Store {
 // Dir is the directory the store reads and writes.
 func (s *Store) Dir() string { return s.dir }
 
+// Now is the store's clock: what the next transition will be applied at.
+func (s *Store) Now() time.Time { return s.now() }
+
 // Result is what one critical section produced.
 type Result struct {
 	// World is what is now on disk (unchanged on a refusal).
