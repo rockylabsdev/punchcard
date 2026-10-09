@@ -213,3 +213,34 @@ func TestTouchTakesTheKeyFromTheGitBranch(t *testing.T) {
 		t.Errorf("not a repo is presence only: exit %d stdout %q", r.code, r.stdout)
 	}
 }
+
+// An unconfigured sync names `punchcard setup` exactly once, whether the
+// config is missing (its error already says so) or the Keychain broke (it
+// doesn't, so the hint supplies it).
+func TestUnconfiguredSyncHintsSetupOnce(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(h *harness)
+	}{
+		{"no config", func(h *harness) { h.env["XDG_CONFIG_HOME"] = h.t.TempDir() }},
+		{"config without a token", func(h *harness) { h.configure("") }},
+		{"broken keychain", func(h *harness) { h.configure(""); h.kc.err = errLocked }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			c.setup(h)
+			h.do("08:00", "start", "AA-1")
+			h.do("08:30", "stop", "--no-sync")
+			r := h.run("sync")
+			if r.code != 3 {
+				t.Fatalf("exit %d, want 3; stderr %q", r.code, r.stderr)
+			}
+			if n := strings.Count(r.stderr, "punchcard setup"); n != 1 {
+				t.Errorf("stderr names `punchcard setup` %d times, want once:\n%s", n, r.stderr)
+			}
+			if j := h.run("sync", "--json"); !strings.Contains(j.stdout, `"hint":"run `+"`punchcard setup`"+`"`) {
+				t.Errorf("--json keeps the hint; got %s", j.stdout)
+			}
+		})
+	}
+}

@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/j-dsmith/punchcard/internal/core"
 )
@@ -79,9 +80,18 @@ func (o output) fail(cmd string, exit int, f failure) int {
 
 func (o output) errLine(f failure) {
 	fmt.Fprintf(o.env.Stderr, "%s %s\n", o.paint(red, "punchcard:"), f.msg)
-	if f.hint != "" {
+	if f.hint != "" && !saysAlready(f.msg, f.hint) {
 		fmt.Fprintf(o.env.Stderr, "  %s\n", f.hint)
 	}
+}
+
+// saysAlready reports whether msg already gives the advice in hint, ignoring
+// the backticks the hint wraps commands in. Some errors carry their own
+// advice ("… (run punchcard setup)"), and stderr shouldn't say it twice.
+// The --json envelope keeps the hint either way.
+func saysAlready(msg, hint string) bool {
+	plain := strings.ReplaceAll(hint, "`", "")
+	return strings.Contains(strings.ReplaceAll(msg, "`", ""), plain)
 }
 
 func (o output) envelope(e Envelope) {
