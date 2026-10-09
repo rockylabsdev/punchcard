@@ -18,14 +18,28 @@ func (a *applier) add(c Add) error {
 }
 
 // track adds n to the list if it is not there; it reports whether it did.
+// If the tracked ticket is unverified and n is confirmed, it confirms
+// it; a confirmed ticket is left alone.
 func (a *applier) track(n NewTicket) bool {
-	if a.ticket(n.Key) != nil {
+	if t := a.ticket(n.Key); t != nil {
+		if t.Unverified && !n.Unverified {
+			t.Summary, t.Unverified = n.Summary, false
+		}
 		return false
 	}
 	a.w.State.TrackedTickets = append(a.w.State.TrackedTickets, TrackedTicket{
 		Key: n.Key, Summary: n.Summary, Unverified: n.Unverified, AddedAt: a.now, Entries: []TimeEntry{},
 	})
 	return true
+}
+
+func (a *applier) verify(c Verify) error {
+	t := a.ticket(c.Key)
+	if t == nil {
+		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
+	}
+	t.Summary, t.Unverified = c.Summary, false
+	return nil
 }
 
 func (a *applier) remove(c Remove) error {
