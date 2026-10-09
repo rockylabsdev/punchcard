@@ -203,7 +203,7 @@ func (w wizard) askRule() error {
 			"  "+line)
 		return nil
 	}
-	w.UI.Say("Claude Code asks you before an agent's punchcard stop --yes reaches Jira",
+	w.UI.Say("Claude Code asks you before an agent's punchcard stop --yes logs a worklog",
 		"if your settings have this rule:",
 		`  { "permissions": { "ask": [`+line+`] } }`)
 	ok, err := w.UI.Confirm(Question{Title: "Add the ask rule to " + path + "?", Default: true})

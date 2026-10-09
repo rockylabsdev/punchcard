@@ -148,6 +148,15 @@ func TestAskRuleStep(t *testing.T) {
 			t.Errorf("file changed: %q", s)
 		}
 	})
+	// The rule gates every agent stop, with a tracker or without, so the
+	// offer says what the stop does in words true for both.
+	t.Run("the offer says the stop logs a worklog", func(t *testing.T) {
+		r := pluginRig(t)
+		r.claude.found = false
+		r.run("", "n", "n")
+		r.has("before an agent's punchcard stop --yes logs a worklog")
+		r.lacks("reaches Jira")
+	})
 	t.Run("declined writes nothing", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false
