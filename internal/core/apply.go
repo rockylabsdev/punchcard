@@ -146,7 +146,7 @@ func (a *applier) stop(c Stop) error {
 	if c.EntryID != "" && e.ID != c.EntryID {
 		return fmt.Errorf("%w: entry %s is no longer open", ErrNoTimer, c.EntryID)
 	}
-	wl, err := worklogFor(*e, c.Duration, c.Comment, a.now)
+	wl, err := worklogFor(*e, c, a.now)
 	if err != nil {
 		return err
 	}
@@ -194,8 +194,9 @@ func (a *applier) stopTarget(key string) (*TrackedTicket, *TimeEntry, error) {
 	}
 }
 
-// worklogFor is the pending worklog stopping e at now would produce.
-func worklogFor(e TimeEntry, d time.Duration, comment string, now Timestamp) (Worklog, error) {
+// worklogFor is the worklog stopping e with c at now would produce.
+func worklogFor(e TimeEntry, c Stop, now Timestamp) (Worklog, error) {
+	d := c.Duration
 	if d == 0 {
 		d = Elapsed(e, now.Time)
 	}
@@ -203,11 +204,15 @@ func worklogFor(e TimeEntry, d time.Duration, comment string, now Timestamp) (Wo
 	if d < time.Minute {
 		return Worklog{}, fmt.Errorf("%w: %s", ErrTooShort, d)
 	}
+	state := WorklogPending
+	if c.Local {
+		state = WorklogLocal
+	}
 	return Worklog{
-		State:            WorklogPending,
+		State:            state,
 		StartedAt:        e.Segments[0].StartedAt,
 		TimeSpentSeconds: int(d / time.Second),
-		Comment:          comment,
+		Comment:          c.Comment,
 	}, nil
 }
 

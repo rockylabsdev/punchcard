@@ -1,0 +1,24 @@
+# A blank machine, no config at all: no tracker. A stop is final (the
+# worklog is local), nothing is owed, sync says there is no tracker, and
+# rm takes the ticket without a warning.
+exec punchcard start payroll
+stdout '^▶ payroll running'
+
+exec punchcard stop --yes --duration 30
+stdout '^■ payroll stopped: 30m, logged$'
+! stderr .
+
+exec punchcard status
+stdout '^Nothing running\.$'
+! stderr .
+
+exec punchcard status --json
+stdout '"unsent":\{"count":0,"seconds":0\}'
+
+exitcode 3 punchcard sync
+stderr 'no tracker'
+! stderr 'Jira'
+
+exec punchcard rm payroll
+stdout '^- payroll removed$'
+! stderr .

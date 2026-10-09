@@ -215,8 +215,8 @@ func (a *app) root() *cobra.Command {
 	var jsonFlag bool
 	root := &cobra.Command{
 		Use:           "punchcard",
-		Short:         "Time work against Jira tickets",
-		Long:          "Punchcard times work against Jira tickets and sends the time to Jira as worklogs.\nBare `punchcard` opens the TUI on a terminal and prints status otherwise.",
+		Short:         "Time work against tickets",
+		Long:          "Punchcard times work against tickets and logs the time as worklogs, sent to a tracker when one is set up.\nBare `punchcard` opens the TUI on a terminal and prints status otherwise.",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -273,12 +273,16 @@ func (a *app) failure(cmd string, err error) int {
 			data: CandidatesData{Candidates: amb.Keys},
 		})
 	case errors.Is(err, core.ErrTooShort):
-		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: "a worklog under one minute is never sent", hint: "pass --duration"})
+		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: "a worklog under one minute is never logged", hint: "pass --duration"})
 	case errors.Is(err, core.ErrUsage):
 		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: err.Error()})
 	case errors.Is(err, core.ErrUnlogged):
-		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error(),
-			hint: "stop and sync it first, or pass --force to drop the unsent time"})
+		// With no tracker only an open entry is unlogged: stopping logs it.
+		hint := "stop and sync it first, or pass --force to drop the unsent time"
+		if !a.env.HasTracker() {
+			hint = "stop it first, or pass --force to drop its time"
+		}
+		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error(), hint: hint})
 	case errors.Is(err, core.ErrHeld):
 		return a.out.fail(cmd, ExitNoTimer, failure{code: "held", msg: err.Error(),
 			hint: "the user started it by hand; only they can move or pause it"})

@@ -95,9 +95,13 @@ const (
 	WorklogPending WorklogState = "pending"
 	WorklogSynced  WorklogState = "synced"
 	WorklogFailed  WorklogState = "failed"
+	// WorklogLocal: recorded with no tracker in effect. It is final, as a
+	// synced worklog is: nothing is owed and it is never sent.
+	WorklogLocal WorklogState = "local"
 )
 
-// Worklog is what the tracker is (or will be) told for a stopped entry.
+// Worklog is the record of a stopped entry: what the tracker is (or will
+// be) told, or, with no tracker, the local record of the time.
 // It is a flat tagged shape: WorklogID and SyncedAt only when synced,
 // Message, RefusedStatus and FailedAt only when failed.
 type Worklog struct {
@@ -114,6 +118,10 @@ type Worklog struct {
 	RefusedStatus int       `json:"refusedStatus,omitempty"`
 	FailedAt      Timestamp `json:"failedAt,omitzero"`
 }
+
+// Logged reports whether the worklog is done with: synced to the tracker,
+// or local because there is none. A logged worklog is never owed or sent.
+func (w Worklog) Logged() bool { return w.State == WorklogSynced || w.State == WorklogLocal }
 
 // Heartbeat is the whole of heartbeat.json: the last moment of presence.
 type Heartbeat struct {

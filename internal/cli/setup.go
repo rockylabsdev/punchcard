@@ -18,7 +18,7 @@ import (
 func (a *app) setupCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "setup",
-		Short: "Configure Jira and the Claude Code plugin (needs a terminal)",
+		Short: "Set up a tracker and the Claude Code plugin (needs a terminal)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !a.env.TTY || a.out.json {

@@ -372,10 +372,11 @@ describe('replyText', () => {
     assert.equal(replyText('start', status({ running: timer({ held: true }) }).envelope, 0), '▶ ABC-123 1:12 · held')
     assert.equal(replyText('pause', status({}).envelope, 0), 'Nothing running.')
   })
-  test('stop: synced, pending, owed', () => {
+  test('stop: synced, pending, local, owed', () => {
     const stop = (state, extra = {}) => ({ ok: true, outcome: 'ok', data: { key: 'A-1', worklog: { state, timeSpentSeconds: 3600 } }, ...extra })
     assert.equal(replyText('stop', stop('synced'), 0), 'Logged 1h to A-1.')
     assert.equal(replyText('stop', stop('pending'), 0), 'Stopped A-1: 1h kept pending.')
+    assert.equal(replyText('stop', stop('local'), 0), 'Logged 1h to A-1.')
     assert.equal(replyText('stop', stop('pending', { outcome: 'sync_pending', error: { message: 'unreachable' } }), 7),
       'Stopped A-1: 1h saved but not sent (unreachable). Run `punchcard sync` later; never stop again.')
   })

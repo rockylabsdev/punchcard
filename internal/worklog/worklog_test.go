@@ -128,6 +128,33 @@ func TestStopSendsTheWorklogAndMarksItSynced(t *testing.T) {
 	}
 }
 
+func TestStopWithNoTrackerLogsLocallyAndNeverOpensOne(t *testing.T) {
+	f := newFixture(t, nil)
+	opened := 0
+	f.s.NoTracker = true
+	f.s.Tracker = func() (tracker.Client, error) { opened++; return nil, tracker.ErrNoTracker }
+	f.start("09:00", "payroll")
+	f.now = at("09:30")
+
+	r, err := f.s.Stop(context.Background(), core.Stop{Origin: core.OriginHand})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.SyncErr != nil {
+		t.Errorf("SyncErr = %v, want nil: a local worklog is not owed", r.SyncErr)
+	}
+	want := core.Worklog{State: core.WorklogLocal, StartedAt: ts("09:00"), TimeSpentSeconds: 1800}
+	if d := cmp.Diff(want, r.Worklog); d != "" {
+		t.Errorf("result worklog (-want +got)\n%s", d)
+	}
+	if d := cmp.Diff(want, f.worklogOf("payroll")); d != "" {
+		t.Errorf("worklog on disk (-want +got)\n%s", d)
+	}
+	if opened != 0 {
+		t.Errorf("opened the tracker %d times, want 0", opened)
+	}
+}
+
 func TestStopThatCannotSendStillStops(t *testing.T) {
 	cases := []struct {
 		name       string

@@ -11,7 +11,7 @@ import (
 )
 
 // The `data` member of each command's envelope. Words follow CONTEXT.md:
-// running|paused|stale for a timer, pending|synced|failed for a worklog.
+// running|paused|stale for a timer, pending|synced|failed|local for a worklog.
 
 // Timer is one open (running or paused) entry.
 type Timer struct {
@@ -31,7 +31,7 @@ type Timer struct {
 	LastSeen        core.Timestamp `json:"lastSeen,omitzero"`
 }
 
-// Owed counts the worklogs still to reach Jira.
+// Owed counts the worklogs still to reach the tracker (never a local one).
 type Owed struct {
 	Count   int `json:"count"`
 	Seconds int `json:"seconds"`
@@ -109,7 +109,7 @@ type RemoveData struct {
 	Key string `json:"key"`
 }
 
-// UnsentWorklog is one worklog still owed to Jira.
+// UnsentWorklog is one worklog still owed to the tracker.
 type UnsentWorklog struct {
 	Key     string       `json:"key"`
 	EntryID string       `json:"entryId"`
@@ -181,7 +181,7 @@ func ticketRow(w core.World, t core.TrackedTicket, now time.Time) Ticket {
 	for _, e := range t.Entries {
 		switch {
 		case e.Stopped():
-			if e.Worklog.State != core.WorklogSynced {
+			if !e.Worklog.Logged() {
 				r.Unsynced++
 			}
 		default:

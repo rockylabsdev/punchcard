@@ -17,7 +17,7 @@ exec punchcard pause
 stdout '^⏸ AA-1 paused  0:00:0[0-9]$'
 
 ! exec punchcard rm AA-1
-stderr '^punchcard: ticket has unlogged time: AA-1 has a running or paused entry or an unsent worklog$'
+stderr '^punchcard: ticket has unlogged time: AA-1 has a running or paused entry or a worklog not yet sent$'
 stderr '^  stop and sync it first, or pass --force to drop the unsent time$'
 
 exec punchcard rm --force AA-1

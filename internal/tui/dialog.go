@@ -252,7 +252,7 @@ func (m Model) openRemove() Model {
 		case e.Worklog == nil:
 			d.unsent += core.Elapsed(e, m.now)
 			d.owes = true
-		case e.Worklog.State != core.WorklogSynced:
+		case !e.Worklog.Logged():
 			d.unsent += time.Duration(e.Worklog.TimeSpentSeconds) * time.Second
 			d.owes = true
 		}

@@ -51,7 +51,7 @@ func (o output) ok(cmd string, data any, events []core.Event, human string) int 
 }
 
 // partial reports a success with debt (exit 7): ok is true and the
-// change is on disk, but a worklog is still owed to Jira.
+// change is on disk, but a worklog is still owed to the tracker.
 func (o output) partial(cmd string, data any, events []core.Event, human string, f failure) int {
 	if o.json {
 		o.envelope(Envelope{OK: true, Outcome: outcomes[ExitSyncPending], Command: cmd, Data: data, Events: events,

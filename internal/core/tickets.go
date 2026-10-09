@@ -49,16 +49,16 @@ func (a *applier) remove(c Remove) error {
 		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
 	}
 	if !c.Force && owes(*t) {
-		return fmt.Errorf("%w: %s has a running or paused entry or an unsent worklog", ErrUnlogged, c.Key)
+		return fmt.Errorf("%w: %s has a running or paused entry or a worklog not yet sent", ErrUnlogged, c.Key)
 	}
 	a.w.State.TrackedTickets = slices.DeleteFunc(a.w.State.TrackedTickets, func(t TrackedTicket) bool { return t.Key == c.Key })
 	return nil
 }
 
-// owes reports whether removing t would throw away time not yet in Jira.
+// owes reports whether removing t would throw away time not yet logged.
 func owes(t TrackedTicket) bool {
 	for _, e := range t.Entries {
-		if e.Worklog == nil || e.Worklog.State != WorklogSynced {
+		if e.Worklog == nil || !e.Worklog.Logged() {
 			return true
 		}
 	}
@@ -112,6 +112,9 @@ func (a *applier) stoppedEntry(key, id string) (*TimeEntry, error) {
 		}
 		if e.Worklog.State == WorklogSynced {
 			return nil, fmt.Errorf("%w: %s worklog %s", ErrAlreadySynced, key, e.Worklog.WorklogID)
+		}
+		if e.Worklog.State == WorklogLocal {
+			return nil, fmt.Errorf("%w: entry %s on %s", ErrLocal, id, key)
 		}
 		return e, nil
 	}

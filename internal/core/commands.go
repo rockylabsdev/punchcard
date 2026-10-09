@@ -44,7 +44,8 @@ type Resume struct {
 	Grammar tracker.Grammar
 }
 
-// Stop ends an entry and produces its pending Worklog. With no Key it
+// Stop ends an entry and produces its Worklog: pending, or local when
+// Local says no tracker is in effect. With no Key it
 // targets the running entry, else the single paused one (several paused:
 // *AmbiguousError). Duration zero means "use the measured elapsed";
 // either way it is truncated to the minute and refused under one minute
@@ -58,6 +59,9 @@ type Stop struct {
 	Duration time.Duration
 	Comment  string
 	Origin   Origin
+	// Local: no tracker is in effect, so the worklog is local (final)
+	// rather than pending. Core never reads config; the caller decides.
+	Local bool
 }
 
 // NewTicket is a ticket to put on the list, with what the tracker said
@@ -102,8 +106,9 @@ type Touch struct {
 	Grammar tracker.Grammar
 }
 
-// MarkSynced records that Jira accepted an entry's worklog. It refuses a
-// worklog already synced (ErrAlreadySynced) and clears AuthFailedAt.
+// MarkSynced records that the tracker accepted an entry's worklog. It refuses a
+// worklog already synced (ErrAlreadySynced) or local (ErrLocal) and
+// clears AuthFailedAt.
 type MarkSynced struct {
 	Key       string
 	EntryID   string
@@ -111,7 +116,8 @@ type MarkSynced struct {
 }
 
 // MarkFailed records a failed POST; the worklog stays retryable. It
-// never downgrades a synced worklog (ErrAlreadySynced).
+// never downgrades a synced worklog (ErrAlreadySynced) and never marks a
+// local one (ErrLocal).
 type MarkFailed struct {
 	Key     string
 	EntryID string

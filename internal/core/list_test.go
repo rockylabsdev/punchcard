@@ -38,6 +38,13 @@ func TestApplyAddRemove(t *testing.T) {
 			want: state(ticket("BB-2")),
 		},
 		{
+			name: "remove drops a ticket whose time is logged locally",
+			w:    world("10:00", ticket("AA-1", stopped(core.WorklogLocal)), ticket("BB-2")),
+			cmd:  core.Remove{Key: "AA-1"},
+			now:  "10:00",
+			want: state(ticket("BB-2")),
+		},
+		{
 			name: "remove refuses a running entry",
 			w:    world("10:00", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			cmd:  core.Remove{Key: "AA-1"}, now: "10:00", err: core.ErrUnlogged,

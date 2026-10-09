@@ -64,6 +64,6 @@ func (a *app) rmCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&force, "force", false, "remove it even with a running or paused entry or an unsent worklog")
+	c.Flags().BoolVar(&force, "force", false, "remove it even with a running or paused entry or a worklog not yet sent")
 	return c
 }

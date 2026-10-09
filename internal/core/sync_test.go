@@ -21,6 +21,7 @@ func TestApplySyncOutcomes(t *testing.T) {
 	}
 	synced := with(core.WorklogSynced, func(w *core.Worklog) { w.WorklogID = "110001"; w.SyncedAt = at("10:00") })
 	failed := with(core.WorklogFailed, func(w *core.Worklog) { w.Message = "timeout"; w.FailedAt = at("10:00") })
+	local := with(core.WorklogLocal, nil)
 	authFailed := func(s core.State) core.State { s.AuthFailedAt = at("09:45"); return s }
 
 	runApply(t, []applyCase{
@@ -81,6 +82,18 @@ func TestApplySyncOutcomes(t *testing.T) {
 			now:  "11:00", err: core.ErrAlreadySynced,
 		},
 		{
+			name: "never mark a local worklog synced: there is no tracker to have told",
+			w:    world("", stoppedAs(local)),
+			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "999"},
+			now:  "11:00", err: core.ErrLocal,
+		},
+		{
+			name: "never mark a local worklog failed",
+			w:    world("", stoppedAs(local)),
+			cmd:  core.MarkFailed{Key: "AA-1", EntryID: "EA", Message: "timeout"},
+			now:  "11:00", err: core.ErrLocal,
+		},
+		{
 			name: "an entry that is not stopped has no worklog to mark",
 			w:    world("", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "1"},
@@ -110,13 +123,14 @@ func TestApplySyncOutcomes(t *testing.T) {
 	})
 }
 
-func TestUnsentNeverOffersASyncedWorklog(t *testing.T) {
+func TestUnsentNeverOffersALoggedWorklog(t *testing.T) {
 	wl := func(id string, s core.WorklogState, secs int) core.TimeEntry {
 		return withWorklog(entry(id, hand, seg("09:00", "09:30")), core.Worklog{State: s, StartedAt: at("09:00"), TimeSpentSeconds: secs})
 	}
 	s := state(
 		ticket("AA-1", wl("E1", core.WorklogSynced, 600), wl("E2", core.WorklogPending, 1200)),
 		ticket("BB-2", wl("E3", core.WorklogFailed, 1800), entry("E4", hand, seg("10:00", ""))),
+		ticket("payroll", wl("E5", core.WorklogLocal, 2400)),
 	)
 	var got []string
 	for _, u := range core.Unsent(s) {

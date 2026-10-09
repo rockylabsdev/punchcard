@@ -105,14 +105,14 @@ func PreviewStop(w World, stop Stop, now time.Time) (Preview, error) {
 	if stop.EntryID != "" && e.ID != stop.EntryID {
 		return Preview{}, fmt.Errorf("%w: entry %s is no longer open", ErrNoTimer, stop.EntryID)
 	}
-	wl, err := worklogFor(*e, stop.Duration, stop.Comment, a.now)
+	wl, err := worklogFor(*e, stop, a.now)
 	if err != nil {
 		return Preview{}, err
 	}
 	return Preview{Key: t.Key, EntryID: e.ID, Worklog: wl, Recovered: e.Recovered}, nil
 }
 
-// UnsentWorklog names a worklog that still has to reach Jira.
+// UnsentWorklog names a worklog that still has to reach the tracker.
 type UnsentWorklog struct {
 	Key     string
 	EntryID string
@@ -120,12 +120,13 @@ type UnsentWorklog struct {
 }
 
 // Unsent lists every pending or failed worklog in list order. A synced
-// worklog is never offered: it must never be POSTed again.
+// worklog is never offered: it must never be POSTed again. Nor is a
+// local one: there is no tracker to send it to.
 func Unsent(s State) []UnsentWorklog {
 	var out []UnsentWorklog
 	for _, t := range s.TrackedTickets {
 		for _, e := range t.Entries {
-			if e.Worklog != nil && e.Worklog.State != WorklogSynced {
+			if e.Worklog != nil && !e.Worklog.Logged() {
 				out = append(out, UnsentWorklog{Key: t.Key, EntryID: e.ID, Worklog: *e.Worklog})
 			}
 		}

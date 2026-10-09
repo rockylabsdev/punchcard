@@ -459,7 +459,9 @@ export function replyText(verb, env, exitCode) {
     if (exitCode === 7) {
       return `Stopped ${d.key}: ${time} saved but not sent (${env.error?.message ?? 'sync pending'}). Run \`punchcard sync\` later; never stop again.`
     }
-    return d.worklog?.state === 'synced' ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
+    // A local worklog (no tracker) is logged as surely as a synced one.
+    const logged = d.worklog?.state === 'synced' || d.worklog?.state === 'local'
+    return logged ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
   }
   const band = bandFrom({ envelope: env }, '')
   return band ? band.text : 'Nothing running.'

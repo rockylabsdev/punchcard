@@ -1,4 +1,4 @@
-// Package worklog sends worklogs to Jira: stop-and-send for one entry,
+// Package worklog sends worklogs to the tracker: stop-and-send for one entry,
 // and sync for everything owed. It is the only code that POSTs, and the
 // CLI and the TUI both call it (only `stop` and `sync` ever send).
 //
@@ -35,13 +35,16 @@ type Sender struct {
 	// Tracker opens the client; it is called only when there is
 	// something to send. Any error from it is treated as not configured.
 	Tracker func() (tracker.Client, error)
+	// NoTracker: none is in effect. Stop records a local worklog, which
+	// is final and owed to no one, so Tracker is never called.
+	NoTracker bool
 }
 
 // StopResult is a stop that happened, and what became of its worklog.
 type StopResult struct {
 	Key, EntryID string
-	// Worklog is the entry's worklog as it is now on disk: synced, or
-	// still pending or failed.
+	// Worklog is the entry's worklog as it is now on disk: synced or
+	// local, or still pending or failed.
 	Worklog core.Worklog
 	// World is on disk after the last write; Now is when the stop was
 	// applied. Events are the stop's (a recovery) then the send's.
@@ -49,7 +52,8 @@ type StopResult struct {
 	Now     time.Time
 	Events  []core.Event
 	Notices []string
-	// SyncErr is nil when Jira took the worklog. Otherwise the worklog is
+	// SyncErr is nil when the tracker took the worklog, or there is
+	// none and the worklog is local. Otherwise the worklog is
 	// owed, and SyncErr says why (match with errors.Is / errors.As):
 	// config.ErrNotConfigured, tracker.ErrUnauthorized (authFailedAt is
 	// now set; pending), tracker.ErrUnreachable (failed), a
@@ -66,6 +70,7 @@ type StopResult struct {
 // non-nil SyncErr: the caller reports a success with debt, never stops
 // again.
 func (s Sender) Stop(ctx context.Context, c core.Stop) (StopResult, error) {
+	c.Local = s.NoTracker
 	var notices []string
 	if c.EntryID == "" {
 		w, ns, err := s.Store.Read()
@@ -199,8 +204,8 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 		return err
 	}
 	e, ok := w.State.Entry(t.Key, t.EntryID)
-	if !ok || e.Worklog == nil || e.Worklog.State == core.WorklogSynced {
-		return nil // removed, or someone else sent it: never POST twice
+	if !ok || e.Worklog == nil || e.Worklog.Logged() {
+		return nil // removed, sent by someone else, or local: never POST it
 	}
 	wl := *e.Worklog
 	pctx, cancel := context.WithTimeout(ctx, PostBudget)

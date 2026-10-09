@@ -32,7 +32,7 @@ func (a *app) stopCmd() *cobra.Command {
 	var f stopFlags
 	c := &cobra.Command{
 		Use:   "stop [KEY]",
-		Short: "Stop an entry and send its worklog to Jira (no KEY: the running entry, else the single paused one)",
+		Short: "Stop an entry and log its worklog, sending it to the tracker if one is set up (no KEY: the running entry, else the single paused one)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s := core.Stop{Comment: message, Origin: a.origin}
@@ -52,15 +52,15 @@ func (a *app) stopCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&durationFlag, "duration", "", "time to log instead of the measured elapsed: 1h30m, 1h, 90m or minutes (1m to 24h)")
 	c.Flags().StringVarP(&message, "message", "m", "", "worklog comment")
-	c.Flags().BoolVar(&f.noSync, "no-sync", false, "record the worklog as pending without sending it")
-	c.Flags().BoolVar(&f.yes, "yes", false, "send without prompting (an agent's stop needs it)")
-	c.Flags().BoolVar(&f.dryRun, "dry-run", false, "show the exact worklog a stop would send, and change nothing")
+	c.Flags().BoolVar(&f.noSync, "no-sync", false, "record the worklog without sending it to the tracker (pending)")
+	c.Flags().BoolVar(&f.yes, "yes", false, "stop without prompting (an agent's stop needs it)")
+	c.Flags().BoolVar(&f.dryRun, "dry-run", false, "show the exact worklog a stop would record, and change nothing")
 	return c
 }
 
-// sender is the worklog seam over this invocation's store and Jira.
+// sender is the worklog seam over this invocation's store and tracker.
 func (a *app) sender() worklog.Sender {
-	return worklog.Sender{Store: a.env.Store, Tracker: a.env.OpenTracker}
+	return worklog.Sender{Store: a.env.Store, Tracker: a.env.OpenTracker, NoTracker: !a.env.HasTracker()}
 }
 
 // stop previews the worklog from a fresh read, applies the CLI's rules
@@ -68,6 +68,9 @@ func (a *app) sender() worklog.Sender {
 // then stops the previewed entry and sends its worklog. Core re-checks
 // everything under the lock.
 func (a *app) stop(s core.Stop, f stopFlags) {
+	// With no tracker the worklog is local: the preview, --no-sync and
+	// the send all record it so.
+	s.Local = !a.env.HasTracker()
 	w, now, err := a.read()
 	if err != nil {
 		a.code = a.failure("stop", err)
@@ -169,15 +172,23 @@ func (a *app) timerEventLines(res store.Result) string {
 
 func stoppedLine(key string, wl core.Worklog) string {
 	outcome := "worklog " + string(wl.State)
-	if wl.State == core.WorklogSynced {
+	switch wl.State {
+	case core.WorklogSynced:
 		outcome = "sent to Jira"
+	case core.WorklogLocal:
+		outcome = "logged"
 	}
 	return fmt.Sprintf("■ %s stopped: %s, %s\n", key, worklogDuration(wl.TimeSpentSeconds), outcome)
 }
 
-// previewText is the worklog a stop would send, in words.
+// previewText is the worklog a stop would send (or, with no tracker,
+// log), in words.
 func previewText(p core.Preview, loc *time.Location) string {
-	s := fmt.Sprintf("%s: would send %s, started %s", p.Key, worklogDuration(p.Worklog.TimeSpentSeconds),
+	verb := "send"
+	if p.Worklog.State == core.WorklogLocal {
+		verb = "log"
+	}
+	s := fmt.Sprintf("%s: would %s %s, started %s", p.Key, verb, worklogDuration(p.Worklog.TimeSpentSeconds),
 		p.Worklog.StartedAt.In(loc).Format("2006-01-02 15:04"))
 	if p.Worklog.Comment != "" {
 		s += fmt.Sprintf(", comment %q", p.Worklog.Comment)
@@ -273,11 +284,12 @@ func parseDuration(s string) (time.Duration, error) {
 
 // syncCmd sends every pending and failed worklog (KEY's only, with a
 // key), one at a time: 0 all sent, 7 some remain, 8 on a 401, 3
-// unconfigured, 75 while another punchcard is sending.
+// unconfigured or no tracker at all, 75 while another punchcard is
+// sending.
 func (a *app) syncCmd(name string, hidden bool) *cobra.Command {
 	return &cobra.Command{
 		Use:    name + " [KEY]",
-		Short:  "Send every pending and failed worklog to Jira",
+		Short:  "Send every pending and failed worklog to the tracker",
 		Hidden: hidden,
 		Args:   cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -295,6 +307,10 @@ func (a *app) syncCmd(name string, hidden bool) *cobra.Command {
 }
 
 func (a *app) sync(name, key string) {
+	if !a.env.HasTracker() {
+		a.syncWithoutTracker(name, key)
+		return
+	}
 	rep, err := a.sender().Sync(context.Background(), key)
 	a.out.notices(rep.Notices)
 	d := SyncData{Sent: unsentData(rep.Sent), Remaining: unsentData(rep.Remaining)}
@@ -323,6 +339,27 @@ func (a *app) sync(name, key string) {
 	default:
 		a.code = a.failure(name, err)
 	}
+}
+
+// syncWithoutTracker refuses, even with nothing owed: a sync that
+// quietly did nothing would let a user believe the time went somewhere.
+// Remaining lists what is still owed from when a tracker was set.
+func (a *app) syncWithoutTracker(name, key string) {
+	w, _, err := a.read()
+	if err != nil {
+		a.code = a.failure(name, err)
+		return
+	}
+	var owed []core.UnsentWorklog
+	for _, u := range core.Unsent(w.State) {
+		if key == "" || u.Key == key {
+			owed = append(owed, u)
+		}
+	}
+	a.code = a.out.fail(name, ExitNotConfigured, failure{code: "not_configured",
+		msg:  "there is no tracker to send to",
+		hint: "worklogs are logged here; `punchcard setup` connects one",
+		data: SyncData{Sent: []UnsentWorklog{}, Remaining: unsentData(owed)}})
 }
 
 func unsentData(us []core.UnsentWorklog) []UnsentWorklog {

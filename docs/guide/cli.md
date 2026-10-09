@@ -458,7 +458,7 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 
 A timer: `{key, summary?, unverified, entryId, state, held, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
 
-A worklog: `{state, startedAt, timeSpentSeconds, comment?, worklogId?, syncedAt?, message?, refusedStatus?, failedAt?}`. `state` is `pending`, `synced` or `failed`; `refusedStatus` is the HTTP status when the tracker answered with a refusal.
+A worklog: `{state, startedAt, timeSpentSeconds, comment?, worklogId?, syncedAt?, message?, refusedStatus?, failedAt?}`. `state` is `pending`, `synced` or `failed`, or `local` when there is no tracker (final, never owed or sent); `refusedStatus` is the HTTP status when the tracker answered with a refusal.
 
 Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no colon.
 
