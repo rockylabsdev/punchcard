@@ -101,6 +101,15 @@ type MarkFailed struct {
 // RecordAuthFailure records a Jira 401 at now.
 type RecordAuthFailure struct{}
 
+// Verify records what Jira said of a tracked ticket: its summary, and
+// that it exists (clearing Unverified). An untracked key is ErrNotTracked.
+// Start, Add and Touch carrying a confirmed NewTicket (Unverified false)
+// confirm a tracked unverified ticket the same way, in one transition.
+type Verify struct {
+	Key     string
+	Summary string
+}
+
 func (Start) command()             {}
 func (Pause) command()             {}
 func (Resume) command()            {}
@@ -111,6 +120,7 @@ func (Touch) command()             {}
 func (MarkSynced) command()        {}
 func (MarkFailed) command()        {}
 func (RecordAuthFailure) command() {}
+func (Verify) command()            {}
 
 // EventKind names a side effect nobody asked for.
 type EventKind string

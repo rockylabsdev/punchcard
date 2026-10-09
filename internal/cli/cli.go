@@ -5,6 +5,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"runtime/debug"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -89,6 +91,10 @@ type Env struct {
 	// TUI runs the full-screen app for bare `punchcard` on a TTY. Nil
 	// prints status instead (until the TUI slice wires it in main).
 	TUI func(Env) int
+	// Jira opens the Jira client; only commands that call Jira call it.
+	// Nil means jira.Open(Getenv): the config file plus the token
+	// lookup. Tests inject a *jira.Fake.
+	Jira func() (jira.Client, error)
 }
 
 // Choice is one ticket offered by the picker.
@@ -109,6 +115,10 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Store == nil {
 		e.Store = store.New(store.Dir(e.Getenv), e.Now)
+	}
+	if e.Jira == nil {
+		getenv := e.Getenv
+		e.Jira = func() (jira.Client, error) { return jira.Open(getenv) }
 	}
 	return e
 }
@@ -221,7 +231,12 @@ func (a *app) root() *cobra.Command {
 // error code, "held".
 func (a *app) failure(cmd string, err error) int {
 	var amb *core.AmbiguousError
+	var nf ticketNotFound
 	switch {
+	case errors.As(err, &nf):
+		return a.out.fail(cmd, ExitTicketNotFound, failure{code: "ticket_not_found",
+			msg:  fmt.Sprintf("Jira has no ticket %s that this account can see", nf.key),
+			hint: "check the key; if it is right, the ticket may exist but be hidden from this account. Nothing changed."})
 	case errors.As(err, &amb):
 		return a.out.fail(cmd, ExitNoTimer, failure{
 			code: "no_timer", msg: err.Error(), hint: "name one: punchcard " + cmd + " KEY",

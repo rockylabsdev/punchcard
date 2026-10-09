@@ -136,7 +136,7 @@ func (a *app) change(name string, c core.Command) {
 func (a *app) eventLines(res store.Result) string {
 	var b strings.Builder
 	for _, e := range res.Events {
-		b.WriteString(a.out.describe(e, res.Now.Location()))
+		b.WriteString(a.out.describe(e, res.World, res.Now.Location()))
 	}
 	return b.String()
 }
@@ -158,13 +158,6 @@ func lastPaused(w core.World, res store.Result) (Timer, bool) {
 		}
 	}
 	return best, found
-}
-
-// newTicket is what start, resume KEY and add record for a key. Only a
-// ticket new to the list would fetch its summary from Jira (slice 4
-// slots that in here); for now every new key is unverified.
-func (a *app) newTicket(key string) (core.NewTicket, error) {
-	return core.NewTicket{Key: key, Unverified: true}, nil
 }
 
 // pick asks for a ticket on a TTY, recents (the ls order) first. With no

@@ -243,9 +243,16 @@ func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
 	return b.String()
 }
 
-func (o output) describe(e core.Event, loc *time.Location) string {
+// describe is one event as a human line. w is the world after the
+// change (it says whether an added ticket was verified).
+func (o output) describe(e core.Event, w core.World, loc *time.Location) string {
 	switch e.Kind {
 	case core.EventAdded:
+		for _, t := range w.State.TrackedTickets {
+			if t.Key == e.Key && !t.Unverified {
+				return fmt.Sprintf("+ %s added\n", e.Key)
+			}
+		}
 		return fmt.Sprintf("+ %s added (not verified with Jira yet)\n", e.Key)
 	case core.EventPaused:
 		return fmt.Sprintf("%s %s paused\n", o.paint(yellow, "⏸"), e.Key)
