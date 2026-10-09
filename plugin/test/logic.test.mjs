@@ -11,6 +11,8 @@ import {
   clock,
   editPresenceDue,
   eventText,
+  gateNeedsDialog,
+  gateQuestion,
   gateVerdict,
   isGatedStop,
   manifestVersion,
@@ -259,7 +261,35 @@ describe('gateVerdict', () => {
   })
 })
 
+describe('gateNeedsDialog', () => {
+  const ask = { decision: 'ask' }
+  const byRule = { decision: 'ask', rule: 'Bash(punchcard stop *--yes*)' }
+  const cases = [
+    ['auto mode: the classifier would decide, so the plugin asks', 'auto', ask, true],
+    ['auto mode, allowed beneath: still asks', 'auto', { decision: 'allow' }, true],
+    ["mode not seen yet: fails closed and asks", '', ask, true],
+    ['default mode: the engine puts the ask to the person', 'default', ask, false],
+    ['bypass mode: the ask verdict prompts there', 'bypassPermissions', ask, false],
+    ["the user's own ask rule prompts in every mode", 'auto', byRule, false],
+    ['a deny beneath is refused by the engine', 'auto', { decision: 'deny' }, false],
+    ['no verdict at all, auto: asks', 'auto', null, true],
+  ]
+  for (const [name, mode, verdict, want] of cases) {
+    test(name, () => assert.equal(gateNeedsDialog(mode, verdict), want))
+  }
+})
+
+test('gateQuestion names the command', () => {
+  const q = gateQuestion('  punchcard stop --yes --duration 1h  ')
+  assert.match(q, /Send it\?/)
+  assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+})
+
 describe('tighten', () => {
+  test("an ask by the user's own rule stands, rule and all", () => {
+    const below = { decision: 'ask', rule: 'Bash(punchcard stop *--yes*)', reason: 'rule' }
+    assert.equal(tighten(below), below)
+  })
   test('a deny beneath stands', () => {
     const deny = { decision: 'deny', reason: 'rule' }
     assert.equal(tighten(deny), deny)

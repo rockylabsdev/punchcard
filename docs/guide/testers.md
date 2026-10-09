@@ -185,6 +185,7 @@ Expect a band above the prompt within a few seconds. Because this is a build fro
 - Ask the agent, in words: "stop my punchcard timer with the comment 'plugin test'". Expect it to show you a preview (ticket, duration, comment) **before** anything is sent, then to run `punchcard stop --yes …`, at which point Claude Code shows a permission dialog mentioning Punchcard. Approve it. Expect the agent to report the time logged and the band to go back to showing nothing (or just the version line). The worklog is in Jira; delete it.
 - Do the stop again, but **decline** the dialog. Expect the timer still running (`punchcard status` in a shell) and the agent to tell you so, without trying again.
 - Start Claude Code with `claude --dangerously-skip-permissions --plugin-dir …` and ask for a stop once more. Expect the dialog anyway.
+- Press shift+tab until the status line says `auto mode on`, and ask for a stop once more. Expect a dialog from the plugin itself this time, `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?`, with **Send to Jira** and **Keep the timer running**. Choose Keep: the timer is untouched and the agent says so. (If you added the ask rule in setup, Claude Code's own dialog appears instead; either way, exactly one.)
 
 ### 14. Your prompts move the timer between sessions
 

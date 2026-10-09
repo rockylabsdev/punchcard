@@ -96,12 +96,13 @@ An agent runs the same CLI through its shell, where the origin is `agent`. It ma
 
 **An agent's stop is a proposal.** `punchcard stop --json` from an agent always exits 6 with the exact worklog in `data.preview` and changes nothing. The skill tells the agent to show you the ticket, duration and comment, and only then run the same command with `--yes`. That call is **gated**: Claude Code puts a yes/no to you before it runs, with the reason `Punchcard: this stops the timer and sends the worklog to Jira. Approve only the worklog you were shown.` Decline, and the timer keeps running.
 
-Two gates produce that one dialog:
+Three things produce that dialog, and you see one of them, not all three:
 
-1. The mod's hook on Bash commands answers `ask` for anything that names `punchcard`, `stop` and `--yes` in one command line, in any order, inside compound commands too. It never answers `allow` (a plugin's allow would override your own rules), and if the hook itself fails it still answers `ask`.
-2. The ask rule `Bash(punchcard stop *--yes*)` in `permissions.ask` of your Claude Code user settings, which `setup` offers to add. It holds even with the plugin disabled or uninstalled.
+1. The plugin's permission hook answers `ask` for any Bash command that names `punchcard`, `stop` and `--yes` in one command line, in any order, inside compound commands too. It never answers `allow` (a plugin's allow would override your own rules), and if the hook itself fails it still answers `ask`. In the default mode and under `--dangerously-skip-permissions` that `ask` is Claude Code's own permission dialog.
+2. In **auto mode**, Claude Code hands an `ask` to a classifier rather than to you, so the plugin raises its own dialog on the call itself: `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?` with the answers **Send to Jira** and **Keep the timer running**. Anything but Send refuses the command with the timer untouched. The plugin does this only where Claude Code would not ask you itself: auto mode, or before it knows the mode.
+3. The ask rule `Bash(punchcard stop *--yes*)` in `permissions.ask` of your Claude Code user settings, which `setup` offers to add. It makes Claude Code ask in every mode, auto mode included, and it holds even with the plugin disabled or uninstalled. When it is present the plugin skips its own dialog, so you are never asked twice.
 
-Both ask under `--dangerously-skip-permissions`. Under `claude -p` or any other run with nobody to answer, the gated call is denied, nothing is sent, and the timer stays running until you stop it or it goes stale. The skill tells the agent to say "run `/punch stop` when you're back" and not to try again. (The denial under `-p` is the behaviour the design records as verified on Claude Code 2.1.291; it was not re-run for this guide.)
+Under `claude -p` or any other run with nobody to answer, the gated call is refused, nothing is sent, and the timer stays running until you stop it or it goes stale. The skill tells the agent to say "run `/punch stop` when you're back" and not to try again. (The `-p` denial of the permission dialog is what the design records as verified on Claude Code 2.1.291; the plugin's own dialog rejecting under `-p` is what the mod API documents, and both are covered by the plugin's tests against the engine.)
 
 A command you type yourself with `!` inside Claude Code runs in the agent's shell and counts as an agent. Use `/punch`, the TUI or a plain shell to act by hand.
 

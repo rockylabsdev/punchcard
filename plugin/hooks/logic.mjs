@@ -267,15 +267,59 @@ export const ASK = Object.freeze({
 
 /**
  * The gate's answer given the verdict beneath it (the user's rules and
- * mode): a deny stands, anything else becomes ask. The gate only ever
- * tightens.
- * @template {{ decision: string }} T
+ * mode): a deny stands, an ask that cites the user's own rule stands (a
+ * settings ask rule puts the call to the person in every mode, and the
+ * rule must stay visible to gateNeedsDialog), anything else becomes ask.
+ * The gate only ever tightens.
+ * @template {{ decision: string, rule?: string }} T
  * @param {T} below
  * @returns {T | typeof ASK}
  */
 export function tighten(below) {
-  return below?.decision === 'deny' ? below : ASK
+  if (below?.decision === 'deny') return below
+  if (below?.decision === 'ask' && below.rule) return below
+  return ASK
 }
+
+/**
+ * Whether the plugin must put a gated stop to the person itself, with its
+ * own dialog, because the engine will not. An `ask` verdict goes to the
+ * mode's decider: a dialog in the default and bypass modes, a headless
+ * host under -p (which denies), but the auto-mode classifier in auto
+ * mode, which can approve on the person's behalf. Only the person's own
+ * settings ask rule (`verdict.rule`) forces a dialog in every mode.
+ *
+ * So the dialog is raised in auto mode, and when the mode is not known
+ * (fail closed), unless the engine will refuse the call anyway or the
+ * user's rule will ask. `mode` is the session's permission mode as the
+ * classic hook inputs carry it ('' until one has been seen).
+ * @param {string} mode
+ * @param {{ decision?: string, rule?: string } | null | undefined} verdict the
+ *   engine's verdict for the call, from `$.tool.check`
+ */
+export function gateNeedsDialog(mode, verdict) {
+  if (verdict?.decision === 'deny') return false
+  if (verdict?.decision === 'ask' && verdict.rule) return false
+  return mode === 'auto' || mode === ''
+}
+
+/** The gate dialog's two answers. */
+export const SEND = 'Send to Jira'
+export const HOLD = 'Keep the timer running'
+
+/**
+ * The gate dialog's question for a Bash command about to send a worklog.
+ * @param {string} command
+ */
+export function gateQuestion(command) {
+  return `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?\n\n${String(command ?? '').trim()}`
+}
+
+/** Why a gated stop was refused, as the model reads it. */
+export const DENIED_BY_USER = 'Punchcard: the user did not approve sending this worklog. The timer is untouched; do not retry.'
+export const DENIED_UNATTENDED =
+  'Punchcard: nobody is here to approve sending this worklog, so it was not sent. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
+export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not sent. The timer is untouched.'
 
 /**
  * Splits /punch's arguments like a shell would, quotes kept together.
