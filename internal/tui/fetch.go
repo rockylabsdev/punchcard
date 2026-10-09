@@ -1,11 +1,7 @@
 package tui
 
 import (
-	"context"
-	"errors"
-
 	tea "charm.land/bubbletea/v2"
-	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/jira"
 )
 
@@ -30,29 +26,12 @@ type fetchMsg struct {
 func (m Model) fetch(key string, tracked, forAdd bool) tea.Cmd {
 	open := m.jira
 	return func() tea.Msg {
-		msg := fetchMsg{key: key, forAdd: forAdd, tracked: tracked}
-		if open == nil {
-			return msg
+		l := jira.LookUp(open, key)
+		return fetchMsg{key: key, forAdd: forAdd, tracked: tracked, summary: l.Summary, notice: l.Notice,
+			found:      l.Outcome == jira.LookupFound,
+			notFound:   l.Outcome == jira.LookupNotFound,
+			authFailed: l.Outcome == jira.LookupAuthFailed,
 		}
-		c, err := open()
-		if err != nil {
-			if !errors.Is(err, config.ErrNotConfigured) {
-				msg.notice = err.Error() + "; treating Jira as not configured"
-			}
-			return msg
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), jira.SummaryBudget)
-		defer cancel()
-		s, err := c.Summary(ctx, key)
-		switch {
-		case err == nil:
-			msg.summary, msg.found = s, true
-		case errors.Is(err, jira.ErrNotFound):
-			msg.notFound = true
-		case errors.Is(err, jira.ErrUnauthorized):
-			msg.authFailed = true
-		}
-		return msg
 	}
 }
 
