@@ -53,18 +53,18 @@ func (m model) detailA5(t *ticket, w int) string {
 		}
 		lines = append(lines, wrapIndent(sDim, "stop sends this as one worklog — x", w), "")
 		if c.recovered {
-			lines = append(lines, " "+spanLine(c.cappedAt.Format("15:04"), "now  ", m.now.Sub(c.cappedAt), false, sRecov.Render("away")))
+			lines = append(lines, gapLine(c.cappedAt.Format("15:04"), "now", sRecov, gRecovered+" away "+hm(m.now.Sub(c.cappedAt)), w)...)
 		}
 		for i := len(c.segs) - 1; i >= 0; i-- {
 			s := c.segs[i]
 			if s.end.IsZero() {
-				lines = append(lines, " "+spanLine(s.start.Format("15:04"), sRunning.Render("now"), m.now.Sub(s.start), true, sRunning.Render("working")))
+				lines = append(lines, " "+spanLine(s.start.Format("15:04"), sRunning.Render("now"), m.now.Sub(s.start), true, sRunning.Render("counted")))
 			} else {
-				lines = append(lines, " "+spanLine(s.start.Format("15:04"), s.end.Format("15:04"), s.end.Sub(s.start), false, "working"))
+				lines = append(lines, " "+spanLine(s.start.Format("15:04"), s.end.Format("15:04"), s.end.Sub(s.start), false, "counted"))
 			}
 			if i > 0 {
 				prev := c.segs[i-1]
-				lines = append(lines, " "+sDim.Render(spanLine(prev.end.Format("15:04"), s.start.Format("15:04"), s.start.Sub(prev.end), false, gPaused+" paused")))
+				lines = append(lines, gapLine(prev.end.Format("15:04"), s.start.Format("15:04"), sDim, gPaused+" paused "+hm(s.start.Sub(prev.end)), w)...)
 			}
 		}
 	}
@@ -176,4 +176,15 @@ func wrapIndent(st lipgloss.Style, text string, w int) string {
 		ls[i] = "  " + st.Render(strings.TrimRight(l, " "))
 	}
 	return strings.Join(ls, "\n")
+}
+
+// gapLine: time that is not counted (a pause, or time away after a cap). Its
+// length lives in the label, out of the counted column, so it can't be summed
+// by eye. "not counted" drops to its own line when the pane is narrow.
+func gapLine(a, b string, st lipgloss.Style, label string, w int) []string {
+	head := " " + st.Render(fit(a+"–"+b, 11)+" "+label)
+	if lipgloss.Width(head)+len(", not counted") <= w {
+		return []string{head + st.Render(", not counted")}
+	}
+	return []string{head, st.Render(strings.Repeat(" ", 13) + "not counted")}
 }
