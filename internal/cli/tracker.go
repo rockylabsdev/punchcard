@@ -34,6 +34,15 @@ func (e Env) Grammar() tracker.Grammar {
 // credentials).
 func (e Env) HasTracker() bool { return e.Tracker != config.TrackerNone }
 
+// Retracked is e with the tracker read from config again, and the seam
+// rebuilt for it. The TUI's S runs setup as a child process, which may
+// choose another tracker while the TUI stays open.
+func (e Env) Retracked() Env {
+	e.Tracker = chosenTracker(e.Getenv)
+	e.OpenTracker = e.openTracker(nil)
+	return e
+}
+
 // openTracker is the seam for e's tracker: with none it answers
 // tracker.ErrNoTracker and open is never called; with Jira it is open,
 // or jira.Open (the config file plus the token lookup) when open is nil.

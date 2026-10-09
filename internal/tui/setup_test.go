@@ -65,6 +65,44 @@ func TestSSuspendsIntoSetupAndRereads(t *testing.T) {
 	}
 }
 
+// The note is the empty list's: the first ticket takes it away.
+func TestTheNoTrackerNoteGoesWithTheFirstTicket(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	frameHas(t, hs, "no tracker · S to set one up")
+	hs.key("a")
+	hs.typeText("payroll")
+	hs.key("enter")
+	frameHas(t, hs, "payroll")
+	frameLacks(t, hs, "no tracker", "Jira")
+}
+
+// Setup may choose a tracker: after S the TUI reads which one is in
+// effect, so the note goes, the Jira conditions apply again and a stop
+// goes through the new tracker's sender.
+func TestSPicksUpTheTrackerSetupChose(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	frameHas(t, hs, "no tracker · S to set one up")
+	hs.suspend(func() {}, nil)
+	jiraSender := &fakeSender{st: hs.st}
+	hs.m.retrack = func() Tracking {
+		return Tracking{Sender: jiraSender, Tracker: func() (tracker.Client, error) { return nil, config.ErrNotConfigured }}
+	}
+
+	hs.key("S")
+
+	frameLacks(t, hs, "no tracker")
+	if got := statusText(hs); got != "Not connected to Jira · S to set up · worklogs wait here, nothing is lost" {
+		t.Errorf("status line after setup = %q", got)
+	}
+	if hs.m.sender != Sender(jiraSender) {
+		t.Errorf("a stop still goes through the old sender")
+	}
+}
+
 func TestSetupThatFailsSaysSo(t *testing.T) {
 	hs := owing(t)
 	hs.open("09:12:00", 120, 32)

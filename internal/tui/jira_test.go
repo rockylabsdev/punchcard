@@ -17,7 +17,7 @@ func stripText(frame string) []string {
 	in := false
 	for _, l := range strings.Split(frame, "\n") {
 		switch {
-		case strings.HasPrefix(l, "╭─[3] Jira"):
+		case strings.HasPrefix(l, "╭─[3] Today"):
 			in = true
 			out = append(out, squash(strings.Trim(l, "╭─╮")))
 		case in && strings.HasPrefix(l, "╰"):
@@ -245,6 +245,25 @@ func TestHelp(t *testing.T) {
 	}
 }
 
+// With no tracker the Jira conditions never show: the gate is the
+// tracker, not the state file, so even an authFailedAt left behind (or
+// a failed worklog from before the tracker went) leaves the status line
+// to the last event, and the pane to what was logged.
+func TestNoTrackerNeverShowsTheJiraBanner(t *testing.T) {
+	hs := owing(t)
+	hs.setup("08:20:00", core.RecordAuthFailure{})
+	hs.noTracker = true
+	hs.open("09:12:00", 120, 32)
+	hs.tick("09:12:34")
+	if got := statusText(hs); got != "" {
+		t.Errorf("status line = %q, want it empty", got)
+	}
+	if got := stripText(hs.frame()); strings.Join(got, "\n") != "[3] Today · logged 0m\nnothing logged today — x on a row stops it and logs it here" {
+		t.Errorf("strip = %q", got)
+	}
+	frameLacks(t, hs, "Jira", "sync")
+}
+
 // A config that cannot be read is not connected too, as worklog.Sender
 // treats it.
 func TestABrokenConfigIsNotConnected(t *testing.T) {
@@ -293,7 +312,7 @@ func TestJiraStripRowsLeadWithTheOutcome(t *testing.T) {
 
 	got := stripText(hs.frame())
 	want := []string{
-		"[3] Jira · logged today 30m · owed 55m · last sync 08:17",
+		"[3] Today · logged 30m · owed 55m · last sync 08:17",
 		"STATUS TICKET TIME STOPPED",
 		"✗ failed — 503 · r PUN-120 40m 07:45",
 		"○ not sent yet · r OPS-77 15m 08:35",

@@ -16,11 +16,11 @@ import (
 // ticks and resizes through Update, rendering after each, and checks
 // that nothing panics and every frame is exactly the window's size.
 func TestHeadlessKeyRun(t *testing.T) {
-	// steps per scenario: 1400 x 11 scenarios keeps the total near the
+	// steps per scenario: 1100 x 15 scenarios keeps the total near the
 	// 16000 of 2000 x 8 that the package could afford under -race.
-	const steps = 1400
+	const steps = 1100
 	keys := []string{"space", "enter", "p", "j", "k", "up", "down", "g", "G", "x", "?", "r",
-		"a", "d", "y", "n", "esc", "tab", "shift+tab", "backspace", "1", "h", "m", "P", "U", "N", "-", "4", ":"}
+		"a", "d", "y", "n", "esc", "tab", "shift+tab", "backspace", "1", "h", "m", "P", "U", "N", "-", "4", ":", "S"}
 	sizes := [][2]int{{80, 24}, {120, 32}, {60, 16}, {44, 10}, {30, 6}, {10, 3}, {1, 1}}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {

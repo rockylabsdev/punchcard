@@ -131,21 +131,25 @@ type fakeSender struct {
 	st      *fakeStore
 	syncErr error
 	jira    *tracker.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
-	mu      sync.Mutex
-	stops   []core.Stop
-	syncs   int
+	// noTracker: none is configured, as worklog.Sender{NoTracker}: a
+	// stop is local and nothing is sent (open sets it from hs.noTracker).
+	noTracker bool
+	mu        sync.Mutex
+	stops     []core.Stop
+	syncs     int
 }
 
 func (f *fakeSender) Stop(_ context.Context, c core.Stop) (worklog.StopResult, error) {
 	f.mu.Lock()
 	f.stops = append(f.stops, c)
 	f.mu.Unlock()
+	c.Local = f.noTracker
 	res, err := f.st.Apply(c)
 	if err != nil {
 		return worklog.StopResult{}, err
 	}
 	r := worklog.StopResult{Key: c.Key, EntryID: c.EntryID, World: res.World, Now: res.Now, SyncErr: f.syncErr}
-	if f.syncErr == nil {
+	if f.syncErr == nil && !f.noTracker {
 		res, err = f.st.Apply(core.MarkSynced{Key: c.Key, EntryID: c.EntryID, WorklogID: "W1"})
 		if err != nil {
 			return r, err
@@ -176,7 +180,11 @@ func (f *fakeSender) Sync(ctx context.Context, key string) (worklog.Report, erro
 	if len(todo) == 0 {
 		return rep, nil
 	}
-	if f.jira == nil {
+	switch {
+	case f.noTracker:
+		rep.Remaining = todo
+		return rep, fmt.Errorf("%w: %w", config.ErrNotConfigured, tracker.ErrNoTracker)
+	case f.jira == nil:
 		rep.Remaining = todo
 		return rep, fmt.Errorf("%w: no config", config.ErrNotConfigured)
 	}
@@ -247,15 +255,15 @@ func (hs *harness) open(when string, w, h int) {
 	hs.t.Helper()
 	hs.now = at(when)
 	o := Options{
-		Store:     hs.st,
-		Now:       func() time.Time { return hs.now },
-		NewID:     func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
-		Sender:    hs.sender,
-		Grammar:   jira.Grammar,
-		NoTracker: hs.noTracker,
+		Store:    hs.st,
+		Now:      func() time.Time { return hs.now },
+		NewID:    func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
+		Tracking: Tracking{Sender: hs.sender, Grammar: jira.Grammar, NoTracker: hs.noTracker},
 	}
 	if hs.noTracker {
+		// As the binary wires it: the seam answers ErrNoTracker.
 		o.Grammar = tracker.Slug
+		o.Tracker = func() (tracker.Client, error) { return nil, tracker.ErrNoTracker }
 	}
 	if hs.jira != nil {
 		o.Tracker = func() (tracker.Client, error) { return hs.jira, nil }
@@ -263,7 +271,7 @@ func (hs *harness) open(when string, w, h int) {
 	if hs.openErr != nil {
 		o.Tracker = func() (tracker.Client, error) { return nil, hs.openErr }
 	}
-	hs.sender.jira = hs.jira
+	hs.sender.jira, hs.sender.noTracker = hs.jira, hs.noTracker
 	hs.m = New(o)
 	hs.m.ticker = func() tea.Cmd { return nil } // the test moves the clock
 	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
