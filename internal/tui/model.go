@@ -209,7 +209,7 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 	case "space", "enter":
 		if t, ok := m.selected(); ok {
 			m, cmd = m.enqueue(intent{kind: intentToggle, key: t.Key})
-			if t.Unverified && stateOf(t) != stateRunning {
+			if t.Unverified && m.stateOf(t) != core.TimerRunning {
 				// Confirm on contact: the start goes ahead now; Jira's
 				// answer, if any, lands as its own change.
 				cmd = tea.Batch(cmd, m.fetch(t.Key, true, false))
