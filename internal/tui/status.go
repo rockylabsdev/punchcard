@@ -137,7 +137,7 @@ func originTag(o core.Origin) string {
 	return sBold.Render(string(o))
 }
 
-// link is what the TUI knows about reaching Jira: whether Options.Jira
+// link is what the TUI knows about reaching Jira: whether Options.Tracker
 // opens a client. It never calls Jira to find out.
 type link struct {
 	known bool

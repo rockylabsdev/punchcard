@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 const (
@@ -38,7 +38,7 @@ func TestStopEnvelopes(t *testing.T) {
 	recoveredAA1 := func(h *harness) { h.do("09:00", "start", "AA-1"); h.do("09:45", "touch") }
 	cases := []struct {
 		name  string
-		jira  *jira.Fake
+		jira  *tracker.Fake
 		setup func(h *harness)
 		at    string
 		args  []string
@@ -46,42 +46,42 @@ func TestStopEnvelopes(t *testing.T) {
 		want  string
 		posts int
 	}{
-		{"stop sends the worklog", &jira.Fake{}, startAA1, "09:30",
+		{"stop sends the worklog", &tracker.Fake{}, startAA1, "09:30",
 			[]string{"stop"}, 0, ok("stop", stopData(syncedAA1), `[{"kind": "synced", "key": "AA-1"}]`), 1},
-		{"unreachable: stopped, worklog failed, exit 7", &jira.Fake{Err: jira.ErrUnreachable}, startAA1, "09:30",
+		{"unreachable: stopped, worklog failed, exit 7", &tracker.Fake{Err: tracker.ErrUnreachable}, startAA1, "09:30",
 			[]string{"stop"}, 7,
 			owed("stop", stopData(`{"state": "failed", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "message": "*", "failedAt": `+nineThirty+`}`),
 				`[{"kind": "syncFailed", "key": "AA-1", "message": "*"}]`, "unreachable"), 1},
-		{"a 401: stopped, worklog pending, exit 7", &jira.Fake{Err: jira.ErrUnauthorized}, startAA1, "09:30",
+		{"a 401: stopped, worklog pending, exit 7", &tracker.Fake{Err: tracker.ErrUnauthorized}, startAA1, "09:30",
 			[]string{"stop"}, 7,
 			owed("stop", stopData(`{"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}`), noEvents, "auth_failed"), 1},
-		{"Jira refuses: worklog failed, exit 7", &jira.Fake{Err: &jira.APIError{Status: 503}}, startAA1, "09:30",
+		{"Jira refuses: worklog failed, exit 7", &tracker.Fake{Err: &tracker.Refusal{Status: 503}}, startAA1, "09:30",
 			[]string{"stop"}, 7,
-			owed("stop", stopData(`{"state": "failed", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "message": "Jira answered 503", "failedAt": `+nineThirty+`}`),
+			owed("stop", stopData(`{"state": "failed", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "message": "Jira answered 503", "refusedStatus": 503, "failedAt": `+nineThirty+`}`),
 				`[{"kind": "syncFailed", "key": "AA-1", "message": "Jira answered 503"}]`, "sync_failed"), 1},
 		{"unconfigured: stopped, exit 7 not_configured", nil, startAA1, "09:30",
 			[]string{"stop"}, 7,
 			owed("stop", stopData(`{"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}`), noEvents, "not_configured"), 0},
-		{"--no-sync never calls Jira", &jira.Fake{}, startAA1, "09:30",
+		{"--no-sync never calls Jira", &tracker.Fake{}, startAA1, "09:30",
 			[]string{"stop", "--no-sync"}, 0,
 			ok("stop", stopData(`{"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}`), noEvents), 0},
-		{"an agent's stop is a proposal", &jira.Fake{}, asAgent, "09:30",
+		{"an agent's stop is a proposal", &tracker.Fake{}, asAgent, "09:30",
 			[]string{"stop", "-m", "x"}, 6,
 			refused("stop", "needs_confirmation", "needs_confirmation", "show the user this worklog; only `punchcard stop --yes` sends it",
 				`{"preview": {"key": "AA-1", "entryId": "ID-1", "recovered": false,
 				  "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "comment": "x"}}}`), 0},
-		{"an agent's stop --yes sends", &jira.Fake{}, asAgent, "09:30",
+		{"an agent's stop --yes sends", &tracker.Fake{}, asAgent, "09:30",
 			[]string{"stop", "--yes"}, 0, ok("stop", stopData(syncedAA1), `[{"kind": "synced", "key": "AA-1"}]`), 1},
-		{"--dry-run previews and changes nothing", &jira.Fake{}, startAA1, "09:30",
+		{"--dry-run previews and changes nothing", &tracker.Fake{}, startAA1, "09:30",
 			[]string{"stop", "--dry-run", "--duration", "1h"}, 0, ok("stop", preview(3600, false), noEvents), 0},
-		{"--dry-run previews for an agent too", &jira.Fake{}, asAgent, "09:30",
+		{"--dry-run previews for an agent too", &tracker.Fake{}, asAgent, "09:30",
 			[]string{"stop", "--dry-run"}, 0, ok("stop", preview(1800, false), noEvents), 0},
-		{"--dry-run previews a recovered entry", &jira.Fake{}, recoveredAA1, "13:00",
+		{"--dry-run previews a recovered entry", &tracker.Fake{}, recoveredAA1, "13:00",
 			[]string{"stop", "--dry-run"}, 0, ok("stop", preview(2700, true), noEvents), 0},
-		{"a recovered entry off a TTY needs --duration, even with --yes", &jira.Fake{}, recoveredAA1, "13:00",
+		{"a recovered entry off a TTY needs --duration, even with --yes", &tracker.Fake{}, recoveredAA1, "13:00",
 			[]string{"stop", "--yes"}, 6,
 			refused("stop", "needs_confirmation", "needs_confirmation", "rerun with --duration, e.g. --duration 1h30m", preview(2700, true)), 0},
-		{"under a minute exits 64", &jira.Fake{}, startAA1, "09:00",
+		{"under a minute exits 64", &tracker.Fake{}, startAA1, "09:00",
 			[]string{"stop"}, 64, refused("stop", "usage", "usage", "pass --duration", "null"), 0},
 	}
 	for _, c := range cases {
@@ -108,7 +108,7 @@ func TestStopEnvelopes(t *testing.T) {
 
 // knowing gives f the test tickets, so a start against it verifies
 // rather than 404s. Nil stays nil (unconfigured).
-func knowing(f *jira.Fake) *jira.Fake {
+func knowing(f *tracker.Fake) *tracker.Fake {
 	if f != nil && f.Summaries == nil {
 		f.Summaries = map[string]string{"AA-1": "Fix the thing", "AA-2": "Other thing"}
 	}
@@ -116,7 +116,7 @@ func knowing(f *jira.Fake) *jira.Fake {
 }
 
 // posts counts the worklog POSTs tried, accepted or not.
-func posts(f *jira.Fake) int {
+func posts(f *tracker.Fake) int {
 	n := 0
 	for _, c := range f.Calls() {
 		if strings.HasPrefix(c, "worklog ") {
@@ -129,7 +129,7 @@ func posts(f *jira.Fake) int {
 func TestAnAgentProposalAndADryRunChangeNothing(t *testing.T) {
 	for _, args := range [][]string{{"stop", "--json"}, {"stop", "--dry-run", "--json"}} {
 		h := newHarness(t)
-		h.jira = knowing(&jira.Fake{})
+		h.jira = knowing(&tracker.Fake{})
 		h.do("09:00", "start", "AA-1")
 		h.env["AI_AGENT"] = "x"
 		h.now = at("09:30")
@@ -142,7 +142,7 @@ func TestAnAgentProposalAndADryRunChangeNothing(t *testing.T) {
 
 func TestStatusShowsTheAuthFailureAfterA401(t *testing.T) {
 	h := newHarness(t)
-	h.jira = knowing(&jira.Fake{Err: jira.ErrUnauthorized})
+	h.jira = knowing(&tracker.Fake{Err: tracker.ErrUnauthorized})
 	h.do("09:00", "start", "AA-1")
 	h.do("09:30", "stop")
 	r := h.run("status", "--json")
@@ -173,31 +173,31 @@ func TestSyncEnvelopes(t *testing.T) {
 	eight := `"2026-08-09T08:00:00.000-0500"`
 	cases := []struct {
 		name  string
-		jira  *jira.Fake
+		jira  *tracker.Fake
 		setup func(h *harness)
 		args  []string
 		code  int
 		want  string
 	}{
-		{"all sent", &jira.Fake{}, twoOwed, []string{"sync"}, 0,
+		{"all sent", &tracker.Fake{}, twoOwed, []string{"sync"}, 0,
 			ok("sync", `{"sent": [`+synced("AA-1", "ID-1", eight, "W1")+`, `+synced("AA-2", "ID-2", nine, "W2")+`], "remaining": []}`,
 				`[{"kind": "synced", "key": "AA-1"}, {"kind": "synced", "key": "AA-2"}]`)},
-		{"sync KEY sends only that ticket's", &jira.Fake{}, twoOwed, []string{"sync", "AA-2"}, 0,
+		{"sync KEY sends only that ticket's", &tracker.Fake{}, twoOwed, []string{"sync", "AA-2"}, 0,
 			ok("sync", `{"sent": [`+synced("AA-2", "ID-2", nine, "W1")+`], "remaining": []}`, `[{"kind": "synced", "key": "AA-2"}]`)},
-		{"some remain: exit 7", &jira.Fake{PostErrs: map[string]error{"AA-1": &jira.APIError{Status: 503}}}, twoOwed, []string{"sync"}, 7,
+		{"some remain: exit 7", &tracker.Fake{PostErrs: map[string]error{"AA-1": &tracker.Refusal{Status: 503}}}, twoOwed, []string{"sync"}, 7,
 			fmt.Sprintf(`{"v": 1, "ok": true, "outcome": "sync_pending", "command": "sync",
-				"data": {"sent": [%s], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "failed", "startedAt": %s, "timeSpentSeconds": 1800, "message": "Jira answered 503", "failedAt": %s}}]},
+				"data": {"sent": [%s], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "failed", "startedAt": %s, "timeSpentSeconds": 1800, "message": "Jira answered 503", "refusedStatus": 503, "failedAt": %s}}]},
 				"events": [{"kind": "syncFailed", "key": "AA-1", "message": "Jira answered 503"}, {"kind": "synced", "key": "AA-2"}],
 				"error": {"code": "sync_failed", "message": "*", "hint": "run `+"`punchcard sync`"+` again later"}}`,
 				synced("AA-2", "ID-2", nine, "W1"), eight, ten)},
-		{"a 401 exits 8 and leaves them pending", &jira.Fake{Err: jira.ErrUnauthorized}, twoOwed, []string{"sync"}, 8,
+		{"a 401 exits 8 and leaves them pending", &tracker.Fake{Err: tracker.ErrUnauthorized}, twoOwed, []string{"sync"}, 8,
 			refused("sync", "auth_failed", "auth_failed", "check the email and API token with `punchcard setup`; a scoped token is refused too",
 				`{"sent": [], "remaining": [`+pending("AA-1", "ID-1", eight)+`, `+pending("AA-2", "ID-2", nine)+`]}`)},
 		{"unconfigured exits 3", nil, twoOwed, []string{"sync"}, 3,
 			refused("sync", "not_configured", "not_configured", "run `punchcard setup`",
 				`{"sent": [], "remaining": [`+pending("AA-1", "ID-1", eight)+`, `+pending("AA-2", "ID-2", nine)+`]}`)},
 		{"nothing owed is 0 even unconfigured", nil, nil, []string{"sync"}, 0, ok("sync", `{"sent": [], "remaining": []}`, noEvents)},
-		{"retry is sync", &jira.Fake{}, twoOwed, []string{"retry", "AA-1"}, 0,
+		{"retry is sync", &tracker.Fake{}, twoOwed, []string{"retry", "AA-1"}, 0,
 			ok("retry", `{"sent": [`+synced("AA-1", "ID-1", eight, "W1")+`], "remaining": []}`, `[{"kind": "synced", "key": "AA-1"}]`)},
 	}
 	for _, c := range cases {
@@ -221,7 +221,7 @@ func TestSyncEnvelopes(t *testing.T) {
 
 func TestSyncWhileAnotherSendsIsBusy(t *testing.T) {
 	h := newHarness(t)
-	h.jira = knowing(&jira.Fake{})
+	h.jira = knowing(&tracker.Fake{})
 	h.do("09:00", "start", "AA-1")
 	h.do("09:30", "stop", "--no-sync")
 	release, err := h.st.LockSync()
@@ -257,7 +257,7 @@ func TestStopPromptsOnATTY(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.jira = knowing(&jira.Fake{})
+			h.jira = knowing(&tracker.Fake{})
 			h.do("09:00", "start", "AA-1")
 			if c.recovered {
 				h.do("09:45", "touch")
@@ -286,7 +286,7 @@ func TestStopPromptsOnATTY(t *testing.T) {
 
 func TestStopPromptCancelledAtEOFChangesNothing(t *testing.T) {
 	h := newHarness(t)
-	h.jira = knowing(&jira.Fake{})
+	h.jira = knowing(&tracker.Fake{})
 	h.do("09:00", "start", "AA-1")
 	h.now = at("09:30")
 	r := h.runTTY("", nil, "stop")
@@ -300,7 +300,7 @@ func TestStopPromptCancelledAtEOFChangesNothing(t *testing.T) {
 
 func TestStopUnsentHumanOutput(t *testing.T) {
 	h := newHarness(t)
-	h.jira = knowing(&jira.Fake{Err: jira.ErrUnreachable})
+	h.jira = knowing(&tracker.Fake{Err: tracker.ErrUnreachable})
 	h.do("09:00", "start", "AA-1")
 	h.now = at("09:30")
 	r := h.run("stop")

@@ -54,15 +54,21 @@ func (a *app) status(shortForm bool) error {
 	return nil
 }
 
-// link is d plus the Jira link: the config file and the token lookup,
-// never a network call.
+// link is d plus the tracker and, with Jira, its link: the config file
+// and the token lookup, never a network call. With no tracker there is
+// no token to look up.
 func (a *app) link(d StatusData) StatusReport {
-	rep := StatusReport{StatusData: d}
+	rep := StatusReport{StatusData: d, Tracker: a.env.Tracker}
+	if !a.env.HasTracker() {
+		return rep
+	}
 	_, sec, err := config.Credentials(a.env.Getenv, a.env.Keychain)
 	var kc *config.KeychainError
+	configured := err == nil
+	rep.Configured = &configured
 	switch {
 	case err == nil:
-		rep.Configured, rep.TokenSource = true, sec.Source
+		rep.TokenSource = sec.Source
 		if sec.StrayFile {
 			rep.StrayTokenFile, _ = config.TokenPath(a.env.Getenv) // a stray file implies a config dir
 		}
@@ -94,9 +100,10 @@ func (o output) statusText(rep StatusReport, now time.Time) string {
 			o.paint(red, "!"), d.AuthFailedAt.In(now.Location()).Format("2006-01-02 15:04"))
 	}
 	switch {
+	case rep.Configured == nil: // no tracker: nothing to connect
 	case rep.KeychainError != "":
 		fmt.Fprintf(&b, "%s Not connected to Jira: %s\n", o.paint(red, "!"), rep.KeychainError)
-	case !rep.Configured:
+	case !*rep.Configured:
 		fmt.Fprintf(&b, "Not connected to Jira: %s\n", strings.TrimPrefix(rep.NotConfigured, config.ErrNotConfigured.Error()+": "))
 	default:
 		fmt.Fprintf(&b, "Jira token: %s\n", sourceText(rep.TokenSource))

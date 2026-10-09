@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // ErrAborted: the user pressed esc or ctrl+c in a prompt.
@@ -63,7 +63,7 @@ type Keychain interface {
 
 // Connect is Test Connection with typed credentials: serverInfo, then
 // myself. Nil in Deps means the real Jira client.
-type Connect func(ctx context.Context, site, email, token string) (jira.Account, error)
+type Connect func(ctx context.Context, site, email, token string) (tracker.Account, error)
 
 // Store is the state file, for clearing authFailedAt on a fresh setup.
 type Store interface {

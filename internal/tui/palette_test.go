@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // run is a stretch of text and the SGR parameters it is drawn with.
@@ -57,7 +57,7 @@ func palette(t *testing.T) *harness {
 	hs.setup("08:40:00", core.Stop{Origin: core.OriginHand})
 	hs.setup("08:41:00", core.MarkSynced{Key: "SYN-1", EntryID: "E-S", WorklogID: "W1"})
 	hs.setup("08:58:00", start("PUN-142", "E-142b"))
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:00:00", 160, 40)
 	hs.send(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
 	hs.tick("09:12:34")

@@ -13,8 +13,8 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +37,7 @@ func (a *app) stopCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s := core.Stop{Comment: message, Origin: a.origin}
 			if len(args) == 1 {
-				s.Key = args[0]
+				s.Key = a.key(args[0])
 			}
 			if cmd.Flags().Changed("duration") {
 				d, err := parseDuration(durationFlag)
@@ -60,7 +60,7 @@ func (a *app) stopCmd() *cobra.Command {
 
 // sender is the worklog seam over this invocation's store and Jira.
 func (a *app) sender() worklog.Sender {
-	return worklog.Sender{Store: a.env.Store, Jira: a.env.Jira}
+	return worklog.Sender{Store: a.env.Store, Tracker: a.env.OpenTracker}
 }
 
 // stop previews the worklog from a fresh read, applies the CLI's rules
@@ -283,8 +283,8 @@ func (a *app) syncCmd(name string, hidden bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := ""
 			if len(args) == 1 {
-				key = args[0]
-				if !core.ValidKey(key) {
+				key = a.key(args[0])
+				if !a.env.Grammar().Valid(key) {
 					return usageError(fmt.Sprintf("%q is not a ticket key", key))
 				}
 			}
@@ -299,21 +299,21 @@ func (a *app) sync(name, key string) {
 	a.out.notices(rep.Notices)
 	d := SyncData{Sent: unsentData(rep.Sent), Remaining: unsentData(rep.Remaining)}
 	human := syncText(d)
-	var api *jira.APIError
+	var refused *tracker.Refusal
 	switch {
 	case err == nil && len(d.Remaining) == 0:
 		a.code = a.out.ok(name, d, rep.Events, human)
 	case errors.Is(err, config.ErrNotConfigured):
 		a.code = a.out.fail(name, ExitNotConfigured, failure{code: "not_configured", msg: err.Error(),
 			hint: "run `punchcard setup`", data: d})
-	case errors.Is(err, jira.ErrUnauthorized):
+	case errors.Is(err, tracker.ErrUnauthorized):
 		a.code = a.out.fail(name, ExitAuthFailed, failure{code: "auth_failed",
 			msg:  "Jira rejected the credentials; the worklogs stay pending",
 			hint: "check the email and API token with `punchcard setup`; a scoped token is refused too", data: d})
 	case errors.Is(err, store.ErrSyncBusy):
 		a.code = a.out.fail(name, ExitBusy, failure{code: "busy", msg: err.Error(),
 			hint: "it may be sending these; try again in a moment", data: d})
-	case err == nil, errors.Is(err, jira.ErrUnreachable), errors.As(err, &api):
+	case err == nil, errors.Is(err, tracker.ErrUnreachable), errors.As(err, &refused):
 		code, msg := "sync_pending", fmt.Sprintf("%d worklog(s) still owed", len(d.Remaining))
 		if err != nil {
 			code, msg = sendProblem(err)

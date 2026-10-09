@@ -97,9 +97,9 @@ const (
 	WorklogFailed  WorklogState = "failed"
 )
 
-// Worklog is what Jira is (or will be) told for a stopped entry. It is a
-// flat tagged shape: WorklogID and SyncedAt only when synced, Message and
-// FailedAt only when failed.
+// Worklog is what the tracker is (or will be) told for a stopped entry.
+// It is a flat tagged shape: WorklogID and SyncedAt only when synced,
+// Message, RefusedStatus and FailedAt only when failed.
 type Worklog struct {
 	State WorklogState `json:"state"`
 	// StartedAt is the entry's first segment start: the worklog's day.
@@ -109,7 +109,10 @@ type Worklog struct {
 	WorklogID        string    `json:"worklogId,omitempty"`
 	SyncedAt         Timestamp `json:"syncedAt,omitzero"`
 	Message          string    `json:"message,omitempty"`
-	FailedAt         Timestamp `json:"failedAt,omitzero"`
+	// RefusedStatus is the tracker's status when it answered with a
+	// refusal; 0 when it could not be reached (or for any other failure).
+	RefusedStatus int       `json:"refusedStatus,omitempty"`
+	FailedAt      Timestamp `json:"failedAt,omitzero"`
 }
 
 // Heartbeat is the whole of heartbeat.json: the last moment of presence.

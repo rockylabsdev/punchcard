@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // knows is a Jira that has these tickets (key, summary, key, summary...).
-func knows(kv ...string) *jira.Fake {
-	f := &jira.Fake{Summaries: map[string]string{}}
+func knows(kv ...string) *tracker.Fake {
+	f := &tracker.Fake{Summaries: map[string]string{}}
 	for i := 0; i < len(kv); i += 2 {
 		f.Summaries[kv[i]] = kv[i+1]
 	}
@@ -24,7 +24,7 @@ const verifiedAA1 = `{"key": "AA-1", "summary": "Fix the thing", "unverified": f
 func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 	cases := []struct {
 		name      string
-		jira      *jira.Fake
+		jira      *tracker.Fake
 		setup     func(h *harness)
 		args      []string
 		code      int
@@ -39,7 +39,7 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 			[]string{"start", "AA-1"}, 5,
 			refused("start", "ticket_not_found", "ticket_not_found", notFoundHint, "null"),
 			[]string{"summary AA-1"}},
-		{"unreachable starts anyway, unverified", &jira.Fake{Err: jira.ErrUnreachable}, nil,
+		{"unreachable starts anyway, unverified", &tracker.Fake{Err: tracker.ErrUnreachable}, nil,
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(running("AA-1", "ID-1", true, "hand", 0)), `[{"kind": "added", "key": "AA-1"}]`),
 			[]string{"summary AA-1"}},
@@ -48,7 +48,7 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(`{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "held": true, "origin": "hand", "recovered": false, "elapsedSeconds": 1800}`), noEvents),
 			[]string{"summary AA-1"}}, // the setup's start only
-		{"an unverified ticket is confirmed by a later start", &jira.Fake{Err: jira.ErrUnreachable},
+		{"an unverified ticket is confirmed by a later start", &tracker.Fake{Err: tracker.ErrUnreachable},
 			func(h *harness) {
 				h.do("09:00", "add", "AA-1")
 				h.jira.Err = nil
@@ -57,7 +57,7 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(verifiedAA1), noEvents),
 			[]string{"summary AA-1", "summary AA-1"}},
-		{"an unverified ticket that now 404s still starts, unverified", &jira.Fake{Err: jira.ErrUnreachable},
+		{"an unverified ticket that now 404s still starts, unverified", &tracker.Fake{Err: tracker.ErrUnreachable},
 			func(h *harness) { h.do("09:00", "add", "AA-1"); h.jira.Err = nil },
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(running("AA-1", "ID-1", true, "hand", 0)), noEvents),
@@ -137,7 +137,7 @@ func TestStartShowsTheRealSummary(t *testing.T) {
 
 func TestA401LeavesItUnverifiedAndRecordsTheAuthFailure(t *testing.T) {
 	h := newHarness(t)
-	h.jira = &jira.Fake{Err: jira.ErrUnauthorized}
+	h.jira = &tracker.Fake{Err: tracker.ErrUnauthorized}
 	r := h.run("start", "AA-1", "--json")
 	got := decode(t, r.stdout)
 	data := got["data"].(map[string]any)
@@ -148,7 +148,7 @@ func TestA401LeavesItUnverifiedAndRecordsTheAuthFailure(t *testing.T) {
 
 func TestReadsNeverCallJira(t *testing.T) {
 	h := newHarness(t)
-	h.jira = &jira.Fake{Err: jira.ErrUnreachable}
+	h.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	h.do("09:00", "start", "AA-1") // unverified
 	h.jira = knows("AA-1", "Fix the thing")
 	for _, args := range [][]string{{"status"}, {"status", "--short"}, {"ls"}, {}, {"pause"}, {"resume"}, {"touch", "AA-1", "--origin", "prompt"}, {"touch", "AA-2", "--origin", "prompt"}} {

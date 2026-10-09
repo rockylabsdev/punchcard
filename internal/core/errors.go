@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 )
 
@@ -36,8 +35,3 @@ func (e *AmbiguousError) Error() string {
 }
 
 func (e *AmbiguousError) Is(target error) bool { return target == ErrNoTimer }
-
-var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]+-[0-9]+$`)
-
-// ValidKey reports whether key looks like a Jira ticket key (ABC-123).
-func ValidKey(key string) bool { return keyPattern.MatchString(key) }

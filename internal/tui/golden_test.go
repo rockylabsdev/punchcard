@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // plain renders a frame through a colour-profile writer forced to NoTTY,
@@ -26,7 +26,7 @@ func plain(frame string) string {
 
 // scenarios are the named states the goldens pin, each built through the
 // store the way the CLI would build it.
-// Jira is configured (a jira.Fake that takes everything) unless the
+// Jira is configured (a tracker.Fake that takes everything) unless the
 // build sets hs.unconfigured.
 var scenarios = []struct {
 	name  string
@@ -45,7 +45,7 @@ var scenarios = []struct {
 	// the banner holds the status line.
 	{"sync_failure", func(hs *harness) {
 		runningDay(hs)
-		hs.jira = &jira.Fake{Err: jira.ErrUnreachable}
+		hs.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	}, []string{"r", "wait"}},
 	{"not_configured", func(hs *harness) {
 		runningDay(hs)
@@ -72,7 +72,7 @@ func pausedDay(hs *harness) {
 // unless the build chose one or chose none.
 func (hs *harness) configure() {
 	if hs.jira == nil && !hs.unconfigured {
-		hs.jira = &jira.Fake{}
+		hs.jira = &tracker.Fake{}
 	}
 }
 

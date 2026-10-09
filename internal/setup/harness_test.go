@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/config"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // esc is a scripted answer that cancels the prompt.
@@ -163,16 +163,16 @@ type fakeJira struct {
 	calls  []string
 }
 
-func (j *fakeJira) connect(_ context.Context, site, email, token string) (jira.Account, error) {
+func (j *fakeJira) connect(_ context.Context, site, email, token string) (tracker.Account, error) {
 	j.calls = append(j.calls, site+" "+email+" "+token)
 	if !j.sites[site] {
-		return jira.Account{}, fmt.Errorf("%w: %w", jira.ErrBadSite, jira.ErrUnreachable)
+		return tracker.Account{}, fmt.Errorf("%w: %w", tracker.ErrBadSite, tracker.ErrUnreachable)
 	}
 	name, ok := j.tokens[email+" "+token]
 	if !ok {
-		return jira.Account{}, &jira.APIError{Status: 401}
+		return tracker.Account{}, &tracker.Refusal{Status: 401}
 	}
-	return jira.Account{AccountID: "A1", DisplayName: name, Email: email}, nil
+	return tracker.Account{AccountID: "A1", DisplayName: name, Email: email}, nil
 }
 
 // fakeClaude is `claude` on PATH, or not.

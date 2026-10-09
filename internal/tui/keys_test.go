@@ -17,7 +17,7 @@ func TestSpaceStartsTheSelectedRowThroughTheStore(t *testing.T) {
 	hs.key("space")
 
 	want := []core.Command{core.Start{Key: "AA-1", Summary: "Summary of AA-1", Origin: core.OriginHand, NewEntryID: "ID-1"}}
-	if diff := cmp.Diff(want, hs.st.commands()); diff != "" {
+	if diff := cmp.Diff(want, hs.st.commands(), anyGrammar); diff != "" {
 		t.Errorf("commands (-want +got):\n%s", diff)
 	}
 	if got := hs.running(); got != "AA-1" {
@@ -96,7 +96,7 @@ func TestKeys(t *testing.T) {
 
 			hs.key(tt.keys...)
 
-			if diff := cmp.Diff(tt.wantCmds, hs.st.commands()); diff != "" {
+			if diff := cmp.Diff(tt.wantCmds, hs.st.commands(), anyGrammar); diff != "" {
 				t.Errorf("commands (-want +got):\n%s", diff)
 			}
 			if got := hs.running(); got != tt.wantRunning {
@@ -140,7 +140,7 @@ func TestKeysWaitForTheStoreInOrder(t *testing.T) {
 		core.Start{Key: "AA-1", Summary: "Summary of AA-1", Origin: core.OriginHand, NewEntryID: "ID-1"},
 		core.Pause{Origin: core.OriginHand},
 	}
-	if diff := cmp.Diff(want, hs.st.commands()); diff != "" {
+	if diff := cmp.Diff(want, hs.st.commands(), anyGrammar); diff != "" {
 		t.Errorf("commands (-want +got):\n%s", diff)
 	}
 	if got := hs.running(); got != "" {

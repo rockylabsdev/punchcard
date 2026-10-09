@@ -11,6 +11,7 @@ import (
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/exitcode"
 	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // TokenPage is where Atlassian mints a classic API token.
@@ -23,7 +24,7 @@ func Run(d Deps) int {
 		d.Now = time.Now
 	}
 	if d.Connect == nil {
-		d.Connect = func(ctx context.Context, site, email, token string) (jira.Account, error) {
+		d.Connect = func(ctx context.Context, site, email, token string) (tracker.Account, error) {
 			return jira.New(site, email, token).TestConnection(ctx)
 		}
 	}
@@ -281,7 +282,7 @@ func (w wizard) askToken(f *form, stored config.Secret, envTok string) error {
 // test runs Test Connection with what was typed (a blank token means
 // PUNCHCARD_TOKEN if set, else the stored one). It returns the step to
 // go on to: stepSave on a pass, else the step that holds the culprit.
-func (w wizard) test(f form, stored config.Secret, envTok string) (jira.Account, step) {
+func (w wizard) test(f form, stored config.Secret, envTok string) (tracker.Account, step) {
 	token := f.token
 	switch {
 	case token != "":
@@ -298,13 +299,13 @@ func (w wizard) test(f form, stored config.Secret, envTok string) (jira.Account,
 	switch {
 	case err == nil:
 		return acct, stepSave
-	case errors.Is(err, jira.ErrUnauthorized):
+	case errors.Is(err, tracker.ErrUnauthorized):
 		w.UI.Say("✗ Jira rejected these credentials.",
 			"Check the email, and that the token is a classic one: a scoped token",
 			"is refused like a wrong one. Make a classic token at "+link(TokenPage))
 		return acct, stepToken
-	case errors.Is(err, jira.ErrBadSite), errors.Is(err, jira.ErrUnreachable):
-		w.UI.Say("✗ "+f.site+" is not a reachable Jira Cloud site", "  "+strings.TrimPrefix(err.Error(), jira.ErrBadSite.Error()+": "))
+	case errors.Is(err, tracker.ErrBadSite), errors.Is(err, tracker.ErrUnreachable):
+		w.UI.Say("✗ "+f.site+" is not a reachable Jira Cloud site", "  "+strings.TrimPrefix(err.Error(), tracker.ErrBadSite.Error()+": "))
 		return acct, stepSite
 	}
 	w.UI.Say("✗ Test Connection failed: " + err.Error())
@@ -315,7 +316,7 @@ func (w wizard) test(f form, stored config.Secret, envTok string) (jira.Account,
 // item deleted, the token written through security, the file only as a
 // fallback (or on Linux). A fresh setup clears authFailedAt.
 func (w wizard) save(f form, stored config.Secret, envTok string) error {
-	if err := config.Save(w.Getenv, config.Config{SiteURL: f.site, Email: f.email}); err != nil {
+	if err := config.Save(w.Getenv, config.Config{Tracker: config.TrackerJira, SiteURL: f.site, Email: f.email}); err != nil {
 		return err
 	}
 	saved, _ := config.Path(w.Getenv) // Save succeeded, so the path exists

@@ -17,7 +17,7 @@ func (h *harness) runTTY(stdin string, tweak func(*cli.Env), args ...string) res
 	env := cli.Env{
 		Stdin: strings.NewReader(stdin), Stdout: &out, Stderr: &errb,
 		Getenv: func(k string) string { return h.env[k] }, Now: func() time.Time { return h.now },
-		Version: "1.2.3", Store: h.st, TTY: true, Jira: h.jiraFn(),
+		Version: "1.2.3", Store: h.st, TTY: true, Tracker: h.tracker, OpenTracker: h.jiraFn(),
 		Keychain: h.kc.read,
 		// Never the real wizard (Keychain, claude, settings.json).
 		Setup: func(cli.Env) int { h.setups++; return h.setupCode },

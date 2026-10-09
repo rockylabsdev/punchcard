@@ -13,7 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -25,9 +25,14 @@ type Options struct {
 	// Sender stops an entry and sends its worklog (worklog.Sender in the
 	// binary). Nil: a stop is recorded and its worklog left pending.
 	Sender Sender
-	// Jira opens the client for summary lookups (add, and confirming an
-	// unverified ticket on start). Nil: Jira is not configured.
-	Jira func() (jira.Client, error)
+	// Tracker opens the client for summary lookups (add, and confirming
+	// an unverified ticket on start). Nil: the tracker is not configured.
+	Tracker func() (tracker.Client, error)
+	// NoTracker: none is configured. Nothing is looked up and a ticket
+	// added is never unverified.
+	NoTracker bool
+	// Grammar is the key grammar in effect (the zero value: the slug).
+	Grammar tracker.Grammar
 	// Setup builds the `punchcard setup` command that S suspends into
 	// (tea.ExecProcess hands it the terminal). Nil: S says to run it
 	// from the shell.

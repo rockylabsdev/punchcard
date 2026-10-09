@@ -7,7 +7,7 @@ import (
 
 func (a *applier) add(c Add) error {
 	for _, n := range c.Tickets {
-		if !ValidKey(n.Key) {
+		if !c.Grammar.Valid(n.Key) {
 			return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, n.Key)
 		}
 	}
@@ -75,7 +75,7 @@ func (a *applier) touch(c Touch) (bool, error) {
 	if c.Key == "" {
 		return true, nil
 	}
-	if !ValidKey(c.Key) {
+	if !c.Grammar.Valid(c.Key) {
 		return false, fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
 	rt, re := a.running()
@@ -125,7 +125,7 @@ func (a *applier) markSynced(c MarkSynced) error {
 	}
 	wl := e.Worklog
 	wl.State, wl.WorklogID, wl.SyncedAt = WorklogSynced, c.WorklogID, a.now
-	wl.Message, wl.FailedAt = "", Timestamp{}
+	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
 	a.w.State.AuthFailedAt = Timestamp{}
 	a.emit(EventSynced, c.Key)
 	return nil
@@ -137,7 +137,7 @@ func (a *applier) markFailed(c MarkFailed) error {
 		return err
 	}
 	wl := e.Worklog
-	wl.State, wl.Message, wl.FailedAt = WorklogFailed, c.Message, a.now
+	wl.State, wl.Message, wl.RefusedStatus, wl.FailedAt = WorklogFailed, c.Message, c.Status, a.now
 	a.events = append(a.events, Event{Kind: EventSyncFailed, Key: c.Key, Message: c.Message})
 	return nil
 }

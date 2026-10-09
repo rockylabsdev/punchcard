@@ -77,7 +77,7 @@ func (a *applier) emit(kind EventKind, key string) {
 }
 
 func (a *applier) start(c Start) error {
-	if !ValidKey(c.Key) {
+	if !c.Grammar.Valid(c.Key) {
 		return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
 	if t, e := a.running(); e != nil {
@@ -125,7 +125,7 @@ func (a *applier) pause(c Pause) error {
 
 func (a *applier) resume(c Resume) error {
 	if c.Key != "" {
-		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID})
+		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
 	}
 	if _, e := a.running(); e != nil {
 		return nil

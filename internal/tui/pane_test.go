@@ -108,7 +108,7 @@ func TestWorklogsTodayUseTheOutcomeWords(t *testing.T) {
 	hs.setup("07:31:00", core.MarkSynced{Key: "PUN-1", EntryID: "A", WorklogID: "W9"})
 	hs.setup("08:00:00", start("PUN-1", "B"))
 	hs.setup("08:20:00", core.Stop{Origin: core.OriginHand})
-	hs.setup("08:20:01", core.MarkFailed{Key: "PUN-1", EntryID: "B", Message: "Jira answered 503: down"})
+	hs.setup("08:20:01", core.MarkFailed{Key: "PUN-1", EntryID: "B", Message: "Service Unavailable: down for maintenance", Status: 503})
 	hs.setup("08:30:00", start("PUN-1", "C"))
 	hs.setup("08:45:00", core.Stop{Origin: core.OriginHand})
 	hs.open("09:00:00", 120, 32)

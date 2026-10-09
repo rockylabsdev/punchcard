@@ -49,6 +49,26 @@ func TestApplySyncOutcomes(t *testing.T) {
 			events: []core.Event{{Kind: core.EventSyncFailed, Key: "AA-1", Message: "timeout"}},
 		},
 		{
+			name: "a refusal keeps the tracker's status",
+			w:    world("", stoppedAs(with(core.WorklogPending, nil))),
+			cmd:  core.MarkFailed{Key: "AA-1", EntryID: "EA", Message: "Service Unavailable", Status: 503},
+			now:  "10:00",
+			want: state(stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt = "Service Unavailable", 503, at("10:00")
+			}))),
+			events: []core.Event{{Kind: core.EventSyncFailed, Key: "AA-1", Message: "Service Unavailable"}},
+		},
+		{
+			name: "a retry that succeeds after a refusal drops its status",
+			w: world("", stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt = "Service Unavailable", 503, at("09:45")
+			}))),
+			cmd:    core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "110001"},
+			now:    "10:00",
+			want:   state(stoppedAs(synced)),
+			events: []core.Event{{Kind: core.EventSynced, Key: "AA-1"}},
+		},
+		{
 			name: "never mark a synced worklog synced again",
 			w:    world("", stoppedAs(synced)),
 			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "999"},

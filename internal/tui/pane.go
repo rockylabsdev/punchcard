@@ -1,14 +1,14 @@
 package tui
 
 import (
-	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // ticketPane is [2] Ticket: what happened on the selected ticket. The
@@ -135,7 +135,7 @@ func openEntry(t core.TrackedTicket) (core.TimeEntry, bool) {
 func outcome(wl core.Worklog, now time.Time) string {
 	switch wl.State {
 	case core.WorklogFailed:
-		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl.Message)) + retry
+		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl)) + retry
 	case core.WorklogPending:
 		return sSync.Render(gPending+" not sent yet") + retry
 	}
@@ -145,19 +145,18 @@ func outcome(wl core.Worklog, now time.Time) string {
 // retry is the r key after an owed worklog; the key is sync blue.
 var retry = sDim.Render(" · ") + sSyncKey.Render("r")
 
-var statusPattern = regexp.MustCompile(`^Jira answered (\d{3})`)
-
-// shortReason is a failure message cut to what fits a row: the HTTP
-// status when Jira answered, "unreachable" when it did not, else the
-// message itself cut short, so the row's "· r" always shows.
-func shortReason(msg string) string {
-	if m := statusPattern.FindStringSubmatch(msg); m != nil {
-		return m[1]
+// shortReason is a failed worklog's reason cut to what fits a row: the
+// refusal's status when the tracker answered, "unreachable" when it did
+// not, else the message itself cut short, so the row's "· r" always
+// shows.
+func shortReason(wl core.Worklog) string {
+	if wl.RefusedStatus != 0 {
+		return strconv.Itoa(wl.RefusedStatus)
 	}
-	if strings.HasPrefix(msg, jira.ErrUnreachable.Error()) {
+	if strings.HasPrefix(wl.Message, tracker.ErrUnreachable.Error()) {
 		return "unreachable"
 	}
-	return ansi.Truncate(msg, 14, "…")
+	return ansi.Truncate(wl.Message, 14, "…")
 }
 
 func sameDay(a, b time.Time) bool {

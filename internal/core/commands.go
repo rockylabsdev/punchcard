@@ -1,6 +1,10 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/j-dsmith/punchcard/internal/tracker"
+)
 
 // Command is one requested transition. The concrete types in this file
 // are the whole set; Apply refuses anything else.
@@ -19,6 +23,9 @@ type Start struct {
 	Unverified bool
 	Origin     Origin
 	NewEntryID string // used only when a new entry is created
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // Pause closes the running segment. The entry stays open.
@@ -32,6 +39,9 @@ type Resume struct {
 	Key        string
 	Origin     Origin
 	NewEntryID string
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // Stop ends an entry and produces its pending Worklog. With no Key it
@@ -50,7 +60,8 @@ type Stop struct {
 	Origin   Origin
 }
 
-// NewTicket is a ticket to put on the list, with what Jira said of it.
+// NewTicket is a ticket to put on the list, with what the tracker said
+// of it.
 type NewTicket struct {
 	Key        string
 	Summary    string
@@ -61,6 +72,9 @@ type NewTicket struct {
 type Add struct {
 	Tickets []NewTicket
 	Origin  Origin
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // Remove takes a ticket off the list. It refuses (ErrUnlogged) while the
@@ -83,6 +97,9 @@ type Touch struct {
 	Unverified bool
 	Origin     Origin
 	NewEntryID string
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // MarkSynced records that Jira accepted an entry's worklog. It refuses a
@@ -99,6 +116,9 @@ type MarkFailed struct {
 	Key     string
 	EntryID string
 	Message string
+	// Status is the tracker's refusal status, when it refused (0: no
+	// answer at all).
+	Status int
 }
 
 // RecordAuthFailure records a Jira 401 at now.

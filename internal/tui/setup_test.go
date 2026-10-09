@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // suspend stubs ExecProcess: "running setup" is done(), then the
@@ -37,11 +37,11 @@ func TestSSuspendsIntoSetupAndRereads(t *testing.T) {
 	}
 	ran := hs.suspend(func() {
 		// What a fresh setup does: config written, authFailedAt cleared.
-		hs.jira = &jira.Fake{}
+		hs.jira = &tracker.Fake{}
 		hs.st.Apply(core.ClearAuthFailure{})
 	}, nil)
 	opened := false
-	hs.m.jira = func() (jira.Client, error) {
+	hs.m.jira = func() (tracker.Client, error) {
 		if !opened {
 			return nil, config.ErrNotConfigured
 		}
@@ -104,7 +104,7 @@ func TestNotConnectedBannerMentionsS(t *testing.T) {
 func TestAddAnsweredByJiraClearsTheAuthFailure(t *testing.T) {
 	hs := listed(newHarness(t))
 	hs.setup("08:20:00", core.RecordAuthFailure{})
-	hs.jira = &jira.Fake{Summaries: map[string]string{"PUN-7": "Fix it"}}
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"PUN-7": "Fix it"}}
 	hs.open("09:00:00", 120, 32)
 	hs.key("a")
 	hs.typeText("PUN-7")

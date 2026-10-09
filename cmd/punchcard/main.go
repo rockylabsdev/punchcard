@@ -34,7 +34,8 @@ func run() int {
 func openTUI(e cli.Env) int {
 	return tui.Run(tui.Options{
 		Store: e.Store, Now: e.Now, NewID: e.NewID,
-		Sender: worklog.Sender{Store: e.Store, Jira: e.Jira}, Jira: e.Jira,
+		Sender:  worklog.Sender{Store: e.Store, Tracker: e.OpenTracker},
+		Tracker: e.OpenTracker, NoTracker: !e.HasTracker(), Grammar: e.Grammar(),
 		Setup: setupCommand,
 		Stdin: e.Stdin, Stdout: e.Stdout, Stderr: e.Stderr,
 	})

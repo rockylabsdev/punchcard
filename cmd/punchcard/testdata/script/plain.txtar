@@ -1,4 +1,5 @@
-# The plain-text shape of the everyday commands.
+# The plain-text shape of the everyday commands, with Jira chosen and no
+# credentials.
 exec punchcard start AA-1
 cmp stdout start.txt
 ! stderr .
@@ -31,3 +32,5 @@ stdout '^punchcard \S+ \(contract v1, go1\.\d+'
 -- start.txt --
 + AA-1 added (not verified with Jira yet)
 ▶ AA-1 running  0:00:00  held
+-- config/punchcard/config.json --
+{"schemaVersion": 1, "tracker": "jira"}

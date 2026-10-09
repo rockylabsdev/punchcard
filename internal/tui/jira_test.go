@@ -7,7 +7,7 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // stripText is [3]'s lines, title first, borders cut off and spaces
@@ -41,7 +41,7 @@ func owing(t *testing.T) *harness {
 	hs := newHarness(t)
 	hs.setup("07:00:00", add("AA-1", "BB-2"), start("AA-1", "E-A"))
 	hs.setup("07:30:00", core.Stop{Origin: core.OriginHand})
-	hs.setup("07:30:01", core.MarkFailed{Key: "AA-1", EntryID: "E-A", Message: "Jira answered 503 Service Unavailable"})
+	hs.setup("07:30:01", core.MarkFailed{Key: "AA-1", EntryID: "E-A", Message: "Jira answered 503 Service Unavailable", Status: 503})
 	hs.setup("08:00:00", start("BB-2", "E-B"))
 	hs.setup("08:15:00", core.Stop{Origin: core.OriginHand})
 	return hs
@@ -81,7 +81,7 @@ func TestBannerIsTheWorstCondition(t *testing.T) {
 				hs.setup("08:20:00", core.RecordAuthFailure{})
 			}
 			if c.configured {
-				hs.jira = &jira.Fake{}
+				hs.jira = &tracker.Fake{}
 			}
 			hs.open("09:12:00", 120, 32)
 			hs.tick("09:12:34")
@@ -99,7 +99,7 @@ func TestBannerIsTheWorstCondition(t *testing.T) {
 // holds the status line until it answers.
 func TestRSyncsEverythingOwed(t *testing.T) {
 	hs := owing(t)
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:12:00", 120, 32)
 	hs.tick("09:12:34")
 
@@ -138,7 +138,7 @@ func TestRSyncsEverythingOwed(t *testing.T) {
 // the site is fixed, r clears both.
 func TestRClearsAFailureOnceJiraAnswers(t *testing.T) {
 	hs := owing(t)
-	hs.jira = &jira.Fake{Err: jira.ErrUnreachable}
+	hs.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	hs.open("09:12:00", 120, 32)
 	hs.key("r")
 	if got := statusText(hs); got != "Jira not reachable · 2 worklogs still owed · nothing is lost" {
@@ -163,12 +163,12 @@ func TestROutcomes(t *testing.T) {
 	cases := []struct {
 		name  string
 		owe   bool
-		jira  *jira.Fake
+		jira  *tracker.Fake
 		toast string
 	}{
-		{"nothing owed", false, &jira.Fake{}, "nothing to send: Jira has everything"},
+		{"nothing owed", false, &tracker.Fake{}, "nothing to send: Jira has everything"},
 		{"not configured", true, nil, "Jira is not set up · 2 worklogs wait here"},
-		{"token rejected", true, &jira.Fake{Err: jira.ErrUnauthorized}, "Jira rejected the token · 2 worklogs still owed · nothing is lost"},
+		{"token rejected", true, &tracker.Fake{Err: tracker.ErrUnauthorized}, "Jira rejected the token · 2 worklogs still owed · nothing is lost"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -220,7 +220,7 @@ func TestKeyBarShowsWhatApplies(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			hs := c.build(t)
-			hs.jira = &jira.Fake{}
+			hs.jira = &tracker.Fake{}
 			hs.open("09:12:00", 120, 32)
 			hs.key(c.keys...)
 			if got := keyBarText(hs); got != c.want {
@@ -234,7 +234,7 @@ func TestKeyBarShowsWhatApplies(t *testing.T) {
 // nothing else.
 func TestHelp(t *testing.T) {
 	hs := owing(t)
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:12:00", 120, 32)
 	hs.key("?")
 	frameHas(t, hs, "Help", "r sync: send pending and failed worklogs", "○ waiting to be sent", "✗ failed")
@@ -281,13 +281,13 @@ func TestJiraStripRowsLeadWithTheOutcome(t *testing.T) {
 	hs.setup("07:00:00", add("PUN-120", "OPS-77", "PUN-9"))
 	hs.setup("07:05:00", start("PUN-120", "E-120"))
 	hs.setup("07:45:00", core.Stop{Origin: core.OriginHand})
-	hs.setup("07:45:01", core.MarkFailed{Key: "PUN-120", EntryID: "E-120", Message: "Jira answered 503 Service Unavailable"})
+	hs.setup("07:45:01", core.MarkFailed{Key: "PUN-120", EntryID: "E-120", Message: "Jira answered 503 Service Unavailable", Status: 503})
 	hs.setup("07:46:00", start("PUN-9", "E-9"))
 	hs.setup("08:16:00", core.Stop{Origin: core.OriginHand})
 	hs.setup("08:17:00", core.MarkSynced{Key: "PUN-9", EntryID: "E-9", WorklogID: "W9"})
 	hs.setup("08:20:00", start("OPS-77", "E-77"))
 	hs.setup("08:35:00", core.Stop{Origin: core.OriginHand})
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:12:00", 120, 32)
 	hs.tick("09:12:34")
 

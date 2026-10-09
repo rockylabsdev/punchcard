@@ -9,10 +9,12 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -80,6 +82,11 @@ func (f *fakeStore) commands() []core.Command {
 	return c
 }
 
+// anyGrammar compares commands without their key grammar (the fake
+// store's core.Apply checks keys with it; a test names the grammar only
+// when the grammar is its subject).
+var anyGrammar = cmpopts.IgnoreTypes(tracker.Grammar{})
+
 var zone = time.FixedZone("UTC-5", -5*3600)
 
 // at is a wall-clock time on the test day, in UTC-5.
@@ -98,7 +105,10 @@ type harness struct {
 	t      *testing.T
 	st     *fakeStore
 	sender *fakeSender
-	jira   *jira.Fake // nil: Jira not configured (set before open)
+	jira   *tracker.Fake // nil: Jira not configured (set before open)
+	// noTracker: none is configured (set before open); the key grammar
+	// is then the slug.
+	noTracker bool
 	// unconfigured: a scenario that wants no Jira (see configure)
 	unconfigured bool
 	// openErr: opening the Jira client fails so (a broken config file)
@@ -120,7 +130,7 @@ func newHarness(t *testing.T) *harness {
 type fakeSender struct {
 	st      *fakeStore
 	syncErr error
-	jira    *jira.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
+	jira    *tracker.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
 	mu      sync.Mutex
 	stops   []core.Stop
 	syncs   int
@@ -172,12 +182,14 @@ func (f *fakeSender) Sync(ctx context.Context, key string) (worklog.Report, erro
 	}
 	var last error
 	for _, u := range todo {
-		id, err := f.jira.PostWorklog(ctx, u.Key, jira.Worklog{TimeSpentSeconds: u.Worklog.TimeSpentSeconds})
+		id, err := f.jira.PostWorklog(ctx, u.Key, tracker.Worklog{TimeSpentSeconds: u.Worklog.TimeSpentSeconds})
 		var c core.Command = core.MarkSynced{Key: u.Key, EntryID: u.EntryID, WorklogID: id}
-		var api *jira.APIError
+		var api *tracker.Refusal
 		switch {
-		case errors.Is(err, jira.ErrUnauthorized):
+		case errors.Is(err, tracker.ErrUnauthorized):
 			c = core.RecordAuthFailure{}
+		case errors.As(err, &api):
+			c = core.MarkFailed{Key: u.Key, EntryID: u.EntryID, Message: err.Error(), Status: api.Status}
 		case err != nil:
 			c = core.MarkFailed{Key: u.Key, EntryID: u.EntryID, Message: err.Error()}
 		}
@@ -235,16 +247,21 @@ func (hs *harness) open(when string, w, h int) {
 	hs.t.Helper()
 	hs.now = at(when)
 	o := Options{
-		Store:  hs.st,
-		Now:    func() time.Time { return hs.now },
-		NewID:  func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
-		Sender: hs.sender,
+		Store:     hs.st,
+		Now:       func() time.Time { return hs.now },
+		NewID:     func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
+		Sender:    hs.sender,
+		Grammar:   jira.Grammar,
+		NoTracker: hs.noTracker,
+	}
+	if hs.noTracker {
+		o.Grammar = tracker.Slug
 	}
 	if hs.jira != nil {
-		o.Jira = func() (jira.Client, error) { return hs.jira, nil }
+		o.Tracker = func() (tracker.Client, error) { return hs.jira, nil }
 	}
 	if hs.openErr != nil {
-		o.Jira = func() (jira.Client, error) { return nil, hs.openErr }
+		o.Tracker = func() (tracker.Client, error) { return nil, hs.openErr }
 	}
 	hs.sender.jira = hs.jira
 	hs.m = New(o)

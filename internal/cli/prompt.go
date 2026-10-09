@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/j-dsmith/punchcard/internal/core"
 )
 
 // linePick is the default picker: a numbered list on stderr, one line of
@@ -50,9 +48,5 @@ func branchKey(dir string) string {
 	if err != nil {
 		return ""
 	}
-	key := branchPattern.FindString(strings.TrimSpace(string(out)))
-	if !core.ValidKey(key) {
-		return ""
-	}
-	return key
+	return branchPattern.FindString(strings.TrimSpace(string(out)))
 }

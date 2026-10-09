@@ -39,7 +39,7 @@ func (d addDialog) recents(m Model) []core.TrackedTicket {
 		if len(out) == maxRecents {
 			break
 		}
-		if q == "" || strings.Contains(t.Key, q) || strings.Contains(strings.ToUpper(t.Summary), q) {
+		if q == "" || strings.Contains(strings.ToUpper(t.Key), q) || strings.Contains(strings.ToUpper(t.Summary), q) {
 			out = append(out, t)
 		}
 	}
@@ -82,15 +82,15 @@ func (d addDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 // submit adds the picked or typed key: straight to the list if it is
 // there and confirmed, else after asking Jira.
 func (d addDialog) submit(m Model) (Model, tea.Cmd) {
-	key := strings.ToUpper(strings.TrimSpace(d.in.Value()))
+	key := m.grammar.Normalize(d.in.Value())
 	if rs := d.recents(m); d.pick >= 0 && d.pick < len(rs) {
 		key = rs[d.pick].Key
 	}
 	switch {
 	case key == "":
 		return m, nil
-	case !core.ValidKey(key):
-		d.err = key + " is not a ticket key (like PUN-123)"
+	case !m.grammar.Valid(key):
+		d.err = key + " is not a ticket key (like " + m.grammar.Example() + ")"
 		m.dlg = d
 		return m, nil
 	}
@@ -104,6 +104,10 @@ func (d addDialog) submit(m Model) (Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+	if m.noTracker {
+		// Nothing to ask: added as typed, never unverified.
+		return d.answered(m, fetchMsg{key: key, forAdd: true, tracked: tracked, found: true})
 	}
 	d.asking, d.err = key, ""
 	m.dlg = d

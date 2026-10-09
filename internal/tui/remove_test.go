@@ -18,7 +18,7 @@ func TestRemoveConfirmsWithY(t *testing.T) {
 	hs.key("y")
 
 	want := []core.Command{core.Remove{Key: "AA-1", Origin: core.OriginHand}}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 	frameLacks(t, hs, "Remove AA-1?", "AA-1 Summary")
@@ -52,7 +52,7 @@ func TestRemoveWarnsWhenUnsentTimeWouldBeLost(t *testing.T) {
 	hs.key("y")
 
 	want := []core.Command{core.Remove{Key: "AA-1", Force: true, Origin: core.OriginHand}}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -29,16 +29,16 @@ type fixture struct {
 	t    *testing.T
 	now  time.Time
 	st   *store.Store
-	jira jira.Client // nil: unconfigured
+	jira tracker.Client // nil: unconfigured
 	s    worklog.Sender
 	ids  int
 }
 
-func newFixture(t *testing.T, j jira.Client) *fixture {
+func newFixture(t *testing.T, j tracker.Client) *fixture {
 	f := &fixture{t: t, now: at("09:00"), jira: j}
 	f.st = store.New(t.TempDir(), func() time.Time { return f.now })
 	f.st.LockWait = 50 * time.Millisecond
-	f.s = worklog.Sender{Store: f.st, Jira: func() (jira.Client, error) {
+	f.s = worklog.Sender{Store: f.st, Tracker: func() (tracker.Client, error) {
 		if f.jira == nil {
 			return nil, config.ErrNotConfigured
 		}
@@ -96,7 +96,7 @@ func kinds(evs []core.Event) []string {
 }
 
 func TestStopSendsTheWorklogAndMarksItSynced(t *testing.T) {
-	fake := &jira.Fake{}
+	fake := &tracker.Fake{}
 	f := newFixture(t, fake)
 	f.start("09:00", "AA-1")
 	f.now = at("09:30")
@@ -119,7 +119,7 @@ func TestStopSendsTheWorklogAndMarksItSynced(t *testing.T) {
 	if r.Key != "AA-1" || r.EntryID != "EAA-1" {
 		t.Errorf("stopped %s/%s", r.Key, r.EntryID)
 	}
-	posted := []jira.PostedWorklog{{Key: "AA-1", ID: "W1", Worklog: jira.Worklog{Started: at("09:00"), TimeSpentSeconds: 1800, Comment: "did it"}}}
+	posted := []tracker.PostedWorklog{{Key: "AA-1", ID: "W1", Worklog: tracker.Worklog{Started: at("09:00"), TimeSpentSeconds: 1800, Comment: "did it"}}}
 	if d := cmp.Diff(posted, fake.Worklogs(), cmp.Comparer(func(a, b time.Time) bool { return a.Equal(b) })); d != "" {
 		t.Errorf("posted (-want +got)\n%s", d)
 	}
@@ -131,7 +131,7 @@ func TestStopSendsTheWorklogAndMarksItSynced(t *testing.T) {
 func TestStopThatCannotSendStillStops(t *testing.T) {
 	cases := []struct {
 		name       string
-		jira       jira.Client
+		jira       tracker.Client
 		holdSync   bool
 		wantErr    error
 		wantState  core.WorklogState
@@ -139,15 +139,15 @@ func TestStopThatCannotSendStillStops(t *testing.T) {
 		authFailed bool
 		posts      int
 	}{
-		{"unreachable marks it failed", &jira.Fake{Err: jira.ErrUnreachable}, false,
-			jira.ErrUnreachable, core.WorklogFailed, []string{"syncFailed AA-1"}, false, 1},
-		{"a 503 marks it failed", &jira.Fake{Err: &jira.APIError{Status: 503}}, false,
-			&jira.APIError{Status: 503}, core.WorklogFailed, []string{"syncFailed AA-1"}, false, 1},
-		{"a 401 leaves it pending and records the auth failure", &jira.Fake{Err: jira.ErrUnauthorized}, false,
-			jira.ErrUnauthorized, core.WorklogPending, []string{}, true, 1},
+		{"unreachable marks it failed", &tracker.Fake{Err: tracker.ErrUnreachable}, false,
+			tracker.ErrUnreachable, core.WorklogFailed, []string{"syncFailed AA-1"}, false, 1},
+		{"a 503 marks it failed", &tracker.Fake{Err: &tracker.Refusal{Status: 503}}, false,
+			&tracker.Refusal{Status: 503}, core.WorklogFailed, []string{"syncFailed AA-1"}, false, 1},
+		{"a 401 leaves it pending and records the auth failure", &tracker.Fake{Err: tracker.ErrUnauthorized}, false,
+			tracker.ErrUnauthorized, core.WorklogPending, []string{}, true, 1},
 		{"unconfigured leaves it pending and sends nothing", nil, false,
 			config.ErrNotConfigured, core.WorklogPending, []string{}, false, 0},
-		{"another sender holding sync.lock leaves it pending", &jira.Fake{}, true,
+		{"another sender holding sync.lock leaves it pending", &tracker.Fake{}, true,
 			store.ErrSyncBusy, core.WorklogPending, []string{}, false, 0},
 	}
 	for _, c := range cases {
@@ -166,7 +166,7 @@ func TestStopThatCannotSendStillStops(t *testing.T) {
 			if err != nil {
 				t.Fatalf("the stop itself failed: %v", err)
 			}
-			if !errors.Is(r.SyncErr, c.wantErr) && !(c.wantErr != nil && errors.As(r.SyncErr, new(*jira.APIError))) {
+			if !errors.Is(r.SyncErr, c.wantErr) && !(c.wantErr != nil && errors.As(r.SyncErr, new(*tracker.Refusal))) {
 				t.Errorf("SyncErr = %v, want %v", r.SyncErr, c.wantErr)
 			}
 			wl := f.worklogOf("AA-1")
@@ -176,13 +176,17 @@ func TestStopThatCannotSendStillStops(t *testing.T) {
 			if c.wantState == core.WorklogFailed && (wl.Message == "" || !wl.FailedAt.Equal(at("09:30"))) {
 				t.Errorf("failed worklog lacks message or failedAt: %+v", wl)
 			}
+			var refused *tracker.Refusal
+			if errors.As(c.wantErr, &refused) && wl.RefusedStatus != refused.Status {
+				t.Errorf("refusedStatus = %d, want the tracker's %d", wl.RefusedStatus, refused.Status)
+			}
 			if got := !f.world().State.AuthFailedAt.IsZero(); got != c.authFailed {
 				t.Errorf("authFailedAt set = %t, want %t", got, c.authFailed)
 			}
 			if d := cmp.Diff(c.wantEvents, kinds(r.Events)); d != "" {
 				t.Errorf("events (-want +got)\n%s", d)
 			}
-			if fk, ok := c.jira.(*jira.Fake); ok && len(fk.Calls()) != c.posts {
+			if fk, ok := c.jira.(*tracker.Fake); ok && len(fk.Calls()) != c.posts {
 				t.Errorf("calls %v, want %d POST(s)", fk.Calls(), c.posts)
 			}
 		})
@@ -190,7 +194,7 @@ func TestStopThatCannotSendStillStops(t *testing.T) {
 }
 
 func TestStopRefusedSendsNothing(t *testing.T) {
-	fake := &jira.Fake{}
+	fake := &tracker.Fake{}
 	f := newFixture(t, fake)
 	_, err := f.s.Stop(context.Background(), core.Stop{Origin: core.OriginHand})
 	if !errors.Is(err, core.ErrNoTimer) {
@@ -204,13 +208,13 @@ func TestStopRefusedSendsNothing(t *testing.T) {
 // probe is a Jira that checks, during the POST, that sync.lock is held
 // and state.lock is not.
 type probe struct {
-	jira.Fake
+	tracker.Fake
 	st           *store.Store
 	syncHeld     bool
 	stateLockErr error
 }
 
-func (p *probe) PostWorklog(ctx context.Context, key string, w jira.Worklog) (string, error) {
+func (p *probe) PostWorklog(ctx context.Context, key string, w tracker.Worklog) (string, error) {
 	if _, err := p.st.LockSync(); errors.Is(err, store.ErrSyncBusy) {
 		p.syncHeld = true
 	}
@@ -242,7 +246,7 @@ func (f *fixture) stopped(key string, from, to string) {
 }
 
 func TestSyncSendsEveryPendingAndFailedWorklogOneAtATime(t *testing.T) {
-	fake := &jira.Fake{PostErrs: map[string]error{"AA-2": &jira.APIError{Status: 503, Messages: []string{"down"}}}}
+	fake := &tracker.Fake{PostErrs: map[string]error{"AA-2": &tracker.Refusal{Status: 503, Message: "down"}}}
 	f := newFixture(t, fake)
 	f.stopped("AA-1", "08:00", "08:30")
 	f.stopped("AA-2", "08:30", "09:00")
@@ -251,7 +255,7 @@ func TestSyncSendsEveryPendingAndFailedWorklogOneAtATime(t *testing.T) {
 	f.now = at("10:00")
 
 	rep, err := f.s.Sync(context.Background(), "")
-	var api *jira.APIError
+	var api *tracker.Refusal
 	if !errors.As(err, &api) || api.Status != 503 {
 		t.Errorf("err = %v, want the 503", err)
 	}
@@ -286,14 +290,14 @@ func TestSyncSendsEveryPendingAndFailedWorklogOneAtATime(t *testing.T) {
 }
 
 func TestSyncStopsAtA401AndASuccessClearsIt(t *testing.T) {
-	fake := &jira.Fake{Err: jira.ErrUnauthorized}
+	fake := &tracker.Fake{Err: tracker.ErrUnauthorized}
 	f := newFixture(t, fake)
 	f.stopped("AA-1", "08:00", "08:30")
 	f.stopped("AA-2", "08:30", "09:00")
 	f.now = at("10:00")
 
 	rep, err := f.s.Sync(context.Background(), "")
-	if !errors.Is(err, jira.ErrUnauthorized) {
+	if !errors.Is(err, tracker.ErrUnauthorized) {
 		t.Fatalf("err = %v, want ErrUnauthorized", err)
 	}
 	if len(fake.Calls()) != 1 || len(rep.Remaining) != 2 || len(rep.Sent) != 0 {
@@ -321,12 +325,12 @@ func TestSyncStopsAtA401AndASuccessClearsIt(t *testing.T) {
 }
 
 func TestSyncStopsWhenJiraIsUnreachable(t *testing.T) {
-	fake := &jira.Fake{Err: jira.ErrUnreachable}
+	fake := &tracker.Fake{Err: tracker.ErrUnreachable}
 	f := newFixture(t, fake)
 	f.stopped("AA-1", "08:00", "08:30")
 	f.stopped("AA-2", "08:30", "09:00")
 	rep, err := f.s.Sync(context.Background(), "")
-	if !errors.Is(err, jira.ErrUnreachable) || len(fake.Calls()) != 1 || len(rep.Remaining) != 2 {
+	if !errors.Is(err, tracker.ErrUnreachable) || len(fake.Calls()) != 1 || len(rep.Remaining) != 2 {
 		t.Errorf("err %v calls %v remaining %d: want one try, then stop", err, fake.Calls(), len(rep.Remaining))
 	}
 }

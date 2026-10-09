@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -31,10 +31,12 @@ type Store interface {
 // touches the store itself (requests run as tea.Cmds and come back as
 // resultMsg) and never waits on Jira (lookups come back as fetchMsg).
 type Model struct {
-	store  Store
-	newID  func() string
-	sender Sender                      // nil: stops leave the worklog pending
-	jira   func() (jira.Client, error) // nil: Jira is not configured
+	store     Store
+	newID     func() string
+	sender    Sender                         // nil: stops leave the worklog pending
+	jira      func() (tracker.Client, error) // nil: the tracker is not configured
+	noTracker bool                           // none configured: nothing to look up
+	grammar   tracker.Grammar
 
 	w, h  int
 	now   time.Time
@@ -134,7 +136,8 @@ type intent struct {
 // (which Init starts). o.Now is read once, to seed the clock until the
 // first tick.
 func New(o Options) Model {
-	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick,
+	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Tracker, noTracker: o.NoTracker, grammar: o.Grammar,
+		now: o.Now(), inflight: true, ticker: tick,
 		setup: o.Setup, execProcess: tea.ExecProcess, pal: newPalette(true)}
 }
 
@@ -215,7 +218,7 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 	case "space", "enter":
 		if t, ok := m.selected(); ok {
 			m, cmd = m.enqueue(intent{kind: intentToggle, key: t.Key})
-			if t.Unverified && m.stateOf(t) != core.TimerRunning {
+			if t.Unverified && !m.noTracker && m.stateOf(t) != core.TimerRunning {
 				// Confirm on contact: the start goes ahead now; Jira's
 				// answer, if any, lands as its own change.
 				cmd = tea.Batch(cmd, m.fetch(t.Key, true, false))
@@ -330,9 +333,9 @@ func sendProblem(err error) string {
 	case worklog.ProblemUnreachable:
 		return "Jira not reachable"
 	case worklog.ProblemRejected:
-		var api *jira.APIError
-		errors.As(err, &api)
-		return "Jira answered " + api.Error()
+		var refused *tracker.Refusal
+		errors.As(err, &refused)
+		return "Jira answered " + refused.Error()
 	case worklog.ProblemBusy:
 		return "another punchcard is sending"
 	}
@@ -350,7 +353,7 @@ func (m Model) command(i intent) core.Command {
 	case intentStop:
 		return i.stop
 	case intentAdd:
-		return core.Add{Tickets: []core.NewTicket{i.ticket}, Origin: core.OriginHand}
+		return core.Add{Tickets: []core.NewTicket{i.ticket}, Origin: core.OriginHand, Grammar: m.grammar}
 	case intentRemove:
 		return core.Remove{Key: i.key, Force: i.force, Origin: core.OriginHand}
 	case intentAuthFailure:
@@ -375,7 +378,8 @@ func (m Model) command(i intent) core.Command {
 		if r, _, ok := core.Running(shown.State); ok && r.Key == t.Key {
 			return core.Pause{Origin: core.OriginHand}
 		}
-		return core.Start{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, Origin: core.OriginHand, NewEntryID: m.newID()}
+		return core.Start{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, Origin: core.OriginHand, NewEntryID: m.newID(),
+			Grammar: m.grammar}
 	}
 	return nil // the ticket left the list meanwhile
 }

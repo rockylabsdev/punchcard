@@ -26,7 +26,7 @@ func TestApplyAddRemove(t *testing.T) {
 		{
 			name: "add refuses a malformed key and adds nothing",
 			w:    world("10:00"),
-			cmd:  core.Add{Tickets: []core.NewTicket{{Key: "BB-2"}, {Key: "nope"}}},
+			cmd:  core.Add{Tickets: []core.NewTicket{{Key: "BB-2"}, {Key: "nope"}}, Grammar: strict},
 			now:  "10:00",
 			err:  core.ErrUsage,
 		},

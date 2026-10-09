@@ -46,12 +46,15 @@ type StatusData struct {
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }
 
-// StatusReport is `data` for status alone: the snapshot plus whether
-// Jira is configured, where the token comes from, and what broke. Only
-// status looks this up (it reads the token; touch never does).
+// StatusReport is `data` for status alone: the snapshot plus the
+// tracker in effect and, with Jira, whether it is configured, where the
+// token comes from, and what broke. Only status looks this up (it reads
+// the token; touch never does).
 type StatusReport struct {
 	StatusData
-	Configured  bool          `json:"configured"`
+	Tracker config.Tracker `json:"tracker"` // none|jira
+	// Configured and the rest are present only with Jira.
+	Configured  *bool         `json:"configured,omitempty"`
 	TokenSource config.Source `json:"tokenSource,omitempty"` // env|keychain|file
 	// StrayTokenFile is the token file's path when the Keychain won.
 	StrayTokenFile string `json:"strayTokenFile,omitempty"`

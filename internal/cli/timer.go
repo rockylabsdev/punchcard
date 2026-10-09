@@ -22,13 +22,13 @@ func (a *app) startCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var key string
 			if len(args) == 1 {
-				key = args[0]
+				key = a.key(args[0])
 			} else {
 				k, err := a.pick("start")
 				if err != nil || k == "" {
 					return err // "" is a cancelled picker: a.code stays 0
 				}
-				key = k
+				key = a.key(k)
 			}
 			n, err := a.newTicket(key)
 			if err != nil {
@@ -36,7 +36,7 @@ func (a *app) startCmd() *cobra.Command {
 				return nil
 			}
 			a.change("start", core.Start{Key: key, Summary: n.Summary, Unverified: n.Unverified,
-				Origin: a.origin, NewEntryID: a.env.NewID()})
+				Origin: a.origin, NewEntryID: a.env.NewID(), Grammar: a.env.Grammar()})
 			return nil
 		},
 	}
@@ -62,13 +62,14 @@ func (a *app) resumeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := core.Resume{Origin: a.origin, NewEntryID: a.env.NewID()}
 			if len(args) == 1 {
-				n, err := a.newTicket(args[0])
+				key := a.key(args[0])
+				n, err := a.newTicket(key)
 				if err != nil {
 					a.code = a.failure("resume", err)
 					return nil
 				}
-				a.change("resume", core.Start{Key: args[0], Summary: n.Summary, Unverified: n.Unverified,
-					Origin: a.origin, NewEntryID: c.NewEntryID})
+				a.change("resume", core.Start{Key: key, Summary: n.Summary, Unverified: n.Unverified,
+					Origin: a.origin, NewEntryID: c.NewEntryID, Grammar: a.env.Grammar()})
 				return nil
 			}
 			a.change("resume", c)
@@ -90,11 +91,13 @@ func (a *app) touchCmd() *cobra.Command {
 			key := ""
 			switch {
 			case len(args) == 1:
-				key = args[0]
+				key = a.key(args[0])
 			case cwd != "":
 				key = branchKey(cwd)
 			}
-			t := core.Touch{Key: key, Unverified: true, Origin: a.origin, NewEntryID: a.env.NewID()}
+			// Presence never asks the tracker: a new key with one is unverified.
+			t := core.Touch{Key: key, Unverified: a.env.HasTracker(), Origin: a.origin, NewEntryID: a.env.NewID(),
+				Grammar: a.env.Grammar()}
 			res, err := a.env.Store.TryApply(t)
 			a.out.notices(res.Notices)
 			switch {

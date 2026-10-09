@@ -15,8 +15,8 @@ import (
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/exitcode"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/spf13/cobra"
 )
 
@@ -93,10 +93,15 @@ type Env struct {
 	// TUI runs the full-screen app for bare `punchcard` on a TTY; main
 	// wires it to tui.Run. Nil (tests) prints status instead.
 	TUI func(Env) int
-	// Jira opens the Jira client; only commands that call Jira call it.
-	// Nil means jira.Open(Getenv): the config file plus the token
-	// lookup. Tests inject a *jira.Fake.
-	Jira func() (jira.Client, error)
+	// Tracker is the tracker in effect. Empty means config's answer
+	// (config.Chosen): no config file is none. Tests set it.
+	Tracker config.Tracker
+	// OpenTracker opens the tracker's client; only commands that call
+	// the tracker call it. After defaults it answers
+	// tracker.ErrNoTracker with no tracker; with Jira, nil means
+	// jira.Open(Getenv): the config file plus the token lookup. Tests
+	// inject a *tracker.Fake.
+	OpenTracker func() (tracker.Client, error)
 	// Keychain is the token lookup's Keychain read (config.Keychain).
 	// Nil means config.SystemKeychain(): /usr/bin/security on macOS, no
 	// Keychain on Linux. Tests always inject a fake.
@@ -133,10 +138,10 @@ func (e Env) withDefaults() Env {
 	if e.Setup == nil {
 		e.Setup = runWizard
 	}
-	if e.Jira == nil {
-		getenv, kc := e.Getenv, e.Keychain
-		e.Jira = func() (jira.Client, error) { return jira.Open(getenv, kc) }
+	if e.Tracker == "" {
+		e.Tracker = chosenTracker(e.Getenv)
 	}
+	e.OpenTracker = e.openTracker(e.OpenTracker)
 	return e
 }
 

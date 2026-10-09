@@ -2,11 +2,11 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
-// fetchMsg is what Jira said of a key, the way `start` asks (slice 04's
-// seam: Options.Jira, then Summary within jira.SummaryBudget).
+// fetchMsg is what the tracker said of a key, the way `start` asks
+// (Options.Tracker, then Summary within tracker.SummaryBudget).
 type fetchMsg struct {
 	key     string
 	forAdd  bool // the add dialog asked; else confirm-on-contact
@@ -26,11 +26,11 @@ type fetchMsg struct {
 func (m Model) fetch(key string, tracked, forAdd bool) tea.Cmd {
 	open := m.jira
 	return func() tea.Msg {
-		l := jira.LookUp(open, key)
+		l := tracker.LookUp(open, key)
 		return fetchMsg{key: key, forAdd: forAdd, tracked: tracked, summary: l.Summary, notice: l.Notice,
-			found:      l.Outcome == jira.LookupFound,
-			notFound:   l.Outcome == jira.LookupNotFound,
-			authFailed: l.Outcome == jira.LookupAuthFailed,
+			found:      l.Outcome == tracker.LookupFound,
+			notFound:   l.Outcome == tracker.LookupNotFound,
+			authFailed: l.Outcome == tracker.LookupAuthFailed,
 		}
 	}
 }

@@ -16,8 +16,8 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // PostBudget bounds one worklog POST.
@@ -28,12 +28,13 @@ const PostBudget = 10 * time.Second
 // the worklog, so giving up early would invite a duplicate POST.
 const markTries = 5
 
-// Sender sends worklogs through Store, to the Jira that Jira opens.
+// Sender sends worklogs through Store, to the tracker that Tracker
+// opens.
 type Sender struct {
 	Store *store.Store
-	// Jira opens the client; it is called only when there is something
-	// to send. Any error from it is treated as not configured.
-	Jira func() (jira.Client, error)
+	// Tracker opens the client; it is called only when there is
+	// something to send. Any error from it is treated as not configured.
+	Tracker func() (tracker.Client, error)
 }
 
 // StopResult is a stop that happened, and what became of its worklog.
@@ -50,9 +51,9 @@ type StopResult struct {
 	Notices []string
 	// SyncErr is nil when Jira took the worklog. Otherwise the worklog is
 	// owed, and SyncErr says why (match with errors.Is / errors.As):
-	// config.ErrNotConfigured, jira.ErrUnauthorized (authFailedAt is now
-	// set; pending), jira.ErrUnreachable (failed), *jira.APIError
-	// (failed), store.ErrSyncBusy (another punchcard is sending;
+	// config.ErrNotConfigured, tracker.ErrUnauthorized (authFailedAt is
+	// now set; pending), tracker.ErrUnreachable (failed), a
+	// *tracker.Refusal (failed), store.ErrSyncBusy (another punchcard is sending;
 	// pending), or a store error recording the outcome.
 	SyncErr error
 }
@@ -161,7 +162,7 @@ func (s Sender) sendAll(ctx context.Context, scope func(core.State) []core.Unsen
 	if len(targets) == 0 {
 		return nil
 	}
-	client, err := s.Jira()
+	client, err := s.Tracker()
 	if err != nil {
 		if !errors.Is(err, config.ErrNotConfigured) {
 			err = fmt.Errorf("%w: %w", config.ErrNotConfigured, err)
@@ -181,8 +182,8 @@ func (s Sender) sendAll(ctx context.Context, scope func(core.State) []core.Unsen
 			continue
 		}
 		last = err
-		var api *jira.APIError
-		if !errors.As(err, &api) || errors.Is(err, jira.ErrUnauthorized) {
+		var refused *tracker.Refusal
+		if !errors.As(err, &refused) || errors.Is(err, tracker.ErrUnauthorized) {
 			break // 401, unreachable, or a store error: the rest would fail too
 		}
 	}
@@ -191,7 +192,7 @@ func (s Sender) sendAll(ctx context.Context, scope func(core.State) []core.Unsen
 
 // sendOne re-reads t under sync.lock, POSTs it unless it is gone or
 // synced, and records the outcome.
-func (s Sender) sendOne(ctx context.Context, client jira.Client, t core.UnsentWorklog, rep *Report) error {
+func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.UnsentWorklog, rep *Report) error {
 	w, notices, err := s.Store.Read()
 	rep.Notices = append(rep.Notices, notices...)
 	if err != nil {
@@ -203,7 +204,7 @@ func (s Sender) sendOne(ctx context.Context, client jira.Client, t core.UnsentWo
 	}
 	wl := *e.Worklog
 	pctx, cancel := context.WithTimeout(ctx, PostBudget)
-	id, perr := client.PostWorklog(pctx, t.Key, jira.Worklog{
+	id, perr := client.PostWorklog(pctx, t.Key, tracker.Worklog{
 		Started: wl.StartedAt.Time, TimeSpentSeconds: wl.TimeSpentSeconds, Comment: wl.Comment,
 	})
 	cancel()
@@ -224,13 +225,17 @@ func (s Sender) sendOne(ctx context.Context, client jira.Client, t core.UnsentWo
 			rep.Sent = append(rep.Sent, core.UnsentWorklog{Key: t.Key, EntryID: t.EntryID, Worklog: *e.Worklog})
 		}
 		return nil
-	case errors.Is(perr, jira.ErrUnauthorized):
+	case errors.Is(perr, tracker.ErrUnauthorized):
 		// A fact about Jira, not about the worklog: it stays pending.
 		res, err := s.Store.Apply(core.RecordAuthFailure{})
 		s.record(rep, res)
 		return errors.Join(perr, err)
 	default:
-		res, err := s.Store.Apply(core.MarkFailed{Key: t.Key, EntryID: t.EntryID, Message: perr.Error()})
+		mark := core.MarkFailed{Key: t.Key, EntryID: t.EntryID, Message: perr.Error()}
+		if refused := (*tracker.Refusal)(nil); errors.As(perr, &refused) {
+			mark.Status = refused.Status
+		}
+		res, err := s.Store.Apply(mark)
 		s.record(rep, res)
 		return errors.Join(perr, err)
 	}
