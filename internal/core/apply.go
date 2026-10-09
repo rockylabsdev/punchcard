@@ -33,9 +33,22 @@ type Resume struct {
 	NewEntryID string
 }
 
+// Stop ends an entry and produces its pending Worklog. With no Key it
+// targets the running entry, else the single paused one. Duration zero
+// means "use the measured elapsed"; either way it is truncated to the
+// minute and refused under one minute. Stop does not gate on origin: the
+// CLI owns needs_confirmation for agents.
+type Stop struct {
+	Key      string
+	Duration time.Duration
+	Comment  string
+	Origin   Origin
+}
+
 func (Start) command()  {}
 func (Pause) command()  {}
 func (Resume) command() {}
+func (Stop) command()   {}
 
 // EventKind names a side effect nobody asked for.
 type EventKind string
@@ -66,6 +79,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.pause(c)
 	case Resume:
 		err = a.resume(c)
+	case Stop:
+		err = a.stop(c)
 	default:
 		err = fmt.Errorf("%w: unknown command %T", ErrUsage, cmd)
 	}
@@ -151,6 +166,75 @@ func (a *applier) resume(c Resume) error {
 	}
 	a.open(latest, c.Origin)
 	return nil
+}
+
+func (a *applier) stop(c Stop) error {
+	_, e, err := a.stopTarget(c.Key)
+	if err != nil {
+		return err
+	}
+	wl, err := worklogFor(*e, c.Duration, c.Comment, a.now)
+	if err != nil {
+		return err
+	}
+	if e.Running() {
+		e.Segments[len(e.Segments)-1].EndedAt = a.now
+	}
+	e.Worklog = &wl
+	e.Recovered = false
+	return nil
+}
+
+// stopTarget finds the entry a stop acts on (see Stop).
+func (a *applier) stopTarget(key string) (*TrackedTicket, *TimeEntry, error) {
+	if key != "" {
+		t := a.ticket(key)
+		if t == nil {
+			return nil, nil, fmt.Errorf("%w: %s", ErrNotTracked, key)
+		}
+		e := openEntry(t)
+		if e == nil {
+			return nil, nil, fmt.Errorf("%w: %s has nothing running or paused", ErrNoTimer, key)
+		}
+		return t, e, nil
+	}
+	if t, e := a.running(); e != nil {
+		return t, e, nil
+	}
+	var keys []string
+	var t *TrackedTicket
+	var e *TimeEntry
+	for i := range a.w.State.TrackedTickets {
+		if pe := openEntry(&a.w.State.TrackedTickets[i]); pe != nil {
+			t, e = &a.w.State.TrackedTickets[i], pe
+			keys = append(keys, t.Key)
+		}
+	}
+	switch len(keys) {
+	case 0:
+		return nil, nil, fmt.Errorf("%w: nothing is running or paused", ErrNoTimer)
+	case 1:
+		return t, e, nil
+	default:
+		return nil, nil, &AmbiguousError{Keys: keys}
+	}
+}
+
+// worklogFor is the pending worklog stopping e at now would produce.
+func worklogFor(e TimeEntry, d time.Duration, comment string, now Timestamp) (Worklog, error) {
+	if d == 0 {
+		d = Elapsed(e, now.Time)
+	}
+	d = d.Truncate(time.Minute)
+	if d < time.Minute {
+		return Worklog{}, fmt.Errorf("%w: %s", ErrTooShort, d)
+	}
+	return Worklog{
+		State:            WorklogPending,
+		StartedAt:        e.Segments[0].StartedAt,
+		TimeSpentSeconds: int(d / time.Second),
+		Comment:          comment,
+	}, nil
 }
 
 // open starts a new segment on e; held and origin describe this stretch.

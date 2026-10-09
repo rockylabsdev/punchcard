@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"regexp"
+	"strings"
 )
 
 // Refusals. Apply wraps these with detail; callers match with errors.Is
@@ -15,7 +16,21 @@ var (
 	// ErrHeld: the running timer was set by hand and only another act by
 	// hand may move or pause it.
 	ErrHeld = errors.New("timer is held")
+	// ErrTooShort: a worklog under one minute is never sent.
+	ErrTooShort = errors.New("under one minute")
+	// ErrNotTracked: the key is not on the list.
+	ErrNotTracked = errors.New("ticket not tracked")
 )
+
+// AmbiguousError: stop with no key found several paused entries and
+// nothing running. It matches ErrNoTimer.
+type AmbiguousError struct{ Keys []string }
+
+func (e *AmbiguousError) Error() string {
+	return "several tickets are paused, name one: " + strings.Join(e.Keys, ", ")
+}
+
+func (e *AmbiguousError) Is(target error) bool { return target == ErrNoTimer }
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]+-[0-9]+$`)
 
