@@ -97,6 +97,27 @@ func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	return t
 }
 
+// theme is Huh's base16 theme with the brand colour where that theme
+// uses cyan, yellow and magenta: titles, the prompt and cursor, the
+// select indicators and the focused button. Descriptions stay grey and
+// errors red, so the wizard reads as one thing with the wordmark.
+func theme(isDark bool) *huh.Styles {
+	t := huh.ThemeBase16(isDark)
+	c := lipgloss.LightDark(isDark)(tui.BrandLight, tui.BrandDark)
+	t.Focused.Title = t.Focused.Title.Foreground(c).Bold(true)
+	t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(c).Bold(true)
+	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(c)
+	t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(c)
+	t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(c)
+	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(c)
+	t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(c)
+	t.Focused.FocusedButton = t.Focused.FocusedButton.Foreground(lipgloss.Color("0")).Background(c).Bold(true)
+	t.Focused.TextInput.Prompt = t.Focused.TextInput.Prompt.Foreground(c)
+	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(c)
+	t.Group.Title = t.Focused.Title
+	return t
+}
+
 // brand is the wordmark style for this terminal's background: the brand
 // colour's light shade on a light background, else its dark one.
 func brand(in, out *os.File) lipgloss.Style {
@@ -156,7 +177,7 @@ func (t *Terminal) run(field huh.Field) error {
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithShowHelp(false).WithWidth(t.width).
 		WithKeyMap(t.keys()).
-		WithTheme(huh.ThemeFunc(huh.ThemeBase16)).
+		WithTheme(huh.ThemeFunc(theme)).
 		WithInput(t.in).
 		WithOutput(t.tty).
 		Run()
