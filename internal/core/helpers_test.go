@@ -46,8 +46,6 @@ func entry(id string, origin core.Origin, segs ...core.Segment) core.TimeEntry {
 	return core.TimeEntry{ID: id, Segments: segs, Held: origin == core.OriginHand, Origin: origin}
 }
 
-func held(e core.TimeEntry, h bool) core.TimeEntry { e.Held = h; return e }
-
 func recovered(e core.TimeEntry) core.TimeEntry { e.Recovered = true; return e }
 
 func withWorklog(e core.TimeEntry, wl core.Worklog) core.TimeEntry { e.Worklog = &wl; return e }
