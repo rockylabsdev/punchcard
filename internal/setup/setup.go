@@ -88,10 +88,3 @@ type Deps struct {
 
 // ConnectBudget bounds Test Connection (two calls).
 const ConnectBudget = 15 * time.Second
-
-// Exit codes.
-const (
-	exitOK       = 0
-	exitInternal = 1
-	exitNewer    = 65 // config written by a newer punchcard: refuse
-)

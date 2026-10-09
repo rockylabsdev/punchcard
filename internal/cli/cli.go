@@ -14,6 +14,7 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/exitcode"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
 	"github.com/spf13/cobra"
@@ -22,20 +23,20 @@ import (
 // ContractVersion is `v` in every --json envelope. Additive changes keep it.
 const ContractVersion = 1
 
-// Exit codes from ADR 0004. Exit 2 is never used: it blocks a Claude Code
-// hook. 3, 5 and 8 arrive with Jira.
+// Exit codes from ADR 0004, from the one table in package exitcode
+// (setup uses it too). Exit 2 is never used: it blocks a Claude Code hook.
 const (
-	ExitOK                = 0
-	ExitInternal          = 1
-	ExitNotConfigured     = 3
-	ExitNoTimer           = 4
-	ExitTicketNotFound    = 5
-	ExitNeedsConfirmation = 6
-	ExitSyncPending       = 7
-	ExitAuthFailed        = 8
-	ExitUsage             = 64
-	ExitStateUnreadable   = 65
-	ExitBusy              = 75
+	ExitOK                = exitcode.OK
+	ExitInternal          = exitcode.Internal
+	ExitNotConfigured     = exitcode.NotConfigured
+	ExitNoTimer           = exitcode.NoTimer
+	ExitTicketNotFound    = exitcode.TicketNotFound
+	ExitNeedsConfirmation = exitcode.NeedsConfirmation
+	ExitSyncPending       = exitcode.SyncPending
+	ExitAuthFailed        = exitcode.AuthFailed
+	ExitUsage             = exitcode.Usage
+	ExitStateUnreadable   = exitcode.StateUnreadable
+	ExitBusy              = exitcode.Busy
 )
 
 // outcomes names each exit code; it is `outcome` in the envelope.
@@ -89,8 +90,8 @@ type Env struct {
 	// TTY. It returns "" when the user cancels. Nil means a numbered
 	// line prompt on Stdin/Stderr; the TUI slice can replace it.
 	Pick func(choices []Choice) (string, error)
-	// TUI runs the full-screen app for bare `punchcard` on a TTY. Nil
-	// prints status instead (until the TUI slice wires it in main).
+	// TUI runs the full-screen app for bare `punchcard` on a TTY; main
+	// wires it to tui.Run. Nil (tests) prints status instead.
 	TUI func(Env) int
 	// Jira opens the Jira client; only commands that call Jira call it.
 	// Nil means jira.Open(Getenv): the config file plus the token

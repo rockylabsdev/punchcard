@@ -9,6 +9,7 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/exitcode"
 	"github.com/j-dsmith/punchcard/internal/jira"
 )
 
@@ -31,16 +32,16 @@ func Run(d Deps) int {
 	switch {
 	case errors.Is(err, ErrAborted):
 		w.UI.Say("Nothing saved")
-		return exitOK
+		return exitcode.OK
 	case errors.Is(err, config.ErrNewerSchema):
 		w.UI.Say("✗ "+err.Error(), "Upgrade punchcard to change its settings; nothing was changed.")
-		return exitNewer
+		return exitcode.StateUnreadable
 	case errors.Is(err, errNotSaved):
 		w.UI.Say("Nothing saved")
-		return exitOK
+		return exitcode.OK
 	case err != nil:
 		w.UI.Say("✗ " + err.Error())
-		return exitInternal
+		return exitcode.Internal
 	}
 	if err := w.plugin(); errors.Is(err, ErrAborted) {
 		return w.stopped(saved)
@@ -49,7 +50,7 @@ func Run(d Deps) int {
 		return w.stopped(saved)
 	}
 	w.UI.Say("Done. Run punchcard to open the TUI.")
-	return exitOK
+	return exitcode.OK
 }
 
 // stopped: esc in the plugin or ask-rule step. Credentials already
@@ -60,7 +61,7 @@ func (w wizard) stopped(saved bool) int {
 	} else {
 		w.UI.Say("Stopped. Nothing changed.")
 	}
-	return exitOK
+	return exitcode.OK
 }
 
 // errNotSaved: the user said no at the save question.
