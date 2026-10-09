@@ -46,3 +46,13 @@ jobs:
 
       - name: plugin logic (node --test)
         run: node --test plugin/test/logic.test.mjs
+
+      # The stop --yes gate against Claude Code's own engine. It needs no
+      # login: a fresh, empty CLAUDE_CONFIG_DIR and no API key. Pinned to
+      # the version it was checked with.
+      - name: plugin gate (claude plugin test)
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.295
+          claude plugin test plugin
