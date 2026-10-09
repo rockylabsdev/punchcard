@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/jira"
 )
 
 // ticketPane is [2] Ticket: what happened on the selected ticket. The
@@ -127,28 +129,35 @@ func openEntry(t core.TrackedTicket) (core.TimeEntry, bool) {
 	return core.TimeEntry{}, false
 }
 
-// outcome is a worklog's standing with Jira, leading with the outcome.
-// The Jira strip uses the same words (slice 9 appends "· r" once r
-// syncs).
+// outcome is a worklog's standing with Jira, leading with the outcome,
+// in the words [2] and the Jira strip share. An owed one ends "· r":
+// r sends it.
 func outcome(wl core.Worklog, now time.Time) string {
 	switch wl.State {
 	case core.WorklogFailed:
-		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl.Message))
+		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl.Message)) + retry
 	case core.WorklogPending:
-		return sSync.Render(gPending + " not sent yet")
+		return sSync.Render(gPending+" not sent yet") + retry
 	}
 	return sDim.Render(gSynced + " logged " + wl.SyncedAt.In(now.Location()).Format("15:04"))
 }
 
+// retry is the r key after an owed worklog; the key is sync blue.
+var retry = sDim.Render(" · ") + sSyncKey.Render("r")
+
 var statusPattern = regexp.MustCompile(`^Jira answered (\d{3})`)
 
 // shortReason is a failure message cut to what fits a row: the HTTP
-// status when Jira answered, else the message itself.
+// status when Jira answered, "unreachable" when it did not, else the
+// message itself cut short, so the row's "· r" always shows.
 func shortReason(msg string) string {
 	if m := statusPattern.FindStringSubmatch(msg); m != nil {
 		return m[1]
 	}
-	return msg
+	if strings.HasPrefix(msg, jira.ErrUnreachable.Error()) {
+		return "unreachable"
+	}
+	return ansi.Truncate(msg, 14, "…")
 }
 
 func sameDay(a, b time.Time) bool {

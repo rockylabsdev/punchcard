@@ -15,18 +15,23 @@ import (
 // ticks and resizes through Update, rendering after each, and checks
 // that nothing panics and every frame is exactly the window's size.
 func TestHeadlessKeyRun(t *testing.T) {
-	keys := []string{"space", "enter", "p", "j", "k", "up", "down", "g", "G", "x", "?",
+	// steps per scenario: 1400 x 11 scenarios keeps the total near the
+	// 16000 of 2000 x 8 that the package could afford under -race.
+	const steps = 1400
+	keys := []string{"space", "enter", "p", "j", "k", "up", "down", "g", "G", "x", "?", "r",
 		"a", "d", "y", "n", "esc", "tab", "shift+tab", "backspace", "1", "h", "m", "P", "U", "N", "-", "4", ":"}
 	sizes := [][2]int{{80, 24}, {120, 32}, {60, 16}, {44, 10}, {30, 6}, {10, 3}, {1, 1}}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
+			t.Parallel()
 			hs := newHarness(t)
 			sc.build(hs)
+			hs.configure()
 			hs.open("09:00:00", 80, 24)
-			hs.key(sc.keys...)
+			hs.play(sc.keys...)
 			rng := rand.New(rand.NewPCG(1, 2))
 			w, h := 80, 24
-			for i := range 2000 {
+			for i := range steps {
 				var msg tea.Msg
 				switch r := rng.IntN(100); {
 				case r < 5:

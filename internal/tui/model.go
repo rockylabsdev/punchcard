@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
@@ -56,10 +57,15 @@ type Model struct {
 	// plain keys (movement) send presence at most once per throttle.
 	lastPresence time.Time
 
-	// status is the status line's slot: the last refusal, notice or
-	// outcome. The banner, toasts and last event replace this in a later
-	// slice.
-	status string
+	// The status line (status.go): a toast, else the banner, else the
+	// last event. syncing is true while r's sync is out.
+	toast   toast
+	last    event
+	syncing bool
+	// link is whether Jira is configured, as the last probe found.
+	link link
+	// profile is the terminal's colour profile, for the grey fallback.
+	profile colorprofile.Profile
 }
 
 // tickMsg is the 1 s clock. It is the only way time reaches Update.
@@ -87,6 +93,7 @@ const (
 	intentRemove                        // take key off the list
 	intentVerify                        // Jira confirmed key: record summary
 	intentAuthFailure                   // Jira answered 401
+	intentReload                        // re-read the store (after a sync)
 )
 
 type intent struct {
@@ -106,9 +113,15 @@ func New(o Options) Model {
 	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true}
 }
 
-// Init loads the store and starts the clock.
+// Init loads the store, asks whether Jira is set up and starts the
+// clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.load(), tick())
+	return tea.Batch(m.startup(), tick())
+}
+
+// startup is Init without the clock: the first read and the probe.
+func (m Model) startup() tea.Cmd {
+	return tea.Batch(m.load(), m.probe())
 }
 
 func tick() tea.Cmd {
@@ -142,6 +155,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.pump()
 	case fetchMsg:
 		return m.fetched(msg)
+	case syncMsg:
+		return m.synced(msg)
+	case linkMsg:
+		m.link = link{known: true, err: msg.err}
+		return m, nil
+	case tea.ColorProfileMsg:
+		m.profile = msg.Profile
+		return m, nil
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -179,6 +200,10 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		m, cmd = m.openAdd()
 	case "d":
 		m = m.openRemove()
+	case "r":
+		m, cmd = m.sync()
+	case "?":
+		m = m.openHelp()
 	case "j", "down":
 		m = m.moveTo(m.sel + 1)
 	case "k", "up":
@@ -216,6 +241,10 @@ func (m Model) pump() (Model, tea.Cmd) {
 	for !m.inflight && len(m.queue) > 0 {
 		i := m.queue[0]
 		m.queue = m.queue[1:]
+		if i.kind == intentReload {
+			m.inflight = true
+			return m, m.load()
+		}
 		c := m.command(i)
 		if c == nil {
 			continue
@@ -226,6 +255,9 @@ func (m Model) pump() (Model, tea.Cmd) {
 			return m, sendStop(m.sender, stop)
 		}
 		s, presence, say := m.store, i.kind == intentPresence, i.say
+		if say == "" {
+			say = m.saying(c)
+		}
 		return m, func() tea.Msg {
 			apply := s.Apply
 			if presence {
@@ -309,6 +341,19 @@ func (m Model) command(i intent) core.Command {
 	return nil // the ticket left the list meanwhile
 }
 
+// saying is the last event a start or pause makes, in its own words.
+func (m Model) saying(c core.Command) string {
+	switch c := c.(type) {
+	case core.Start:
+		return "started " + c.Key
+	case core.Pause:
+		if t, _, ok := core.Running(m.shown().State); ok {
+			return "paused " + t.Key
+		}
+	}
+	return ""
+}
+
 // accept takes in what the store handed back.
 func (m Model) accept(r resultMsg) Model {
 	// A World with no schema version means the read itself failed
@@ -321,13 +366,13 @@ func (m Model) accept(r resultMsg) Model {
 	}
 	switch {
 	case r.err != nil && !(r.presence && errors.Is(r.err, store.ErrBusy)):
-		m.status = describe(r.err)
-	case len(r.notices) > 0:
-		m.status = r.notices[len(r.notices)-1]
+		m = m.notify(describe(r.err))
+	case r.err != nil:
 	case r.say != "":
-		m.status = r.say
-	case !r.presence:
-		m.status = ""
+		m = m.happened(r.now, core.OriginHand, r.say)
+	}
+	if len(r.notices) > 0 {
+		m = m.notify(r.notices[len(r.notices)-1]) // a notice outranks the outcome's toast
 	}
 	if m.pendingSel != "" {
 		for i, t := range m.rows() {
@@ -413,7 +458,11 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.WindowTitle = "punchcard"
 	if m.w > 0 && m.h > 0 {
-		v.SetContent(m.frame())
+		f := m.frame()
+		if m.profile == colorprofile.ANSI {
+			f = greyFallback(f) // the renderer would map greys to white or black
+		}
+		v.SetContent(f)
 	}
 	return v
 }

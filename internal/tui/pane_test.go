@@ -114,8 +114,8 @@ func TestWorklogsTodayUseTheOutcomeWords(t *testing.T) {
 	hs.open("09:00:00", 120, 32)
 
 	wantLines(t, paneText(t, hs.frame(), 120),
-		"15m  ○ not sent yet",
-		"20m  ✗ failed — 503",
+		"15m  ○ not sent yet · r",
+		"20m  ✗ failed — 503 · r",
 		"30m  ✓ logged 07:31",
 	)
 }

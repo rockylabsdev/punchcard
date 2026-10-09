@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -155,8 +156,8 @@ func TestPauseWithNothingRunningSaysSo(t *testing.T) {
 
 	hs.key("p")
 
-	if hs.m.status != "nothing is running" {
-		t.Errorf("status = %q", hs.m.status)
+	if statusText(hs) != "nothing is running" {
+		t.Errorf("status = %q", statusText(hs))
 	}
 }
 
@@ -169,11 +170,11 @@ func TestBusyLock(t *testing.T) {
 	hs.st.busy = true
 
 	hs.key("j")
-	if hs.m.status != "" {
-		t.Errorf("status after a busy touch = %q, want empty", hs.m.status)
+	if strings.Contains(statusText(hs), "another punchcard") {
+		t.Errorf("status after a busy touch = %q, want empty", statusText(hs))
 	}
 	hs.key("space")
-	if hs.m.status == "" {
+	if !strings.Contains(statusText(hs), "another punchcard") {
 		t.Errorf("a busy start said nothing")
 	}
 	if got, _ := hs.m.selected(); got.Key != "BB-2" {

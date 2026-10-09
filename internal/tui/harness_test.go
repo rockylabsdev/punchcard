@@ -2,12 +2,14 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
@@ -76,9 +78,13 @@ type harness struct {
 	st     *fakeStore
 	sender *fakeSender
 	jira   *jira.Fake // nil: Jira not configured (set before open)
-	m      Model
-	now    time.Time
-	ids    int
+	// unconfigured: a scenario that wants no Jira (see configure)
+	unconfigured bool
+	// openErr: opening the Jira client fails so (a broken config file)
+	openErr error
+	m       Model
+	now     time.Time
+	ids     int
 }
 
 func newHarness(t *testing.T) *harness {
@@ -93,8 +99,10 @@ func newHarness(t *testing.T) *harness {
 type fakeSender struct {
 	st      *fakeStore
 	syncErr error
+	jira    *jira.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
 	mu      sync.Mutex
 	stops   []core.Stop
+	syncs   int
 }
 
 func (f *fakeSender) Stop(_ context.Context, c core.Stop) (worklog.StopResult, error) {
@@ -121,6 +129,53 @@ func (f *fakeSender) Stop(_ context.Context, c core.Stop) (worklog.StopResult, e
 		}
 	}
 	return r, nil
+}
+
+// Sync sends every owed worklog to jira the way worklog.Sender does:
+// unconfigured is config.ErrNotConfigured, a 401 records the failure
+// and stops, unreachable marks failed and stops, an API error marks
+// failed and carries on.
+func (f *fakeSender) Sync(ctx context.Context, key string) (worklog.Report, error) {
+	f.mu.Lock()
+	f.syncs++
+	f.mu.Unlock()
+	w, _, _ := f.st.Read()
+	rep := worklog.Report{World: w}
+	todo := core.Unsent(w.State)
+	if len(todo) == 0 {
+		return rep, nil
+	}
+	if f.jira == nil {
+		rep.Remaining = todo
+		return rep, fmt.Errorf("%w: no config", config.ErrNotConfigured)
+	}
+	var last error
+	for _, u := range todo {
+		id, err := f.jira.PostWorklog(ctx, u.Key, jira.Worklog{TimeSpentSeconds: u.Worklog.TimeSpentSeconds})
+		var c core.Command = core.MarkSynced{Key: u.Key, EntryID: u.EntryID, WorklogID: id}
+		var api *jira.APIError
+		switch {
+		case errors.Is(err, jira.ErrUnauthorized):
+			c = core.RecordAuthFailure{}
+		case err != nil:
+			c = core.MarkFailed{Key: u.Key, EntryID: u.EntryID, Message: err.Error()}
+		}
+		res, aerr := f.st.Apply(c)
+		if aerr != nil {
+			return rep, aerr
+		}
+		rep.World = res.World
+		if err == nil {
+			rep.Sent = append(rep.Sent, u)
+			continue
+		}
+		last = err
+		if !errors.As(err, &api) {
+			break
+		}
+	}
+	rep.Remaining = core.Unsent(rep.World.State)
+	return rep, last
 }
 
 func (f *fakeSender) calls() []core.Stop {
@@ -167,9 +222,13 @@ func (hs *harness) open(when string, w, h int) {
 	if hs.jira != nil {
 		o.Jira = func() (jira.Client, error) { return hs.jira, nil }
 	}
+	if hs.openErr != nil {
+		o.Jira = func() (jira.Client, error) { return nil, hs.openErr }
+	}
+	hs.sender.jira = hs.jira
 	hs.m = New(o)
 	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
-	hs.run(hs.m.load())
+	hs.run(hs.m.startup())
 }
 
 // send delivers one message and everything it causes, except that the

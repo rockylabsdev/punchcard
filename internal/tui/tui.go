@@ -33,10 +33,12 @@ type Options struct {
 }
 
 // Sender is the worklog seam, the only code that POSTs. Stop applies the
-// stop, then sends that entry's worklog once; it can block for
-// worklog.PostBudget, so the model only ever calls it inside a tea.Cmd.
+// stop, then sends that entry's worklog once; Sync sends everything owed
+// (key "" is all). Both can block for worklog.PostBudget per POST, so
+// the model only ever calls them inside a tea.Cmd.
 type Sender interface {
 	Stop(ctx context.Context, c core.Stop) (worklog.StopResult, error)
+	Sync(ctx context.Context, key string) (worklog.Report, error)
 }
 
 // Run opens the TUI and blocks until the user quits. Timers keep running
