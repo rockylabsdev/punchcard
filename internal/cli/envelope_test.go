@@ -32,6 +32,9 @@ type harness struct {
 	// kc is the Keychain seam every run gets (never the real one): no
 	// item unless a test says otherwise.
 	kc *fakeKeychain
+	// setups counts runs of the wizard (runTTY injects a fake that
+	// exits setupCode).
+	setups, setupCode int
 }
 
 // fakeKeychain answers the Keychain seam and counts the reads.

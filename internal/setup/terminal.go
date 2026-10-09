@@ -182,4 +182,3 @@ func (g *gutterWriter) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
-

@@ -100,6 +100,11 @@ type Env struct {
 	// Nil means config.SystemKeychain(): /usr/bin/security on macOS, no
 	// Keychain on Linux. Tests always inject a fake.
 	Keychain config.Keychain
+	// Setup runs the setup wizard on the terminal and returns its exit
+	// code. Nil means the real one (Huh on Stdin/Stdout, the macOS
+	// Keychain through security, the claude CLI, ~/.claude/settings.json);
+	// tests always inject one.
+	Setup func(Env) int
 }
 
 // Choice is one ticket offered by the picker.
@@ -123,6 +128,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Keychain == nil {
 		e.Keychain = config.SystemKeychain()
+	}
+	if e.Setup == nil {
+		e.Setup = runWizard
 	}
 	if e.Jira == nil {
 		getenv, kc := e.Getenv, e.Keychain
@@ -216,6 +224,9 @@ func (a *app) root() *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if a.env.TTY && a.env.TUI != nil && !a.out.json {
+				if firstRun(a.env) {
+					a.env.Setup(a.env) // finished or cancelled, the TUI opens next
+				}
 				a.code = a.env.TUI(a.env)
 				return nil
 			}
