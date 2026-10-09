@@ -353,7 +353,7 @@ func TestEnvelopes(t *testing.T) {
 			h.do("09:00", "start", "AA-1")
 		}, "09:10",
 			[]string{"touch", "AA-2", "--origin", "prompt"}, 0,
-			ok("touch", status(running("AA-2", "ID-2", false, "prompt", 0), paused("AA-1", "ID-1", false, "agent", 600)),
+			ok("touch", status(running("AA-2", "ID-2", false, "prompt", 0), paused("AA-1", "ID-1", false, "prompt", 600)),
 				`[{"kind": "paused", "key": "AA-1"}, {"kind": "added", "key": "AA-2"}, {"kind": "started", "key": "AA-2"}]`)},
 		{"touch from a prompt leaves a held timer alone", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:10",
 			[]string{"touch", "AA-2", "--origin", "prompt"}, 0,

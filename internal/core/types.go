@@ -53,8 +53,9 @@ type TimeEntry struct {
 	// ID is a UUID and the idempotency key for the worklog POST.
 	ID       string    `json:"id"`
 	Segments []Segment `json:"segments"`
-	// Held and Origin describe the entry's current (or last) running
-	// stretch. Only OriginHand sets Held.
+	// Held describes the entry's current (or last) running stretch; only
+	// OriginHand sets it. Origin is who made the entry's last change:
+	// opened its stretch, paused it or stopped it (recovery keeps it).
 	Held   bool   `json:"held"`
 	Origin Origin `json:"origin"`
 	// Recovered is set by recovery and cleared only by stop.

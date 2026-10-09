@@ -20,6 +20,9 @@ type Store interface {
 	Read() (core.World, []string, error)
 	Apply(core.Command) (store.Result, error)
 	TryApply(core.Command) (store.Result, error)
+	// Stamp stats state.json; it moves when another process (or the
+	// TUI) replaced the file. It never locks, reads or writes.
+	Stamp() (store.Stamp, error)
 }
 
 // Model is the whole TUI. Update is pure apart from the commands it
@@ -66,6 +69,13 @@ type Model struct {
 	link link
 	// profile is the terminal's colour profile, for the grey fallback.
 	profile colorprofile.Profile
+
+	// Changes made elsewhere (elsewhere.go): seen is state.json's stamp
+	// at the last read; tags are rows' "paused by agent" markers.
+	seen store.Stamp
+	tags map[string]tag
+	// ticker schedules the next tick (tests stub it: they move time).
+	ticker func() tea.Cmd
 }
 
 // tickMsg is the 1 s clock. It is the only way time reaches Update.
@@ -79,6 +89,11 @@ type resultMsg struct {
 	err      error
 	presence bool   // a presence-only touch: ErrBusy is expected and silent
 	say      string // the status line on success
+	// A read (startup, reload, the tick's check): stamp is state.json's
+	// stamp taken just before it, if stamped. unchanged: the check found
+	// the same stamp and read nothing.
+	read, stamped, unchanged bool
+	stamp                    store.Stamp
 }
 
 // intentKind is what a key asked the store for.
@@ -110,13 +125,13 @@ type intent struct {
 // (which Init starts). o.Now is read once, to seed the clock until the
 // first tick.
 func New(o Options) Model {
-	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true}
+	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick}
 }
 
 // Init loads the store, asks whether Jira is set up and starts the
 // clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.startup(), tick())
+	return tea.Batch(m.startup(), m.ticker())
 }
 
 // startup is Init without the clock: the first read and the probe.
@@ -131,10 +146,7 @@ func tick() tea.Cmd {
 // load is the lock-free read the model starts with.
 func (m Model) load() tea.Cmd {
 	s := m.store
-	return func() tea.Msg {
-		w, notices, err := s.Read()
-		return resultMsg{world: w, notices: notices, err: err}
-	}
+	return func() tea.Msg { return read(s) }
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -143,14 +155,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 		return m, nil
 	case tickMsg:
-		// Later: stat state.json here and re-read on change.
 		m.now = time.Time(msg)
 		if m.dlg != nil {
 			m.dlg = m.dlg.tick(m)
 		}
-		return m, tick()
+		m, watch := m.watch()
+		return m, tea.Batch(m.ticker(), watch)
 	case resultMsg:
 		m.inflight = false
+		if msg.unchanged {
+			return m.pump()
+		}
 		m = m.accept(msg)
 		return m.pump()
 	case fetchMsg:
@@ -356,6 +371,9 @@ func (m Model) saying(c core.Command) string {
 
 // accept takes in what the store handed back.
 func (m Model) accept(r resultMsg) Model {
+	if r.read {
+		m = m.elsewhere(r) // before the World moves: it diffs against it
+	}
 	// A World with no schema version means the read itself failed
 	// (busy lock, newer schema): keep showing the last good one.
 	if r.world.State.SchemaVersion != 0 {

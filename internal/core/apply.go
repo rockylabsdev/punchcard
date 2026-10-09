@@ -163,6 +163,7 @@ func (a *applier) stop(c Stop) error {
 		e.Segments[len(e.Segments)-1].EndedAt = a.now
 	}
 	e.Worklog = &wl
+	e.Origin = c.Origin
 	e.Recovered = false
 	return nil
 }
@@ -236,6 +237,7 @@ func (a *applier) pauseRunning(origin Origin, announce bool) error {
 		return fmt.Errorf("%w: %s was set by hand", ErrHeld, t.Key)
 	}
 	e.Segments[len(e.Segments)-1].EndedAt = a.now
+	e.Origin = origin
 	if announce {
 		a.emit(EventPaused, t.Key)
 	}

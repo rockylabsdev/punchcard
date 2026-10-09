@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/j-dsmith/punchcard/internal/core"
 )
 
 // TestHeadlessKeyRun drives the model with thousands of keystrokes,
@@ -41,6 +42,9 @@ func TestHeadlessKeyRun(t *testing.T) {
 				case r < 25:
 					hs.now = hs.now.Add(time.Duration(rng.IntN(120)) * time.Second)
 					msg = tickMsg(hs.now)
+				case r < 28:
+					outsideChange(hs, rng) // seen on the next tick
+					continue
 				default:
 					msg = keyPress(keys[rng.IntN(len(keys))])
 				}
@@ -49,6 +53,28 @@ func TestHeadlessKeyRun(t *testing.T) {
 			}
 		})
 	}
+}
+
+// outsideChange makes a random change as another process would; a refusal
+// is fine.
+func outsideChange(hs *harness, rng *rand.Rand) {
+	origins := []core.Origin{core.OriginHand, core.OriginPrompt, core.OriginAgent}
+	o := origins[rng.IntN(len(origins))]
+	w, _, _ := hs.st.Read()
+	var c core.Command = core.Pause{Origin: o}
+	switch rng.IntN(4) {
+	case 0:
+		if ts := w.State.TrackedTickets; len(ts) > 0 {
+			hs.ids++
+			c = core.Start{Key: ts[rng.IntN(len(ts))].Key, Origin: o, NewEntryID: fmt.Sprintf("X-%d", hs.ids)}
+		}
+	case 1:
+		c = core.Stop{Origin: o}
+	case 2:
+		c = core.Resume{Origin: o}
+	}
+	_, _ = hs.st.Apply(c)
+	hs.st.commands()
 }
 
 func checkFrame(t *testing.T, step int, msg tea.Msg, frame string, w, h int) {
