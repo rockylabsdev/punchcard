@@ -6,29 +6,17 @@ import (
 	"github.com/j-dsmith/punchcard/internal/core"
 )
 
-// ticketState is what a row's symbol says.
-type ticketState int
+// stateOf is t's timer state as shown: the core's, over the shown World,
+// where a stale timer already appears recovered (so never stale).
+func (m Model) stateOf(t core.TrackedTicket) core.TimerState {
+	return core.StateOf(m.shown(), t, m.now)
+}
 
-const (
-	stateIdle ticketState = iota
-	stateRunning
-	statePaused
-	stateRecovered // paused by recovery: check the duration at stop
-)
-
-// stateOf reads a ticket's open (unstopped) entry.
-func stateOf(t core.TrackedTicket) ticketState {
-	for _, e := range t.Entries {
-		switch {
-		case e.Running():
-			return stateRunning
-		case e.Paused() && e.Recovered:
-			return stateRecovered
-		case e.Paused():
-			return statePaused
-		}
-	}
-	return stateIdle
+// recoveredPause: t's open entry was paused by recovery, so the row
+// says check the duration at stop.
+func recoveredPause(t core.TrackedTicket) bool {
+	e, ok := openEntry(t)
+	return ok && e.Paused() && e.Recovered
 }
 
 // ticketsPane is [1] Tickets: what am I tracking and where did today go.
@@ -74,13 +62,13 @@ func (m Model) ticketRow(t core.TrackedTicket, w, keyW int, selected bool) strin
 		num = sFaint.Render("—")
 	}
 	glyph, key, sum := sDim.Render(gIdle), t.Key, summaryText(t)
-	switch stateOf(t) {
-	case stateRunning:
+	switch st := m.stateOf(t); {
+	case st == core.TimerRunning:
 		glyph, key, sum, num = sRunning.Render(gRunning), sRunning.Render(t.Key), sRunning.Render(t.Summary), sRunning.Render(clock(d))
-	case statePaused:
-		glyph, key = sPaused.Render(gPaused), sPaused.Render(t.Key)
-	case stateRecovered:
+	case recoveredPause(t):
 		glyph, key = sRecov.Render(gRecovered), sRecov.Render(t.Key)
+	case st == core.TimerPaused:
+		glyph, key = sPaused.Render(gPaused), sPaused.Render(t.Key)
 	}
 	if tg := m.tagged(t.Key); tg != "" {
 		sum = sChanged.Render(tg) + sDim.Render(" · ") + sum

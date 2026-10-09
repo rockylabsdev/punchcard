@@ -173,13 +173,13 @@ func TestCredentials(t *testing.T) {
 }
 
 func TestTokenPath(t *testing.T) {
-	if got := config.TokenPath(env(map[string]string{"XDG_CONFIG_HOME": "/x", "HOME": "/h"})); got != "/x/punchcard/token" {
+	if got, _ := config.TokenPath(env(map[string]string{"XDG_CONFIG_HOME": "/x", "HOME": "/h"})); got != "/x/punchcard/token" {
 		t.Errorf("TokenPath = %q", got)
 	}
-	if got := config.TokenPath(env(map[string]string{"HOME": "/h"})); got != "/h/.config/punchcard/token" {
+	if got, _ := config.TokenPath(env(map[string]string{"HOME": "/h"})); got != "/h/.config/punchcard/token" {
 		t.Errorf("TokenPath = %q", got)
 	}
-	if got := config.TokenPath(env(map[string]string{})); got != "" {
+	if got, _ := config.TokenPath(env(map[string]string{})); got != "" {
 		t.Errorf("TokenPath = %q", got)
 	}
 }

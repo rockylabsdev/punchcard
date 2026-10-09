@@ -34,8 +34,8 @@ func (a *app) setupCmd() *cobra.Command {
 // existence is the "already introduced" marker; with no config
 // directory at all there is nowhere to set up.
 func firstRun(e Env) bool {
-	p := config.Path(e.Getenv)
-	if p == "" {
+	p, err := config.Path(e.Getenv)
+	if err != nil || e.Store.Err() != nil {
 		return false
 	}
 	return missing(p) && missing(filepath.Join(e.Store.Dir(), store.StateFile))

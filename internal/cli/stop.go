@@ -128,7 +128,8 @@ func (a *app) stop(s core.Stop, f stopFlags) {
 			a.code = a.failure("stop", err)
 			return
 		}
-		wl := findEntry(res.World.State, s.Key, s.EntryID).Worklog
+		e, _ := res.World.State.Entry(s.Key, s.EntryID)
+		wl := e.Worklog
 		d := StopData{Key: s.Key, EntryID: s.EntryID, Worklog: *wl}
 		a.done("stop", res, d, a.eventLines(res)+stoppedLine(s.Key, *wl))
 		return
@@ -239,23 +240,14 @@ func (a *app) promptStop(s core.Stop, p core.Preview, def int) (core.Stop, bool)
 }
 
 // sendProblem names why a worklog was not sent: the envelope's
-// error.code and a message.
+// error.code (worklog.Why) and a message. A not-configured error already
+// says to run setup where setup is the fix.
 func sendProblem(err error) (code, msg string) {
-	var api *jira.APIError
-	switch {
-	case errors.Is(err, config.ErrNotConfigured):
-		return "not_configured", err.Error() + " (run `punchcard setup`)"
-	case errors.Is(err, jira.ErrUnauthorized):
-		return "auth_failed", "Jira rejected the credentials (a scoped API token is refused too)"
-	case errors.Is(err, jira.ErrUnreachable):
-		return "unreachable", err.Error()
-	case errors.As(err, &api):
-		return "sync_failed", err.Error()
-	case errors.Is(err, store.ErrSyncBusy):
-		return "sync_busy", err.Error()
-	default:
-		return "sync_pending", err.Error()
+	p := worklog.Why(err)
+	if p == worklog.ProblemAuthFailed {
+		return string(p), "Jira rejected the credentials (a scoped API token is refused too)"
 	}
+	return string(p), err.Error()
 }
 
 var durationPattern = regexp.MustCompile(`^(?:([0-9]+)h)?(?:([0-9]+)m)?$`)

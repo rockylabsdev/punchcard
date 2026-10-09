@@ -37,10 +37,10 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 		lines = append(lines, sDim.Render(gIdle+" NOT RUNNING"), sDim.Render("  ")+sBold.Render("space")+sDim.Render(" starts it"))
 	} else {
 		el := core.Elapsed(e, m.now)
-		switch stateOf(t) {
-		case stateRunning:
+		switch {
+		case m.stateOf(t) == core.TimerRunning:
 			head(gRunning+" RUNNING", sRunning, clock(el))
-		case stateRecovered:
+		case recoveredPause(t):
 			head(gRecovered+" RECOVERED", sRecov, hm(el))
 		default:
 			head(gPaused+" PAUSED", sPaused, hm(el))

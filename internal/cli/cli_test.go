@@ -93,3 +93,21 @@ func TestUnknownCommandIsUsageNeverTwo(t *testing.T) {
 		t.Errorf("error = %v", env["error"])
 	}
 }
+
+func TestNoHomeFailsCommandsThatNeedTheDataDir(t *testing.T) {
+	for _, args := range [][]string{{"status"}, {"start", "ABC-1"}, {"ls"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			r := run(t, map[string]string{}, append(args, "--json")...)
+			if r.code != 1 {
+				t.Fatalf("exit %d, want 1; stdout %s", r.code, r.stdout)
+			}
+			e, _ := decode(t, r.stdout)["error"].(map[string]any)
+			if msg, _ := e["message"].(string); !strings.Contains(msg, "XDG_DATA_HOME") || !strings.Contains(msg, "HOME") {
+				t.Errorf("message = %q, want it to name XDG_DATA_HOME and HOME", msg)
+			}
+		})
+	}
+	if r := run(t, map[string]string{}, "version"); r.code != 0 {
+		t.Errorf("version needs no data dir: exit %d", r.code)
+	}
+}

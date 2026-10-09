@@ -7,10 +7,10 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/j-dsmith/punchcard/internal/cli"
 	"github.com/j-dsmith/punchcard/internal/tui"
 	"github.com/j-dsmith/punchcard/internal/worklog"
-	"golang.org/x/term"
 )
 
 // run is the whole program; main_test.go re-runs it as `punchcard` in
@@ -23,7 +23,7 @@ func run() int {
 		Getenv:  os.Getenv,
 		Now:     time.Now,
 		Version: cli.BuildVersion(),
-		TTY:     term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
+		TTY:     term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()),
 		TUI:     openTUI,
 	})
 }

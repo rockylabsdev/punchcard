@@ -15,14 +15,14 @@ import (
 
 // Timer is one open (running or paused) entry.
 type Timer struct {
-	Key        string      `json:"key"`
-	Summary    string      `json:"summary,omitempty"`
-	Unverified bool        `json:"unverified"`
-	EntryID    string      `json:"entryId"`
-	State      string      `json:"state"` // running|paused|stale
-	Held       bool        `json:"held"`
-	Origin     core.Origin `json:"origin"`
-	Recovered  bool        `json:"recovered"`
+	Key        string          `json:"key"`
+	Summary    string          `json:"summary,omitempty"`
+	Unverified bool            `json:"unverified"`
+	EntryID    string          `json:"entryId"`
+	State      core.TimerState `json:"state"` // running|paused|stale
+	Held       bool            `json:"held"`
+	Origin     core.Origin     `json:"origin"`
+	Recovered  bool            `json:"recovered"`
 	// ElapsedSeconds is the measured time; for a stale timer it is
 	// capped at lastSeen, the figure the next change will record.
 	ElapsedSeconds int `json:"elapsedSeconds"`
@@ -69,7 +69,7 @@ type Ticket struct {
 	Unverified bool           `json:"unverified"`
 	AddedAt    core.Timestamp `json:"addedAt"`
 	// State is the open entry's (running|paused|stale); absent when idle.
-	State string `json:"state,omitempty"`
+	State core.TimerState `json:"state,omitempty"`
 	// ElapsedSeconds is the open entry's elapsed (capped if stale), else 0.
 	ElapsedSeconds int `json:"elapsedSeconds"`
 	TodaySeconds   int `json:"todaySeconds"`
@@ -140,21 +140,14 @@ func timerOf(w core.World, t core.TrackedTicket, e core.TimeEntry, now time.Time
 		Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, EntryID: e.ID,
 		Held: e.Held, Origin: e.Origin, Recovered: e.Recovered,
 		ElapsedSeconds: seconds(core.Elapsed(e, now)),
+		State:          core.EntryState(w, e, now),
 	}
-	switch {
-	case e.Paused():
-		tm.State = "paused"
-	case core.Stale(w, now):
+	if tm.State == core.TimerStale {
 		r, _ := core.Recover(w, now)
-		tm.State = "stale"
+		capped, _ := r.State.Entry(t.Key, e.ID)
 		tm.UncappedSeconds = tm.ElapsedSeconds
-		tm.ElapsedSeconds = seconds(core.Elapsed(findEntry(r.State, t.Key, e.ID), now))
-		tm.LastSeen = w.Heartbeat.LastSeen
-		if tm.LastSeen.IsZero() {
-			tm.LastSeen = e.Segments[len(e.Segments)-1].StartedAt
-		}
-	default:
-		tm.State = "running"
+		tm.ElapsedSeconds = seconds(core.Elapsed(capped, now))
+		tm.LastSeen = core.EffectiveLastSeen(w.Heartbeat, e)
 	}
 	return tm
 }
@@ -206,19 +199,6 @@ func listData(w core.World, now time.Time, only []string) ListData {
 	return d
 }
 
-func findEntry(s core.State, key, id string) core.TimeEntry {
-	for _, t := range s.TrackedTickets {
-		if t.Key == key {
-			for _, e := range t.Entries {
-				if e.ID == id {
-					return e
-				}
-			}
-		}
-	}
-	return core.TimeEntry{}
-}
-
 func seconds(d time.Duration) int { return int(d / time.Second) }
 
 // Human rendering.
@@ -227,14 +207,14 @@ func seconds(d time.Duration) int { return int(d / time.Second) }
 func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
 	var b strings.Builder
 	switch tm.State {
-	case "running":
+	case core.TimerRunning:
 		fmt.Fprintf(&b, "%s %s running  %s", o.paint(green, "▶"), tm.Key, clock(secs(tm.ElapsedSeconds)))
 		if tm.Held {
 			b.WriteString("  held")
 		}
-	case "paused":
+	case core.TimerPaused:
 		fmt.Fprintf(&b, "%s %s paused  %s", o.paint(yellow, "⏸"), tm.Key, clock(secs(tm.ElapsedSeconds)))
-	case "stale":
+	case core.TimerStale:
 		fmt.Fprintf(&b, "%s %s stale  %s (capped; %s uncapped)\n", o.paint(red, "!"), tm.Key,
 			clock(secs(tm.ElapsedSeconds)), clock(secs(tm.UncappedSeconds)))
 		fmt.Fprintf(&b, "  last seen %s (%s ago); the next action will recover it",
@@ -243,7 +223,7 @@ func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
 	if tm.Recovered {
 		b.WriteString("  (recovered: check the duration at stop)")
 	}
-	if tm.Summary != "" && tm.State != "stale" {
+	if tm.Summary != "" && tm.State != core.TimerStale {
 		b.WriteString("  " + tm.Summary)
 	}
 	b.WriteString("\n")

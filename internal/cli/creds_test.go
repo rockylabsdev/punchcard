@@ -188,3 +188,22 @@ func TestAuthFailedAtSetAndClear(t *testing.T) {
 		t.Error("a successful sync left authFailedAt set")
 	}
 }
+
+// An unconfigured stop names the setup hint once, not twice.
+func TestUnconfiguredStopNamesSetupOnce(t *testing.T) {
+	for _, args := range [][]string{{"stop"}, {"stop", "--json"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			h := newHarness(t)
+			h.env["XDG_CONFIG_HOME"] = t.TempDir() // no config.json
+			h.do("09:00", "start", "AA-1")
+			h.now = at("09:30")
+			r := h.run(args...)
+			if r.code != 7 {
+				t.Fatalf("exit %d, want 7\n%s%s", r.code, r.stdout, r.stderr)
+			}
+			if n := strings.Count(r.stdout+r.stderr, "punchcard setup"); n != 1 {
+				t.Errorf("the setup hint appears %d times:\n%s%s", n, r.stdout, r.stderr)
+			}
+		})
+	}
+}

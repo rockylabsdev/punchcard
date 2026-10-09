@@ -143,19 +143,19 @@ func (m Model) bindings() []binding {
 	sel, ok := m.selected()
 	if ok {
 		label := "start"
-		switch stateOf(sel) {
-		case stateRunning:
+		switch m.stateOf(sel) {
+		case core.TimerRunning:
 			label = "pause"
-		case statePaused, stateRecovered:
+		case core.TimerPaused:
 			label = "resume"
 		}
 		bs = append(bs, binding{"space", label})
-		if stateOf(sel) != stateIdle {
+		if m.stateOf(sel) != core.TimerIdle {
 			bs = append(bs, binding{"x", "stop…"})
 		}
 	}
 	// p pauses from any row; on the running row space already says so.
-	if len(rows) > 0 && stateOf(rows[0]) == stateRunning && (!ok || sel.Key != rows[0].Key) {
+	if len(rows) > 0 && m.stateOf(rows[0]) == core.TimerRunning && (!ok || sel.Key != rows[0].Key) {
 		bs = append(bs, binding{"p", "pause"})
 	}
 	bs = append(bs, binding{"a", "add"})

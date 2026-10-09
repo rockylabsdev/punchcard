@@ -9,6 +9,7 @@ import (
 
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/exitcode"
 	"github.com/j-dsmith/punchcard/internal/jira"
 )
 
@@ -31,16 +32,16 @@ func Run(d Deps) int {
 	switch {
 	case errors.Is(err, ErrAborted):
 		w.UI.Say("Nothing saved")
-		return exitOK
+		return exitcode.OK
 	case errors.Is(err, config.ErrNewerSchema):
 		w.UI.Say("✗ "+err.Error(), "Upgrade punchcard to change its settings; nothing was changed.")
-		return exitNewer
+		return exitcode.StateUnreadable
 	case errors.Is(err, errNotSaved):
 		w.UI.Say("Nothing saved")
-		return exitOK
+		return exitcode.OK
 	case err != nil:
 		w.UI.Say("✗ " + err.Error())
-		return exitInternal
+		return exitcode.Internal
 	}
 	if err := w.plugin(); errors.Is(err, ErrAborted) {
 		return w.stopped(saved)
@@ -49,7 +50,7 @@ func Run(d Deps) int {
 		return w.stopped(saved)
 	}
 	w.UI.Say("Done. Run punchcard to open the TUI.")
-	return exitOK
+	return exitcode.OK
 }
 
 // stopped: esc in the plugin or ask-rule step. Credentials already
@@ -60,7 +61,7 @@ func (w wizard) stopped(saved bool) int {
 	} else {
 		w.UI.Say("Stopped. Nothing changed.")
 	}
-	return exitOK
+	return exitcode.OK
 }
 
 // errNotSaved: the user said no at the save question.
@@ -99,7 +100,8 @@ func (w wizard) where(s config.Secret) string {
 	if s.Source == config.SourceKeychain {
 		return "Keychain"
 	}
-	return config.TokenPath(w.Getenv)
+	p, _ := config.TokenPath(w.Getenv) // a stored file token implies a config dir
+	return p
 }
 
 // credentials is the re-run fork, then site → email → token → test →
@@ -316,7 +318,8 @@ func (w wizard) save(f form, stored config.Secret, envTok string) error {
 	if err := config.Save(w.Getenv, config.Config{SiteURL: f.site, Email: f.email}); err != nil {
 		return err
 	}
-	w.UI.Say("Saved " + config.Path(w.Getenv))
+	saved, _ := config.Path(w.Getenv) // Save succeeded, so the path exists
+	w.UI.Say("Saved " + saved)
 	token := f.token
 	if token == "" {
 		token = stored.Value
@@ -337,7 +340,7 @@ func (w wizard) save(f form, stored config.Secret, envTok string) error {
 }
 
 func (w wizard) saveToken(email, token string) error {
-	path := config.TokenPath(w.Getenv)
+	path, _ := config.TokenPath(w.Getenv) // config.Save succeeded first, so it exists
 	if w.Keychain == nil {
 		if err := config.WriteTokenFile(w.Getenv, token); err != nil {
 			return err

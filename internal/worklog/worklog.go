@@ -91,7 +91,7 @@ func (s Sender) Stop(ctx context.Context, c core.Stop) (StopResult, error) {
 	if rep.World.State.SchemaVersion != 0 {
 		r.World = rep.World
 	}
-	if e := entry(r.World.State, c.Key, c.EntryID); e != nil && e.Worklog != nil {
+	if e, ok := r.World.State.Entry(c.Key, c.EntryID); ok && e.Worklog != nil {
 		r.Worklog = *e.Worklog
 	}
 	return r, nil
@@ -197,8 +197,8 @@ func (s Sender) sendOne(ctx context.Context, client jira.Client, t core.UnsentWo
 	if err != nil {
 		return err
 	}
-	e := entry(w.State, t.Key, t.EntryID)
-	if e == nil || e.Worklog == nil || e.Worklog.State == core.WorklogSynced {
+	e, ok := w.State.Entry(t.Key, t.EntryID)
+	if !ok || e.Worklog == nil || e.Worklog.State == core.WorklogSynced {
 		return nil // removed, or someone else sent it: never POST twice
 	}
 	wl := *e.Worklog
@@ -220,7 +220,7 @@ func (s Sender) sendOne(ctx context.Context, client jira.Client, t core.UnsentWo
 		if err != nil {
 			return fmt.Errorf("jira took worklog %s for %s but it could not be recorded: %w", id, t.Key, err)
 		}
-		if e := entry(res.World.State, t.Key, t.EntryID); e != nil && e.Worklog != nil {
+		if e, ok := res.World.State.Entry(t.Key, t.EntryID); ok && e.Worklog != nil {
 			rep.Sent = append(rep.Sent, core.UnsentWorklog{Key: t.Key, EntryID: t.EntryID, Worklog: *e.Worklog})
 		}
 		return nil
@@ -242,19 +242,4 @@ func (s Sender) record(rep *Report, res store.Result) {
 	if res.World.State.SchemaVersion != 0 {
 		rep.World = res.World
 	}
-}
-
-func entry(st core.State, key, id string) *core.TimeEntry {
-	for i := range st.TrackedTickets {
-		t := &st.TrackedTickets[i]
-		if t.Key != key {
-			continue
-		}
-		for j := range t.Entries {
-			if t.Entries[j].ID == id {
-				return &t.Entries[j]
-			}
-		}
-	}
-	return nil
 }

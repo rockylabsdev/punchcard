@@ -1,10 +1,6 @@
 package cli
 
 import (
-	"context"
-	"errors"
-
-	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 )
@@ -44,28 +40,22 @@ func (a *app) newTicket(key string) (core.NewTicket, error) {
 			tracked = true
 		}
 	}
-	c, err := a.env.Jira()
-	if err != nil {
-		if !errors.Is(err, config.ErrNotConfigured) {
-			a.out.notices([]string{err.Error() + "; treating Jira as not configured"})
-		}
-		return n, nil
+	l := jira.LookUp(a.env.Jira, key)
+	if l.Notice != "" {
+		a.out.notices([]string{l.Notice})
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), jira.SummaryBudget)
-	defer cancel()
-	summary, err := c.Summary(ctx, key)
 	switch {
-	case err == nil:
+	case l.Outcome == jira.LookupFound:
 		// Jira answered: a recorded 401 no longer holds.
 		if !w.State.AuthFailedAt.IsZero() {
 			if _, aerr := a.apply(core.ClearAuthFailure{}); aerr != nil {
 				return n, aerr
 			}
 		}
-		return core.NewTicket{Key: key, Summary: summary}, nil
-	case errors.Is(err, jira.ErrNotFound) && !tracked:
+		return core.NewTicket{Key: key, Summary: l.Summary}, nil
+	case l.Outcome == jira.LookupNotFound && !tracked:
 		return n, ticketNotFound{key}
-	case errors.Is(err, jira.ErrUnauthorized):
+	case l.Outcome == jira.LookupAuthFailed:
 		// A 401 is a fact about Jira, persisted for status and the banner.
 		if _, aerr := a.apply(core.RecordAuthFailure{}); aerr != nil {
 			return n, aerr
