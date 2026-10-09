@@ -50,7 +50,7 @@ func (m Model) ticketsPane(w, h int) []string {
 	if len(rows) == 0 {
 		body = []string{"",
 			sDim.Render("  No tickets yet."),
-			sDim.Render("  ") + sBold.Render("punchcard start KEY") + sDim.Render(" begins one."),
+			sDim.Render("  Press ") + sBold.Render("a") + sDim.Render(" to add one by key."),
 		}
 	}
 	// Scroll so the cursor stays in view, centred where it can be.

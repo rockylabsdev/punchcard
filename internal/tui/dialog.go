@@ -232,19 +232,4 @@ func parseDuration(s string) (time.Duration, bool) {
 	return d, true
 }
 
-// addDialog is a: type a key or pick a recent ticket.
-type addDialog struct {
-	asking string // the key Jira is being asked about
-}
-
-func (m Model) openAdd() (Model, tea.Cmd) { return m, nil }
-
-func (d addDialog) answered(m Model, f fetchMsg) (Model, tea.Cmd) { return m, nil }
-
 func (m Model) openRemove() Model { return m }
-
-func (d addDialog) title() string                                   { return "Add ticket" }
-func (d addDialog) body(m Model, w int) []string                    { return nil }
-func (d addDialog) bindings() []binding                             { return nil }
-func (d addDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) { return m, nil }
-func (d addDialog) tick(m Model) dialog                             { return d }
