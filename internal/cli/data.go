@@ -15,14 +15,14 @@ import (
 
 // Timer is one open (running or paused) entry.
 type Timer struct {
-	Key        string      `json:"key"`
-	Summary    string      `json:"summary,omitempty"`
-	Unverified bool        `json:"unverified"`
-	EntryID    string      `json:"entryId"`
+	Key        string          `json:"key"`
+	Summary    string          `json:"summary,omitempty"`
+	Unverified bool            `json:"unverified"`
+	EntryID    string          `json:"entryId"`
 	State      core.TimerState `json:"state"` // running|paused|stale
-	Held       bool        `json:"held"`
-	Origin     core.Origin `json:"origin"`
-	Recovered  bool        `json:"recovered"`
+	Held       bool            `json:"held"`
+	Origin     core.Origin     `json:"origin"`
+	Recovered  bool            `json:"recovered"`
 	// ElapsedSeconds is the measured time; for a stale timer it is
 	// capped at lastSeen, the figure the next change will record.
 	ElapsedSeconds int `json:"elapsedSeconds"`
