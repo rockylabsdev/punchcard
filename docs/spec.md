@@ -247,14 +247,14 @@ The local file is the source of truth. Jira is a destination that may be unreach
 
 - **Commands:** `start [KEY]`, `pause`, `resume [KEY]`, `stop [KEY]`, `status`, `ls`, `add KEY…`, `rm KEY`, `sync [KEY]`, `setup`, `version`. Hidden: `retry` (alias of `sync`), `touch [KEY] [--cwd DIR]` (the mod's presence call; `--cwd` derives the key from that directory's git branch), `--origin`. Bare `punchcard` opens the TUI on a TTY and prints `status` otherwise.
 - **JSON is opt-in only** (`--json` or `PUNCHCARD_JSON=1`); stdout not being a TTY never switches it on. One envelope on stdout even on failure: `{v, ok, outcome, command, data, events, error}`. `error` is `{code, message, hint?}`. `v` versions the contract separately from the file schema; additive changes keep `v: 1`; `version --json` reports it. `--json` never prompts. State words follow `CONTEXT.md`: `running|paused|stale` for a timer, `pending|synced|failed` for a worklog.
-- **Exit codes:** 0 ok (including idempotent no-ops; reads always 0), 1 internal, 3 `not_configured`, 4 `no_timer` (nothing to act on, or an ambiguous target), 5 `ticket_not_found` (404: missing or invisible), 6 `needs_confirmation` (`data.preview` is the exact worklog; rerun with `--yes`), 7 `sync_pending` (**partial success**, `ok: true`: the stop is on disk, the worklog is pending or failed; run `sync`, never `stop` again), 8 `auth_failed`, 64 usage, 65 `state_unreadable` (newer schema), 75 busy. **Exit 2 is never used.**
+- **Exit codes:** 0 ok (including idempotent no-ops; reads always 0), 1 internal, 3 `not_configured`, 4 `no_timer` (nothing to act on, or an ambiguous target), 5 `ticket_not_found` (404: missing or invisible), 6 `needs_confirmation` (`data.preview` is the exact worklog; an agent reruns with `--yes`; a recovered entry needs `--duration`, with or without `--yes`), 7 `sync_pending` (**partial success**, `ok: true`: the stop is on disk, the worklog is pending or failed; run `sync`, never `stop` again), 8 `auth_failed`, 64 usage, 65 `state_unreadable` (newer schema), 75 busy. **Exit 2 is never used.**
 - **Origin:** `agent` when `CLAUDECODE` or `AI_AGENT` is set, `hand` otherwise; `--origin` overrides (the mod passes `prompt` for focus and `hand` for `/punch`). A command typed with `!` inside Claude Code counts as `agent`; accepted.
 - **Transitions:** `start A` while A runs is a no-op with exit 0, and with origin `hand` it holds A. `start B` pauses A with an event. `pause` with nothing running exits 4. `resume` with no key resumes the most recently paused entry; `resume KEY` equals `start KEY`. `start KEY` adds an untracked ticket. `rm` refuses a ticket with a running or paused entry or an unsynced worklog (exit 4 with a hint); `--force` overrides.
 - **Summary fetch:** only a ticket new to the list fetches its summary, with a budget of about 2 s. A 404 exits 5 and changes nothing. Unreachable or unconfigured starts anyway and leaves the ticket unverified until a later change to that ticket, or the TUI, confirms it. Reads never call Jira.
-- **Stop:** with no key, the running entry, else the single paused entry; several paused entries exit 4 and list them; `stop KEY` targets one. On a TTY it prompts for the duration (prefilled) and a comment; with no TTY or with `--json` it uses the measured elapsed truncated to the minute. It POSTs inline; `--no-sync` leaves the worklog pending. A recovered entry with no TTY and no `--duration` is refused with exit 6. Under one minute, the TTY prompt opens with no default and asks until a duration is typed; with no TTY, `--json` or `--yes` it is refused with exit 64 and a hint to pass `--duration`. `--duration` accepts `1h30m`, `1h`, `90m` or bare minutes, 1 m to 24 h; `h:mm` is rejected. With origin `agent` and no `--yes`, `stop` always exits 6 with `data.preview`. `--dry-run` always previews with exit 0.
+- **Stop:** with no key, the running entry, else the single paused entry; several paused entries exit 4 and list them; `stop KEY` targets one. On a TTY it prompts for the duration (prefilled) and a comment; with no TTY or with `--json` it uses the measured elapsed truncated to the minute. It POSTs inline; `--no-sync` leaves the worklog pending. A recovered entry with no TTY and no `--duration` is refused with exit 6; on a TTY the prompt says it was recovered and offers the capped time as the default when that is at least a minute (the TUI dialog never prefills a recovered entry). Under one minute, the TTY prompt opens with no default and asks until a duration is typed; with no TTY, `--json` or `--yes` it is refused with exit 64 and a hint to pass `--duration`. `--duration` accepts `1h30m`, `1h`, `90m` or bare minutes, 1 m to 24 h; `h:mm` is rejected. With origin `agent` and no `--yes`, `stop` always exits 6 with `data.preview`. `--dry-run` always previews with exit 0.
 - **Sync:** `sync` with no key sends every pending and failed worklog one at a time; exits 0 when all sent, 7 when some remain, 8 on a 401, 3 when unconfigured. Only `stop` (its own worklog) and `sync` ever POST.
 - **Human output:** errors to stderr; colour only on a TTY with `NO_COLOR` unset. `status` shows the running ticket, paused tickets, the unsent count and, after a 401, the auth failure until a call succeeds. `status --short` is for shell prompts (`▶ ABC-123 1:12 · 2 unsent`, `⏸ …`, `! … stale`), prints nothing when idle with nothing owed, only `2 unsent` when idle with worklogs owed, and always exits 0. `ls` is ordered by most recent activity with key, state, open elapsed, unsynced count and summary. Every human-mode change prints a stderr warning while unsent worklogs exist.
-- **Recents are the `ls` order**, with no separate store. `start` with no key opens a picker on a TTY and exits 64 otherwise.
+- **Recents are the `ls` order**, with no separate store. `start` with no key opens a picker on a TTY and exits 64 otherwise. The picker is a numbered list of at most 9 recents on stderr; the answer is a number or a key typed in full, and an empty line cancels with exit 0.
 
 ### Agent integration — [Agent integration surface and unattended-action policy](https://github.com/j-dsmith/punchcard/issues/10), ADR [0005](adr/0005-agent-stop-gated-by-mod-and-ask-rule.md)
 
@@ -278,7 +278,6 @@ The state file, which encodes the schema more precisely than prose (carried from
 ```json
 {
   "schemaVersion": 1,
-  "authFailedAt": null,
   "trackedTickets": [
     {
       "key": "PUNCH-12",
@@ -295,8 +294,7 @@ The state file, which encodes the schema more precisely than prose (carried from
           ],
           "held": true,
           "origin": "hand",
-          "recovered": false,
-          "worklog": null
+          "recovered": false
         }
       ]
     }
@@ -304,14 +302,14 @@ The state file, which encodes the schema more precisely than prose (carried from
 }
 ```
 
-`worklog` is `null` until the entry is stopped, then one of three flat tagged shapes:
+`worklog` is absent until the entry is stopped, then one of three flat tagged shapes (`comment` is absent when empty; `authFailedAt` appears at the top level only after a 401):
 
 ```json
 { "state": "pending", "startedAt": "…", "timeSpentSeconds": 1800, "comment": "Fixed the formatter" }
-{ "state": "synced",  "startedAt": "…", "timeSpentSeconds": 1800, "comment": null,
+{ "state": "synced",  "startedAt": "…", "timeSpentSeconds": 1800,
   "worklogId": "110001", "syncedAt": "…" }
-{ "state": "failed",  "startedAt": "…", "timeSpentSeconds": 1800, "comment": null,
-  "message": "401 Unauthorized", "failedAt": "…" }
+{ "state": "failed",  "startedAt": "…", "timeSpentSeconds": 1800,
+  "message": "Jira answered 503: Service unavailable", "failedAt": "…" }
 ```
 
 The heartbeat file holds `schemaVersion` and `lastSeen`, nothing else, and is written on presence events, rate-limited, never waiting for the lock.
@@ -391,7 +389,7 @@ The settled layout, from the prototype at 80×24 (the prototype is a reference; 
 - **[3] Jira**, a full-width strip along the bottom sized to its contents (at most about 5 rows, then `+N more`): logged today · owed · last sync (or `token rejected` / `not connected`), a dim column header, and rows that **lead with the outcome**: `✗ failed — 503 · r`, `○ not sent yet · r`, `✓ logged 17:49`. Owed worklogs from any day; sent ones only from today.
 - **Status line**, just above the keys: the worst condition in the quiet banner form (one slot, never dismissible, worst first: token rejected, then a Keychain error naming the cause, then not connected, then failed worklogs), otherwise the last event with its time and origin (`you` / `prompt` / `agent`). A transient notice (a toast, "syncing…") replaces it for about 5 s, the one exception to never dismissible.
 - **Key bar**: context-sensitive, showing only the keys that apply now, switching to the dialog's keys inside a dialog.
-- **Keys:** `space`/`enter` start, pause or resume the selected row (starting B pauses A); `p` pauses whatever is running from any row; `x` opens the stop dialog (editable duration, optional comment, live "→ sends 1h 12m" preview; enter sends, esc cancels and leaves the timer alone); `a` add with recents offered under the input; `d` remove, confirming with `y` and warning when unsent time would be lost; `r` syncs all pending and failed; `S` suspends into setup; `j k ↑ ↓ g G` move; `?` help; `q` quits with timers running.
+- **Keys:** `space`/`enter` start, pause or resume the selected row (starting B pauses A); `p` pauses whatever is running from any row; `x` opens the stop dialog (editable duration taking `1h 20m`, `1h20m`, `1h`, `80m`, `80` or `1:20`, 1 m to 24 h, spaces ignored, which is looser than the CLI's `--duration`, since `h:mm` is accepted here and refused there; optional comment; live "→ sends 1h 12m" preview; enter sends, esc cancels and leaves the timer alone); `a` add with recents offered under the input; `d` remove, confirming with `y` and warning when unsent time would be lost; `r` syncs all pending and failed; `S` suspends into setup; `j k ↑ ↓ g G` move; `?` help; `q` quits with timers running.
 - **Colour and symbols:** the semantic colours are the **16 ANSI slots** so they follow the theme; only greys come from the 256 cube and fall back to bright black. Running green bold `▶`; paused yellow `‖`; recovered magenta bold `!`; **sync reserved blue** (pending `○`, the `r` key; synced `✓` is dim, not blue); failure red `✗`; idle `·` and unverified `?` dim. Every state has a symbol so no-colour mode still distinguishes them; symbols are single-cell, no emoji, none whose width varies by terminal.
 - **Changes made elsewhere:** on the 1 s tick, when the `stat` check finds `state.json` changed, the changed row shows a tag naming what and who for about 6 s (`started by agent`, `paused by prompt`, `stopped by hand`) and the status line logs it with its origin.
 - **The TUI never writes from its model.** Every keystroke requests a transition through the store, and the model re-reads the result. The 1 s tick carries `now`; `Update` never reads the clock.
