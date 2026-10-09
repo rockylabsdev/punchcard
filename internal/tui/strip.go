@@ -134,6 +134,8 @@ func (m Model) stripTitle() string {
 	switch {
 	case !st.AuthFailedAt.IsZero():
 		title += sDim.Render(" · ") + sFail.Render("token rejected")
+	case m.keychainError() != nil:
+		title += sDim.Render(" · ") + sWarn.Render("Keychain error")
 	case m.notConnected():
 		title += sDim.Render(" · ") + sWarn.Render("not connected")
 	case !last.IsZero():

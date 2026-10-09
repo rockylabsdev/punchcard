@@ -59,13 +59,13 @@ func TestBannerIsTheWorstCondition(t *testing.T) {
 		title      string
 	}{
 		{"token rejected beats not connected", false, true, true,
-			"✗ Jira rejected the token at 08:20 · 2 worklogs waiting", "· token rejected"},
+			"✗ Jira rejected the token at 08:20 · 2 worklogs waiting · S to fix", "· token rejected"},
 		{"token rejected", true, true, true,
-			"✗ Jira rejected the token at 08:20 · 2 worklogs waiting", "· token rejected"},
+			"✗ Jira rejected the token at 08:20 · 2 worklogs waiting · S to fix", "· token rejected"},
 		{"not connected beats a failure", false, false, true,
-			"Not connected to Jira · worklogs wait here, nothing is lost", "· not connected"},
+			"Not connected to Jira · S to set up · worklogs wait here, nothing is lost", "· not connected"},
 		{"not connected, nothing owed", false, false, false,
-			"Not connected to Jira · worklogs wait here, nothing is lost", "· not connected"},
+			"Not connected to Jira · S to set up · worklogs wait here, nothing is lost", "· not connected"},
 		{"a failure", true, false, true,
 			"✗ 1 worklog failed to reach Jira · r to retry · nothing is lost", "· owed 45m"},
 		{"all well", true, false, false, "", "· owed 0m"},
@@ -202,19 +202,19 @@ func TestKeyBarShowsWhatApplies(t *testing.T) {
 		want  string
 	}{
 		{"idle row, something owed", owing, nil,
-			"space start a add d remove r sync 2 ? help q quit"},
+			"space start a add d remove r sync 2 S setup ? help q quit"},
 		{"running row, nothing owed", func(t *testing.T) *harness {
 			hs := newHarness(t)
 			hs.setup("08:00:00", add("AA-1"), start("AA-1", "E"))
 			return hs
-		}, nil, "space pause x stop… a add d remove ? help q quit"},
+		}, nil, "space pause x stop… a add d remove S setup ? help q quit"},
 		{"another row runs", func(t *testing.T) *harness {
 			hs := owing(t)
 			hs.setup("08:30:00", start("AA-1", "E2"))
 			return hs
-		}, []string{"j"}, "space start p pause a add d remove r sync 2 ? help q quit"},
+		}, []string{"j"}, "space start p pause a add d remove r sync 2 S setup ? help q quit"},
 		{"empty list", func(t *testing.T) *harness { return newHarness(t) }, nil,
-			"a add ? help q quit"},
+			"a add S setup ? help q quit"},
 		{"help open", owing, []string{"?"}, "any key close"},
 	}
 	for _, c := range cases {
@@ -251,7 +251,7 @@ func TestABrokenConfigIsNotConnected(t *testing.T) {
 	hs := owing(t)
 	hs.openErr = errors.New("config.json: invalid character")
 	hs.open("09:12:00", 120, 32)
-	if got := statusText(hs); got != "Not connected to Jira · worklogs wait here, nothing is lost" {
+	if got := statusText(hs); got != "Not connected to Jira · S to set up · worklogs wait here, nothing is lost" {
 		t.Errorf("status line = %q", got)
 	}
 }

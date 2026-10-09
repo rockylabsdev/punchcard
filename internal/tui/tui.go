@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os/exec"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -26,7 +27,11 @@ type Options struct {
 	Sender Sender
 	// Jira opens the client for summary lookups (add, and confirming an
 	// unverified ticket on start). Nil: Jira is not configured.
-	Jira   func() (jira.Client, error)
+	Jira func() (jira.Client, error)
+	// Setup builds the `punchcard setup` command that S suspends into
+	// (tea.ExecProcess hands it the terminal). Nil: S says to run it
+	// from the shell.
+	Setup  func() *exec.Cmd
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer

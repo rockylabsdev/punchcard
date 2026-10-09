@@ -29,4 +29,4 @@
 │ ○ not sent yet · r            OPS-77        15m   08:01                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
  ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                                                        
- space pause  x stop…  a add  d remove  r sync 2  ? help  q quit                                                        
+ space pause  x stop…  a add  d remove  r sync 2  S setup  ? help  q quit                                               

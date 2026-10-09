@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -76,6 +77,10 @@ type Model struct {
 	tags map[string]tag
 	// ticker schedules the next tick (tests stub it: they move time).
 	ticker func() tea.Cmd
+	// setup builds the setup command S runs; execProcess suspends the
+	// TUI to run it (tea.ExecProcess; tests stub it).
+	setup       func() *exec.Cmd
+	execProcess func(*exec.Cmd, tea.ExecCallback) tea.Cmd
 }
 
 // tickMsg is the 1 s clock. It is the only way time reaches Update.
@@ -109,6 +114,7 @@ const (
 	intentVerify                        // Jira confirmed key: record summary
 	intentAuthFailure                   // Jira answered 401
 	intentReload                        // re-read the store (after a sync)
+	intentClearAuth                     // Jira answered with these credentials
 )
 
 type intent struct {
@@ -125,7 +131,8 @@ type intent struct {
 // (which Init starts). o.Now is read once, to seed the clock until the
 // first tick.
 func New(o Options) Model {
-	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick}
+	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick,
+		setup: o.Setup, execProcess: tea.ExecProcess}
 }
 
 // Init loads the store, asks whether Jira is set up and starts the
@@ -175,6 +182,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case linkMsg:
 		m.link = link{known: true, err: msg.err}
 		return m, nil
+	case setupDoneMsg:
+		return m.setupDone(msg)
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
 		return m, nil
@@ -217,6 +226,8 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		m = m.openRemove()
 	case "r":
 		m, cmd = m.sync()
+	case "S":
+		m, cmd = m.runSetup()
 	case "?":
 		m = m.openHelp()
 	case "j", "down":
@@ -336,6 +347,11 @@ func (m Model) command(i intent) core.Command {
 		return core.Remove{Key: i.key, Force: i.force, Origin: core.OriginHand}
 	case intentAuthFailure:
 		return core.RecordAuthFailure{}
+	case intentClearAuth:
+		if m.world.State.AuthFailedAt.IsZero() {
+			return nil
+		}
+		return core.ClearAuthFailure{}
 	}
 	shown := m.shown()
 	for _, t := range shown.State.TrackedTickets {

@@ -76,6 +76,12 @@ func (m Model) fetched(f fetchMsg) (Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	default:
+		if (f.found || f.notFound) && !m.world.State.AuthFailedAt.IsZero() {
+			// Jira answered with these credentials: a recorded 401 no
+			// longer holds (a confirm-on-contact clears it via Verify).
+			m, cmd = m.enqueue(intent{kind: intentClearAuth})
+			cmds = append(cmds, cmd)
+		}
 		if d, ok := m.dlg.(addDialog); ok && d.asking == f.key {
 			m, cmd = d.answered(m, f)
 			cmds = append(cmds, cmd)

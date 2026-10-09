@@ -24,6 +24,7 @@ func (helpDialog) body(_ Model, w int) []string {
 		key("x", "stop the selected entry: review, then send to Jira"),
 		key("a / d", "add a ticket / remove the selected one"),
 		"  " + fit(sSyncKey.Render("r"), 16) + "sync: send pending and failed worklogs",
+		key("S", "setup: Jira credentials, the Claude Code plugin"),
 		key("j k ↑ ↓ g G", "move"),
 		key("q", "quit; timers keep running without the TUI"),
 		"",

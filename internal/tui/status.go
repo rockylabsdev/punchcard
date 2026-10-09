@@ -75,19 +75,28 @@ func (m Model) banner() (text string, st lipgloss.Style, ok bool) {
 			failed++
 		}
 	}
-	var kc *config.KeychainError
-	switch {
+	switch kc := m.keychainError(); {
 	case !s.AuthFailedAt.IsZero():
 		return gFailed + " Jira rejected the token at " + m.when(s.AuthFailedAt.Time) +
-			" · " + worklogs(owed) + " waiting", sFail, true
-	case m.link.known && errors.As(m.link.err, &kc):
+			" · " + worklogs(owed) + " waiting · S to fix", sFail, true
+	case kc != nil:
 		return "Keychain error: " + kc.Err.Error() + " · worklogs wait here, nothing is lost", sWarn, true
 	case m.notConnected():
-		return "Not connected to Jira · worklogs wait here, nothing is lost", sWarn, true
+		return "Not connected to Jira · S to set up · worklogs wait here, nothing is lost", sWarn, true
 	case failed > 0:
 		return gFailed + " " + worklogs(failed) + " failed to reach Jira · r to retry · nothing is lost", sFail, true
 	}
 	return "", lipgloss.Style{}, false
+}
+
+// keychainError is the probe's Keychain failure, if that is why Jira
+// is not connected.
+func (m Model) keychainError() *config.KeychainError {
+	var kc *config.KeychainError
+	if m.link.known && errors.As(m.link.err, &kc) {
+		return kc
+	}
+	return nil
 }
 
 // notConnected: Jira is not set up (or its config cannot be read). It
