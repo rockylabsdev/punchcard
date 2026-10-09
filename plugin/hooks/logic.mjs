@@ -83,7 +83,46 @@ export function parseEnvelope(stdout) {
 
 /**
  * @typedef {{ tone: 'success' | 'warning' | 'error' | 'subtle', text: string }} Band
+ * @typedef {{ plugin: string, binary: string }} Skew
  */
+
+/**
+ * A release version without its leading v, or "" for one that is not a
+ * release (dev, unknown, empty): those never count as skew, as in setup.
+ * @param {unknown} v
+ */
+function release(v) {
+  const s = String(v ?? '').replace(/^v/, '')
+  return /^\d/.test(s) ? s : ''
+}
+
+/**
+ * The `version` in a plugin.json's text, or "" when it has none.
+ * @param {string} text
+ */
+export function manifestVersion(text) {
+  try {
+    const v = JSON.parse(String(text ?? '')).version
+    return typeof v === 'string' ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Whether this plugin and the punchcard binary on PATH come from different
+ * releases (ADR 0007: the binary leads after `brew upgrade`, the plugin
+ * follows through `punchcard setup`). plugin is plugin.json's version,
+ * binary is `version --json`'s data.version.
+ * @param {unknown} plugin
+ * @param {unknown} binary
+ * @returns {Skew | null}
+ */
+export function versionSkew(plugin, binary) {
+  const p = release(plugin)
+  const b = release(binary)
+  return p && b && p !== b ? { plugin: p, binary: b } : null
+}
 
 /**
  * What the band above the prompt shows, or null for no band.
@@ -95,9 +134,10 @@ export function parseEnvelope(stdout) {
  * none).
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @param {string} hereKey
+ * @param {Skew | null} [skew] plugin and binary versions when they differ
  * @returns {Band | null}
  */
-export function bandFrom(poll, hereKey) {
+export function bandFrom(poll, hereKey, skew = null) {
   if (poll.missing) return { tone: 'error', text: 'punchcard not found on PATH' }
   if (poll.failed !== undefined) return { tone: 'error', text: `punchcard: ${poll.failed}` }
   const env = poll.envelope
@@ -110,7 +150,7 @@ export function bandFrom(poll, hereKey) {
   const authFailed = Boolean(d.authFailedAt)
   const keychainBroken = !authFailed && Boolean(d.keychainError) // one slot: the worse wins
   const shown = d.running ?? paused[0]
-  if (!shown && unsent === 0 && !authFailed && !keychainBroken) return null
+  if (!shown && unsent === 0 && !authFailed && !keychainBroken && !skew) return null
 
   /** @type {string[]} */
   const parts = []
@@ -136,6 +176,10 @@ export function bandFrom(poll, hereKey) {
   }
   const runningKey = d.running?.key ?? ''
   if (hereKey && hereKey !== runningKey) parts.push(`here: ${hereKey}`)
+  if (skew) {
+    parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
+    if (tone === 'subtle') tone = 'warning'
+  }
   return { tone, text: parts.join(' · ') }
 }
 

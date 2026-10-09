@@ -6,6 +6,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Band } from '../types'
+type Skew = { plugin: string; binary: string } // logic.mjs's Skew
 import {
   ASK,
   CANCEL,
@@ -16,6 +17,7 @@ import {
   editPresenceDue,
   eventText,
   gateVerdict,
+  manifestVersion,
   needsDuration,
   parseEnvelope,
   parsePunch,
@@ -25,6 +27,7 @@ import {
   stopQuestion,
   submitTouch,
   tighten,
+  versionSkew,
 } from './logic.mjs'
 
 const band = atom({ plugin: 'punchcard', key: 'band' } as const, null as Band | null)
@@ -32,6 +35,7 @@ const band = atom({ plugin: 'punchcard', key: 'band' } as const, null as Band | 
 const POLL_MS = 10_000
 const QUICK_MS = 5_000 // reads and presence
 const SEND_MS = 30_000 // a stop POSTs within a 10 s budget
+const VERSION_MS = 300_000 // how often to re-read the binary's version (brew upgrade mid-session)
 
 type Origin = 'prompt' | 'hand'
 type Ran = { envelope: any; exitCode: number }
@@ -39,6 +43,9 @@ type Ran = { envelope: any; exitCode: number }
 // Module state: a reload resets both, which is harmless.
 let lastEdit = 0 // when typing last counted as presence
 let polling = false // a status poll is in flight
+let pluginVersion: string | null = null // this plugin's plugin.json version, read once
+let binaryVersion = '' // `punchcard version --json`, '' until known
+let binaryCheckedAt = 0
 
 // run calls punchcard with --json and an explicit --origin. It rejects
 // only when the binary could not be started or timed out.
@@ -64,6 +71,38 @@ async function hereKey($: EngineInterface): Promise<string> {
   }
 }
 
+// ownVersion is this plugin's plugin.json version, "" when unreadable.
+async function ownVersion($: EngineInterface): Promise<string> {
+  if (pluginVersion !== null) return pluginVersion
+  pluginVersion = ''
+  for (const p of [`${$.plugin.root}/.claude-plugin/plugin.json`, `${$.plugin.root}/plugin.json`]) {
+    try {
+      pluginVersion = manifestVersion(await $.fs.read(p))
+      if (pluginVersion) break
+    } catch {
+      // not here; try the next place
+    }
+  }
+  return pluginVersion
+}
+
+// skew compares this plugin's version with the binary's (ADR 0007). The
+// binary's is re-read every VERSION_MS, so a brew upgrade during the
+// session shows up; "" (unknown) never counts as skew.
+async function skew($: EngineInterface): Promise<Skew | null> {
+  const now = await $.clock.now()
+  if (!binaryVersion || now - binaryCheckedAt >= VERSION_MS) {
+    binaryCheckedAt = now
+    try {
+      const r = await run($, ['version'], 'prompt')
+      binaryVersion = r.envelope?.ok ? String(r.envelope.data?.version ?? '') : ''
+    } catch {
+      binaryVersion = '' // not found or timed out: the status poll says so
+    }
+  }
+  return versionSkew(await ownVersion($), binaryVersion)
+}
+
 // refresh polls status --json and redraws the band.
 async function refresh($: EngineInterface) {
   if (polling) return
@@ -73,7 +112,7 @@ async function refresh($: EngineInterface) {
     let next: Band | null
     try {
       const r = await run($, ['status'], 'prompt')
-      next = bandFrom({ envelope: r.envelope }, here)
+      next = bandFrom({ envelope: r.envelope }, here, await skew($))
     } catch (err) {
       const msg = String((err as Error)?.message ?? err)
       next = /time ?out|timed out/i.test(msg) ? bandFrom({ failed: 'status timed out' }, here) : bandFrom({ missing: true }, here)
