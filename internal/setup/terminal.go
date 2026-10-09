@@ -16,10 +16,35 @@ import (
 	"github.com/charmbracelet/x/term"
 )
 
-// Wordmark is PUNCHCARD in block letters, shown above the wizard.
+// Wordmark is PUNCHCARD as holes in a punched card: a 4×7 dot matrix
+// per letter, one column between letters. A punched position is '#',
+// an unpunched one '.'; wordmark renders them as a bright and a faint
+// dot, so the unpunched grid reads as the card itself.
 const Wordmark = "" +
-	"█▀█ █ █ █▄ █ █▀▀ █ █ █▀▀ ▄▀█ █▀█ █▀▄\n" +
-	"█▀▀ █▄█ █ ▀█ █▄▄ █▀█ █▄▄ █▀█ █▀▄ █▄▀"
+	"###..#..#.#..#..##..#..#..##...##..###..###.\n" +
+	"#..#.#..#.##.#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
+	"#..#.#..#.##.#.#....#..#.#....#..#.#..#.#..#\n" +
+	"###..#..#.#.##.#....####.#....####.###..#..#\n" +
+	"#....#..#.#.##.#....#..#.#....#..#.#.#..#..#\n" +
+	"#....#..#.#..#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
+	"#.....##..#..#..##..#..#..##..#..#.#..#.###."
+
+// wordmark is Wordmark styled: punched holes in the mark colour,
+// unpunched ones in the gutter grey.
+func wordmark() string {
+	var b strings.Builder
+	for _, r := range Wordmark {
+		switch r {
+		case '#':
+			b.WriteString(tMark.Render("●"))
+		case '.':
+			b.WriteString(tGutter.Render("·"))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
 
 var (
 	tGutter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -58,7 +83,7 @@ func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 
 // Begin prints the wordmark and opens the gutter.
 func (t *Terminal) Begin() {
-	t.print("\n" + tMark.Render(Wordmark) + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
+	t.print("\n" + wordmark() + "\n\n" + tGutter.Render("┌") + "  " + tTitle.Render("punchcard setup") + "\n")
 }
 
 // End closes the gutter.
