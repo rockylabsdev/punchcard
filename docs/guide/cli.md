@@ -381,7 +381,7 @@ $ punchcard touch --cwd /path/to/checkout --origin prompt --json
 {"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","held":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","held":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
 ```
 
-Today a prompt never starts a timer from idle; it only moves one that is already running. That is how the code behaves and is documented as such, not as a decision.
+A prompt never starts a timer from idle; it only moves one that is already running.
 
 ## Origin
 
