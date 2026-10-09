@@ -18,6 +18,7 @@ func (h *harness) runTTY(stdin string, tweak func(*cli.Env), args ...string) res
 		Stdin: strings.NewReader(stdin), Stdout: &out, Stderr: &errb,
 		Getenv: func(k string) string { return h.env[k] }, Now: func() time.Time { return h.now },
 		Version: "1.2.3", Store: h.st, TTY: true, Jira: h.jiraFn(),
+		Keychain: h.kc.read,
 	}
 	if tweak != nil {
 		tweak(&env)

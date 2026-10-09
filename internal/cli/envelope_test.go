@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/cli"
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
 	"golang.org/x/sys/unix"
@@ -28,6 +29,24 @@ type harness struct {
 	// jira, when set, is the Jira every run talks to. Nil means the
 	// default lookup, which finds no config here: unconfigured.
 	jira *jira.Fake
+	// kc is the Keychain seam every run gets (never the real one): no
+	// item unless a test says otherwise.
+	kc *fakeKeychain
+}
+
+// fakeKeychain answers the Keychain seam and counts the reads.
+type fakeKeychain struct {
+	token string
+	err   error
+	reads int
+}
+
+func (k *fakeKeychain) read(string) (string, error) {
+	k.reads++
+	if k.token == "" && k.err == nil {
+		return "", config.ErrNoKeychainItem
+	}
+	return k.token, k.err
 }
 
 func (h *harness) jiraFn() func() (jira.Client, error) {
@@ -38,7 +57,7 @@ func (h *harness) jiraFn() func() (jira.Client, error) {
 }
 
 func newHarness(t *testing.T) *harness {
-	h := &harness{t: t, dir: t.TempDir(), now: at("09:00"), env: map[string]string{}}
+	h := &harness{t: t, dir: t.TempDir(), now: at("09:00"), env: map[string]string{}, kc: &fakeKeychain{}}
 	h.st = store.New(h.dir, func() time.Time { return h.now })
 	h.st.LockWait = 50 * time.Millisecond
 	return h
@@ -57,14 +76,15 @@ func (h *harness) run(args ...string) result {
 	h.t.Helper()
 	var out, errb bytes.Buffer
 	code := cli.Run(args, cli.Env{
-		Stdin:   bytes.NewReader(nil),
-		Stdout:  &out,
-		Stderr:  &errb,
-		Getenv:  func(k string) string { return h.env[k] },
-		Now:     func() time.Time { return h.now },
-		Version: "1.2.3",
-		Store:   h.st,
-		Jira:    h.jiraFn(),
+		Stdin:    bytes.NewReader(nil),
+		Stdout:   &out,
+		Stderr:   &errb,
+		Getenv:   func(k string) string { return h.env[k] },
+		Now:      func() time.Time { return h.now },
+		Version:  "1.2.3",
+		Store:    h.st,
+		Jira:     h.jiraFn(),
+		Keychain: h.kc.read,
 		NewID: func() string {
 			h.ids++
 			return fmt.Sprintf("ID-%d", h.ids)
@@ -127,6 +147,13 @@ func paused(key, id string, held bool, origin string, elapsed int) string {
 func status(run string, paused ...string) string {
 	return fmt.Sprintf(`{"running": %s, "paused": [%s], "unsent": {"count": 0, "seconds": 0}, "authFailedAt": null}`,
 		run, strings.Join(paused, ","))
+}
+
+// unlinked is status data as status itself reports it in the harness:
+// the snapshot plus the Jira link, unconfigured (no HOME).
+func unlinked(data string) string {
+	data = strings.TrimSpace(data)
+	return strings.TrimSuffix(data, "}") + `, "configured": false, "notConfigured": "not connected to Jira: neither XDG_CONFIG_HOME nor HOME is set"}`
 }
 
 func TestEnvelopes(t *testing.T) {
@@ -253,34 +280,34 @@ func TestEnvelopes(t *testing.T) {
 				`[{"kind": "recovered", "key": "AA-1", "at": "2026-08-09T09:45:00.000-0500"}]`)},
 
 		// status
-		{"status idle", nil, "09:00", []string{"status"}, 0, ok("status", idle, noEvents)},
+		{"status idle", nil, "09:00", []string{"status"}, 0, ok("status", unlinked(idle), noEvents)},
 		{"status running and paused", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.do("09:10", "start", "AA-2")
 		}, "09:15",
 			[]string{"status"}, 0,
-			ok("status", status(running("AA-2", "ID-2", true, "hand", 300), paused("AA-1", "ID-1", true, "hand", 600)), noEvents)},
+			ok("status", unlinked(status(running("AA-2", "ID-2", true, "hand", 300), paused("AA-1", "ID-1", true, "hand", 600))), noEvents)},
 		{"status on a stale timer reports it capped", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.do("09:45", "touch")
 		}, "13:00",
 			[]string{"status"}, 0,
-			ok("status", `{"running": {"key": "AA-1", "unverified": true, "entryId": "ID-1", "state": "stale", "held": true, "origin": "hand",
+			ok("status", unlinked(`{"running": {"key": "AA-1", "unverified": true, "entryId": "ID-1", "state": "stale", "held": true, "origin": "hand",
 				"recovered": false, "elapsedSeconds": 2700, "uncappedSeconds": 14400, "lastSeen": "2026-08-09T09:45:00.000-0500"},
-				"paused": [], "unsent": {"count": 0, "seconds": 0}, "authFailedAt": null}`, noEvents)},
+				"paused": [], "unsent": {"count": 0, "seconds": 0}, "authFailedAt": null}`), noEvents)},
 		{"status counts unsent worklogs", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.do("09:30", "stop")
 		}, "10:00",
 			[]string{"status"}, 0,
-			ok("status", `{"running": null, "paused": [], "unsent": {"count": 1, "seconds": 1800}, "authFailedAt": null}`, noEvents)},
+			ok("status", unlinked(`{"running": null, "paused": [], "unsent": {"count": 1, "seconds": 1800}, "authFailedAt": null}`), noEvents)},
 		{"status --short is the same envelope", nil, "09:00", []string{"status", "--short"}, 0, ok("status", idle, noEvents)},
 		{"status refuses a newer schema", func(h *harness) {
 			os.WriteFile(filepath.Join(h.dir, "state.json"), []byte(`{"schemaVersion": 9}`), 0o600)
 		}, "09:00",
 			[]string{"status"}, 65,
 			refused("status", "state_unreadable", "state_unreadable", "upgrade punchcard", "null")},
-		{"bare punchcard off a TTY is status", nil, "09:00", []string{}, 0, ok("status", idle, noEvents)},
+		{"bare punchcard off a TTY is status", nil, "09:00", []string{}, 0, ok("status", unlinked(idle), noEvents)},
 
 		// ls, add, rm
 		{"ls is most recently active first", func(h *harness) {

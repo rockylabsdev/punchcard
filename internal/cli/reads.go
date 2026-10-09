@@ -1,18 +1,21 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/spf13/cobra"
 )
 
 // The reads: status, ls and version. They never call Jira and never
-// write; status and ls exit 0 unless the state cannot be read.
+// write; status and ls exit 0 unless the state cannot be read. Status
+// (but not --short) looks up the token to report its source.
 
 func (a *app) statusCmd() *cobra.Command {
 	var shortForm bool
@@ -41,17 +44,39 @@ func (a *app) status(shortForm bool) error {
 		return nil
 	}
 	d := snapshot(w, now)
-	var human string
 	if shortForm {
-		human = a.out.shortLine(d)
-	} else {
-		human = a.out.statusText(d, now)
+		// A shell prompt runs this every time: no token lookup.
+		a.code = a.out.ok("status", d, nil, a.out.shortLine(d))
+		return nil
 	}
-	a.code = a.out.ok("status", d, nil, human)
+	rep := a.link(d)
+	a.code = a.out.ok("status", rep, nil, a.out.statusText(rep, now))
 	return nil
 }
 
-func (o output) statusText(d StatusData, now time.Time) string {
+// link is d plus the Jira link: the config file and the token lookup,
+// never a network call.
+func (a *app) link(d StatusData) StatusReport {
+	rep := StatusReport{StatusData: d}
+	_, sec, err := config.Credentials(a.env.Getenv, a.env.Keychain)
+	var kc *config.KeychainError
+	switch {
+	case err == nil:
+		rep.Configured, rep.TokenSource = true, sec.Source
+		if sec.StrayFile {
+			rep.StrayTokenFile = config.TokenPath(a.env.Getenv)
+		}
+	case errors.As(err, &kc):
+		rep.KeychainError = kc.Error()
+		rep.NotConfigured = kc.Error()
+	default:
+		rep.NotConfigured = err.Error()
+	}
+	return rep
+}
+
+func (o output) statusText(rep StatusReport, now time.Time) string {
+	d := rep.StatusData
 	var b strings.Builder
 	if d.Running != nil {
 		b.WriteString(o.timerLine(*d.Running, now.Location(), now))
@@ -68,7 +93,28 @@ func (o output) statusText(d StatusData, now time.Time) string {
 		fmt.Fprintf(&b, "%s Jira rejected the token at %s; run `punchcard setup`\n",
 			o.paint(red, "!"), d.AuthFailedAt.In(now.Location()).Format("2006-01-02 15:04"))
 	}
+	switch {
+	case rep.KeychainError != "":
+		fmt.Fprintf(&b, "%s Not connected to Jira: %s\n", o.paint(red, "!"), rep.KeychainError)
+	case !rep.Configured:
+		fmt.Fprintf(&b, "Not connected to Jira: %s\n", strings.TrimPrefix(rep.NotConfigured, config.ErrNotConfigured.Error()+": "))
+	default:
+		fmt.Fprintf(&b, "Jira token: %s\n", sourceText(rep.TokenSource))
+	}
+	if rep.StrayTokenFile != "" {
+		fmt.Fprintf(&b, "%s a stray token file at %s is ignored (the Keychain wins); delete it\n", o.paint(yellow, "!"), rep.StrayTokenFile)
+	}
 	return b.String()
+}
+
+func sourceText(s config.Source) string {
+	switch s {
+	case config.SourceEnv:
+		return "PUNCHCARD_TOKEN"
+	case config.SourceKeychain:
+		return "Keychain"
+	}
+	return string(s)
 }
 
 // shortLine is `status --short`: ▶ ABC-123 1:12 · 2 unsent, ⏸ …, ! … stale.

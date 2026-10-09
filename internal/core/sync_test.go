@@ -73,6 +73,20 @@ func TestApplySyncOutcomes(t *testing.T) {
 			now:  "09:45",
 			want: authFailed(state(stoppedAs(with(core.WorklogPending, nil)))),
 		},
+		{
+			name: "a successful authenticated call clears the auth failure",
+			w:    core.World{State: authFailed(state(stoppedAs(with(core.WorklogPending, nil))))},
+			cmd:  core.ClearAuthFailure{},
+			now:  "10:00",
+			want: state(stoppedAs(with(core.WorklogPending, nil))),
+		},
+		{
+			name: "verify is Jira answering, so it clears the auth failure",
+			w:    core.World{State: authFailed(state(ticket("AA-2")))},
+			cmd:  core.Verify{Key: "AA-2", Summary: "Fix"},
+			now:  "10:00",
+			want: state(func() core.TrackedTicket { t := ticket("AA-2"); t.Summary = "Fix"; return t }()),
+		},
 	})
 }
 

@@ -14,16 +14,14 @@ import (
 	"github.com/j-dsmith/punchcard/internal/config"
 )
 
-// Open is the real Client from the config file and the token lookup. It
-// fails with config.ErrNotConfigured (or config.ErrNewerSchema, or a
-// malformed-file error) before any network call. Only Jira-calling
+// Open is the real Client from the config file and the token lookup
+// (PUNCHCARD_TOKEN, then kc, then the token file; kc is
+// config.SystemKeychain() outside tests, nil on Linux). It fails with
+// config.ErrNotConfigured, config.ErrNewerSchema, a *config.KeychainError
+// or a malformed-file error before any network call. Only Jira-calling
 // commands call it; reads and the presence path never do.
-func Open(getenv func(string) string) (Client, error) {
-	cfg, err := config.Load(getenv)
-	if err != nil {
-		return nil, err
-	}
-	tok, err := config.Token(getenv)
+func Open(getenv func(string) string, kc config.Keychain) (Client, error) {
+	cfg, tok, err := config.Credentials(getenv, kc)
 	if err != nil {
 		return nil, err
 	}

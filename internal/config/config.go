@@ -71,22 +71,3 @@ func Load(getenv func(string) string) (Config, error) {
 	return c, nil
 }
 
-// Source names where a token came from; status reports it.
-type Source string
-
-const SourceEnv Source = "env" // PUNCHCARD_TOKEN
-
-// Secret is the API token and where it was found.
-type Secret struct {
-	Value  string
-	Source Source
-}
-
-// Token finds the API token. For now only PUNCHCARD_TOKEN; slice 11
-// extends this to env → Keychain → file without changing callers.
-func Token(getenv func(string) string) (Secret, error) {
-	if t := getenv("PUNCHCARD_TOKEN"); t != "" {
-		return Secret{Value: t, Source: SourceEnv}, nil
-	}
-	return Secret{}, fmt.Errorf("%w: no API token (set PUNCHCARD_TOKEN)", ErrNotConfigured)
-}

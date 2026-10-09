@@ -27,7 +27,8 @@ func TestOpen(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "punchcard", "config.json"),
 		[]byte(`{"schemaVersion":1,"siteUrl":"`+ts.URL+`/","email":"user@example.com"}`), 0o600)
 	vars := map[string]string{"XDG_CONFIG_HOME": dir, "PUNCHCARD_TOKEN": "tok"}
-	c, err := Open(func(k string) string { return vars[k] })
+	noItem := func(string) (string, error) { return "", config.ErrNoKeychainItem }
+	c, err := Open(func(k string) string { return vars[k] }, noItem)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	delete(vars, "PUNCHCARD_TOKEN")
-	if _, err := Open(func(k string) string { return vars[k] }); !errors.Is(err, config.ErrNotConfigured) {
+	if _, err := Open(func(k string) string { return vars[k] }, noItem); !errors.Is(err, config.ErrNotConfigured) {
 		t.Errorf("no token: err = %v", err)
 	}
 }

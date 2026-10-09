@@ -56,6 +56,12 @@ func (a *app) newTicket(key string) (core.NewTicket, error) {
 	summary, err := c.Summary(ctx, key)
 	switch {
 	case err == nil:
+		// Jira answered: a recorded 401 no longer holds.
+		if !w.State.AuthFailedAt.IsZero() {
+			if _, aerr := a.apply(core.ClearAuthFailure{}); aerr != nil {
+				return n, aerr
+			}
+		}
 		return core.NewTicket{Key: key, Summary: summary}, nil
 	case errors.Is(err, jira.ErrNotFound) && !tracked:
 		return n, ticketNotFound{key}
