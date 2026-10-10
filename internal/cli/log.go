@@ -55,7 +55,8 @@ func (a *app) logCmd() *cobra.Command {
 		Short: "List worklogs over a range as Markdown (the default), CSV or JSON",
 		Long: "List one row per stopped entry whose worklog day (the local date it started) is in the range.\n" +
 			"The default range, and --week, is Monday of this week through today; --month is the first of the\n" +
-			"month through today; --from and --to are inclusive YYYY-MM-DD dates, either may stand alone.",
+			"month through today; --from and --to are inclusive YYYY-MM-DD dates, either may stand alone:\n" +
+			"--from alone runs through today, --to alone starts on the Monday of its own week.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			now := a.env.Now()
@@ -63,7 +64,7 @@ func (a *app) logCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			format, err := logFormat(f, cmd.Flags().Changed("json"))
+			format, err := formatOf(f, cmd.Flags().Changed("json"))
 			if err != nil {
 				return err
 			}
@@ -74,9 +75,9 @@ func (a *app) logCmd() *cobra.Command {
 			}
 			d := logData(w, now, from, to)
 			switch format {
-			case "csv":
+			case logCSVOut:
 				a.code = a.raw(logCSV(d))
-			case "md":
+			case logMDOut:
 				a.code = a.raw(logMarkdown(d))
 			default:
 				a.code = a.out.ok("log", d, nil, logMarkdown(d))
@@ -86,8 +87,8 @@ func (a *app) logCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&f.week, "week", false, "Monday of this week through today (the default)")
 	c.Flags().BoolVar(&f.month, "month", false, "the first of this month through today")
-	c.Flags().StringVar(&f.from, "from", "", "first day, YYYY-MM-DD (alone: through today)")
-	c.Flags().StringVar(&f.to, "to", "", "last day, YYYY-MM-DD (alone: from this Monday)")
+	c.Flags().StringVar(&f.from, "from", "", "first day, YYYY-MM-DD (alone: through today, or just that day if still to come)")
+	c.Flags().StringVar(&f.to, "to", "", "last day, YYYY-MM-DD (alone: from the Monday of its week)")
 	c.Flags().BoolVar(&f.md, "md", false, "print Markdown: a table per day with totals (the default)")
 	c.Flags().BoolVar(&f.csv, "csv", false, "print CSV with a header row, for a spreadsheet or another tracker")
 	return c
@@ -100,50 +101,64 @@ func (a *app) raw(text string) int {
 	return ExitOK
 }
 
-// logFormat is "csv", "md" or "" (the envelope with --json, else the
-// Markdown). Asking for two formats by flag is usage; PUNCHCARD_JSON=1
-// alone yields to a format flag.
-func logFormat(f logFlags, jsonFlag bool) (string, error) {
+// logFormat is how log prints: the envelope with --json, else the
+// Markdown (logDefault), or a format asked for by name.
+type logFormat string
+
+const (
+	logDefault logFormat = ""
+	logCSVOut  logFormat = "csv"
+	logMDOut   logFormat = "md"
+)
+
+// countTrue is how many of bs are set.
+func countTrue(bs ...bool) int {
 	n := 0
-	for _, b := range []bool{f.md, f.csv, jsonFlag} {
+	for _, b := range bs {
 		if b {
 			n++
 		}
 	}
+	return n
+}
+
+// midnight is the start of t's local date, in t's zone.
+func midnight(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// formatOf is the format the flags name. Asking for two formats by flag
+// is usage; PUNCHCARD_JSON=1 alone yields to a format flag.
+func formatOf(f logFlags, jsonFlag bool) (logFormat, error) {
 	switch {
-	case n > 1:
+	case countTrue(f.md, f.csv, jsonFlag) > 1:
 		return "", usageError("--md, --csv and --json are different formats: pass one")
 	case f.csv:
-		return "csv", nil
+		return logCSVOut, nil
 	case f.md:
-		return "md", nil
+		return logMDOut, nil
 	}
-	return "", nil
+	return logDefault, nil
 }
 
 // logRange is the inclusive range of local dates, as midnights in now's
-// zone. With --from or --to alone, the other is the current week's edge:
-// today for --to, this Monday for --from.
+// zone. A date flag alone takes its missing edge from the date given, so
+// that a lone flag never makes a range the user cannot see: --to alone
+// starts on the Monday of --to's week; --from alone runs through today,
+// or is that one day when it is still to come. Only both flags can be
+// out of order.
 func logRange(f logFlags, now time.Time) (from, to time.Time, err error) {
 	loc := now.Location()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	monday := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
+	today := midnight(now)
 	dates := f.from != "" || f.to != ""
-	n := 0
-	for _, b := range []bool{f.week, f.month, dates} {
-		if b {
-			n++
-		}
-	}
 	switch {
-	case n > 1:
+	case countTrue(f.week, f.month, dates) > 1:
 		return from, to, usageError("--week, --month and --from/--to are different ranges: pass one")
 	case f.month:
 		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc), today, nil
 	case !dates:
-		return monday, today, nil
+		return mondayOf(today), today, nil
 	}
-	from, to = monday, today
 	if f.from != "" {
 		if from, err = time.ParseInLocation(dateLayout, f.from, loc); err != nil {
 			return from, to, usageError(fmt.Sprintf("--from %q is not a YYYY-MM-DD date", f.from))
@@ -154,10 +169,23 @@ func logRange(f logFlags, now time.Time) (from, to time.Time, err error) {
 			return from, to, usageError(fmt.Sprintf("--to %q is not a YYYY-MM-DD date", f.to))
 		}
 	}
-	if from.After(to) {
+	switch {
+	case f.from == "":
+		from = mondayOf(to)
+	case f.to == "":
+		to = today
+		if from.After(today) {
+			to = from
+		}
+	case from.After(to):
 		return from, to, usageError(fmt.Sprintf("--from %s is after --to %s", from.Format(dateLayout), to.Format(dateLayout)))
 	}
 	return from, to, nil
+}
+
+// mondayOf is the Monday on or before the midnight day.
+func mondayOf(day time.Time) time.Time {
+	return day.AddDate(0, 0, -((int(day.Weekday()) + 6) % 7))
 }
 
 // logData is the worklogs whose day is in [from, to], by day then start,
@@ -173,7 +201,7 @@ func logData(w core.World, now time.Time, from, to time.Time) LogData {
 			// A worklog belongs wholly to the local date it started, even
 			// when its entry ran past midnight.
 			start := e.Worklog.StartedAt.In(loc)
-			day := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
+			day := midnight(start)
 			if day.Before(from) || day.After(to) {
 				continue
 			}
@@ -186,19 +214,13 @@ func logData(w core.World, now time.Time, from, to time.Time) LogData {
 		}
 	}
 	slices.SortStableFunc(d.Rows, func(x, y LogRow) int { return x.Started.Compare(y.Started.Time) })
-	for _, t := range w.State.TrackedTickets {
-		for _, e := range t.Entries {
-			if e.Running() {
-				tm := timerOf(w, t, e, now)
-				d.Open = &tm
-			}
-		}
+	t, e, ok := core.Running(w.State)
+	if !ok {
+		t, e, ok = core.LastPaused(w.State)
 	}
-	if d.Open == nil {
-		if t, e, ok := core.LastPaused(w.State); ok {
-			tm := timerOf(w, t, e, now)
-			d.Open = &tm
-		}
+	if ok {
+		tm := timerOf(w, t, e, now)
+		d.Open = &tm
 	}
 	return d
 }

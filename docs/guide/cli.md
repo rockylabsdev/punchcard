@@ -449,7 +449,7 @@ punchcard: setup is interactive; run it in a terminal
 
 ### `log`
 
-One row per worklog whose day (the local date its entry started, so a stretch past midnight stays on the day it began) is in the range, by day then start. The range is this week, Monday through today, by default and with `--week`; `--month` is the first of the month through today; `--from DATE` and `--to DATE` (`YYYY-MM-DD`, inclusive) may stand alone, `--from` running through today and `--to` starting this Monday. Two ranges, two formats, a bad date or `--from` after `--to` is usage (exit 64); anything else exits 0, an empty range included. `log` only reads: no tracker, no presence, no write.
+One row per worklog whose day (the local date its entry started, so a stretch past midnight stays on the day it began) is in the range, by day then start. The range is this week, Monday through today, by default and with `--week`; `--month` is the first of the month through today; `--from DATE` and `--to DATE` (`YYYY-MM-DD`, inclusive) may stand alone: `--from` runs through today (or is just that day, when it is still to come), and `--to` starts on the Monday of its own week, so `--to` with last Friday is last week through Friday. Two ranges, two formats, a bad date or `--from` after `--to` is usage (exit 64); anything else exits 0, an empty range included. `log` only reads: no tracker, no presence, no write.
 
 ```
 $ punchcard log

@@ -163,8 +163,12 @@ func TestLogRanges(t *testing.T) {
 			"2026-08-01", "2026-08-03", []string{"2026-08-01", "2026-08-03", "2026-08-03"}},
 		{"--from alone runs through today", on(5, "11:30"), []string{"--from", "2026-08-04"},
 			"2026-08-04", "2026-08-05", []string{"2026-08-04", "2026-08-04", "2026-08-05"}},
-		{"--to alone starts this Monday", on(5, "11:30"), []string{"--to", "2026-08-04"},
+		{"--to alone starts on its own week's Monday", on(5, "11:30"), []string{"--to", "2026-08-04"},
 			"2026-08-03", "2026-08-04", []string{"2026-08-03", "2026-08-03", "2026-08-04", "2026-08-04"}},
+		{"--to alone in a past week is that week through --to", on(5, "11:30"), []string{"--to", "2026-08-01"},
+			"2026-07-27", "2026-08-01", []string{"2026-08-01"}},
+		{"--from alone in the future is that one day", on(5, "11:30"), []string{"--from", "2026-08-07"},
+			"2026-08-07", "2026-08-07", nil},
 		{"one day", on(9, "12:00"), []string{"--from", "2026-08-02", "--to", "2026-08-02"},
 			"2026-08-02", "2026-08-02", nil},
 	}
@@ -194,7 +198,6 @@ func TestLogRanges(t *testing.T) {
 func TestLogUsage(t *testing.T) {
 	for _, args := range [][]string{
 		{"--from", "2026-08-05", "--to", "2026-08-03"},
-		{"--to", "2026-07-31"}, // before this Monday, where --from defaults
 		{"--from", "8/3/2026"},
 		{"--to", "2026-08-32"},
 		{"--week", "--month"},
