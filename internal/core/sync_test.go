@@ -23,6 +23,8 @@ func TestApplySyncOutcomes(t *testing.T) {
 	failed := with(core.WorklogFailed, func(w *core.Worklog) { w.Message = "timeout"; w.FailedAt = at("10:00") })
 	local := with(core.WorklogLocal, nil)
 	authFailed := func(s core.State) core.State { s.AuthFailedAt = at("09:45"); return s }
+	unverifiedAs := func(tk core.TrackedTicket) core.TrackedTicket { tk.Unverified = true; return tk }
+	summarised := func(tk core.TrackedTicket) core.TrackedTicket { tk.Summary = "Fix it"; return tk }
 
 	runApply(t, []applyCase{
 		{
@@ -31,6 +33,24 @@ func TestApplySyncOutcomes(t *testing.T) {
 			cmd:    core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "110001"},
 			now:    "10:00",
 			want:   state(stoppedAs(synced)),
+			events: []core.Event{{Kind: core.EventSynced, Key: "AA-1"}},
+		},
+		{
+			// An accepted worklog proves the key exists (#42); the summary
+			// is the sender's to fetch.
+			name:   "mark synced confirms an unverified ticket, summary untouched",
+			w:      world("", unverifiedAs(stoppedAs(with(core.WorklogPending, nil)))),
+			cmd:    core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "110001"},
+			now:    "10:00",
+			want:   state(stoppedAs(synced)),
+			events: []core.Event{{Kind: core.EventSynced, Key: "AA-1"}},
+		},
+		{
+			name:   "mark synced leaves a verified ticket's summary alone",
+			w:      world("", summarised(stoppedAs(with(core.WorklogPending, nil)))),
+			cmd:    core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "110001"},
+			now:    "10:00",
+			want:   state(summarised(stoppedAs(synced))),
 			events: []core.Event{{Kind: core.EventSynced, Key: "AA-1"}},
 		},
 		{

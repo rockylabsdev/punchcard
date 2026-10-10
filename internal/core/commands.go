@@ -110,7 +110,8 @@ type Touch struct {
 
 // MarkSynced records that the tracker accepted an entry's worklog. It refuses a
 // worklog already synced (ErrAlreadySynced) or local (ErrLocal) and
-// clears AuthFailedAt.
+// clears AuthFailedAt. Since the tracker accepted the key, it also clears
+// the ticket's Unverified; the summary is left as it is, for a Verify.
 type MarkSynced struct {
 	Key       string
 	EntryID   string
@@ -151,7 +152,8 @@ type ClearAuthFailure struct{}
 // that it exists (clearing Unverified), and, since Jira answered, clears
 // AuthFailedAt. An untracked key is ErrNotTracked.
 // Start, Add and Touch carrying a confirmed NewTicket (Unverified false)
-// confirm a tracked unverified ticket the same way, in one transition.
+// confirm a tracked unverified ticket the same way, in one transition;
+// MarkSynced confirms it too, but leaves the summary for a Verify.
 type Verify struct {
 	Key     string
 	Summary string

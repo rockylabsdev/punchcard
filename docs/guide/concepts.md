@@ -74,9 +74,9 @@ Why 2 hours and not a daemon watching you: [ADR 0001](../adr/0001-no-daemon-pres
 
 ## Unverified
 
-Only with a tracker. A ticket added while the tracker could not be reached (offline, credentials missing, or a 401) is **unverified**: it has no summary and might be a typo. Time against it counts normally. It is confirmed the next time a change to it reaches the tracker. A key the tracker says does not exist is never added at all. Without a tracker there is nothing to confirm a key against, so a ticket is never unverified: it is added with no summary and that is final.
+Only with a tracker. A ticket added while the tracker could not be reached (offline, credentials missing, or a 401) is **unverified**: it has no summary and might be a typo. Time against it counts normally. It is confirmed the next time a change to it reaches the tracker, or when the tracker accepts a worklog for it at `stop` or `sync`. Then Punchcard also asks for the summary, and if that one call fails the ticket stays confirmed without a summary. A key the tracker says does not exist is never added at all. Without a tracker there is nothing to confirm a key against, so a ticket is never unverified: it is added with no summary and that is final.
 
-*Scenario:* On a train you run `punchcard start DATA-9`. Output: `+ DATA-9 added (not verified with Jira yet)`. `ls` shows `(unverified)` in the summary column and the TUI shows `? unverified — Jira not reached yet`. Back online, `punchcard start DATA-9` (or `space` on its row) fetches the summary and the marker clears.
+*Scenario:* On a train you run `punchcard start DATA-9`. Output: `+ DATA-9 added (not verified with Jira yet)`. `ls` shows `(unverified)` in the summary column and the TUI shows `? unverified — Jira not reached yet`. Back online, `punchcard start DATA-9` (or `space` on its row) fetches the summary and the marker clears. So does `punchcard sync` sending its worklog.
 
 ## Today
 
