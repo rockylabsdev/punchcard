@@ -29,6 +29,21 @@ type Client interface {
 	TestConnection(ctx context.Context) (Account, error)
 }
 
+// InEffect is the tracker in effect, resolved once per invocation and
+// handed whole to everything that depends on it (the CLI's commands, the
+// worklog sender, the TUI): how to open its client, whether there is
+// none at all, and what its keys look like.
+type InEffect struct {
+	// Open opens the client. With None it answers ErrNoTracker; nil is
+	// a tracker that is not configured.
+	Open func() (Client, error)
+	// None: no tracker is chosen. Nothing is looked up or sent, and a
+	// stopped worklog is local.
+	None bool
+	// Grammar is the key grammar (the zero value: the slug).
+	Grammar Grammar
+}
+
 // Worklog is what PostWorklog tells the tracker. An empty Comment is
 // omitted.
 type Worklog struct {

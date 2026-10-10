@@ -30,6 +30,12 @@ func (e Env) Grammar() tracker.Grammar {
 	return tracker.Slug
 }
 
+// InEffect is e's tracker as one value, for the worklog sender and the
+// TUI. Stop previews and the sender both take Local from it (Sender.Prepare).
+func (e Env) InEffect() tracker.InEffect {
+	return tracker.InEffect{Open: e.OpenTracker, None: !e.HasTracker(), Grammar: e.Grammar()}
+}
+
 // HasTracker reports whether a tracker is configured (it may still lack
 // credentials).
 func (e Env) HasTracker() bool { return e.Tracker != config.TrackerNone }

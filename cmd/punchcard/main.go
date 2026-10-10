@@ -43,10 +43,8 @@ func openTUI(e cli.Env) int {
 
 // tracking is e's tracker as the TUI takes it.
 func tracking(e cli.Env) tui.Tracking {
-	return tui.Tracking{
-		Sender:  worklog.Sender{Store: e.Store, Tracker: e.OpenTracker, NoTracker: !e.HasTracker()},
-		Tracker: e.OpenTracker, NoTracker: !e.HasTracker(), Grammar: e.Grammar(),
-	}
+	t := e.InEffect()
+	return tui.Tracking{Sender: worklog.Sender{Store: e.Store, Tracker: t}, InEffect: t}
 }
 
 // setupCommand is `punchcard setup` as a child process, for S in the

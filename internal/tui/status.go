@@ -159,7 +159,7 @@ type linkMsg struct{ err error }
 // stays inside it for errors.As. With no tracker there is nothing to
 // connect to, so nothing is opened and nothing is wrong.
 func (m Model) probe() tea.Cmd {
-	open := m.jira
+	open := m.open
 	if m.noTracker {
 		return func() tea.Msg { return linkMsg{} }
 	}

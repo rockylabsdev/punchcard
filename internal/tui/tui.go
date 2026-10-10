@@ -36,21 +36,16 @@ type Options struct {
 	Stderr io.Writer
 }
 
-// Tracking is the tracker in effect and everything that follows from
-// it. With none, a stop is local, nothing is looked up and the Jira
-// conditions never show.
+// Tracking is the tracker in effect and the sender over it. With none
+// (InEffect.None), a stop is local, nothing is looked up, a ticket added
+// is never unverified and the Jira conditions never show. InEffect.Open
+// opens the client for summary lookups (add, and confirming an
+// unverified ticket on start); nil is a tracker not configured.
 type Tracking struct {
 	// Sender stops an entry and sends its worklog (worklog.Sender in the
 	// binary). Nil: a stop is recorded and its worklog left pending.
 	Sender Sender
-	// Tracker opens the client for summary lookups (add, and confirming
-	// an unverified ticket on start). Nil: the tracker is not configured.
-	Tracker func() (tracker.Client, error)
-	// NoTracker: none is configured. Nothing is looked up, a ticket
-	// added is never unverified, and nothing is said about Jira.
-	NoTracker bool
-	// Grammar is the key grammar in effect (the zero value: the slug).
-	Grammar tracker.Grammar
+	tracker.InEffect
 }
 
 // Sender is the worklog seam, the only code that POSTs. Stop applies the

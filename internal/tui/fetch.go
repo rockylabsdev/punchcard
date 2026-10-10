@@ -24,7 +24,7 @@ type fetchMsg struct {
 // Unconfigured, unreachable or any other answer leaves the key
 // unverified.
 func (m Model) fetch(key string, tracked, forAdd bool) tea.Cmd {
-	open := m.jira
+	open := m.open
 	return func() tea.Msg {
 		l := tracker.LookUp(open, key)
 		return fetchMsg{key: key, forAdd: forAdd, tracked: tracked, summary: l.Summary, notice: l.Notice,

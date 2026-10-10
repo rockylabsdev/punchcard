@@ -38,12 +38,12 @@ func newFixture(t *testing.T, j tracker.Client) *fixture {
 	f := &fixture{t: t, now: at("09:00"), jira: j}
 	f.st = store.New(t.TempDir(), func() time.Time { return f.now })
 	f.st.LockWait = 50 * time.Millisecond
-	f.s = worklog.Sender{Store: f.st, Tracker: func() (tracker.Client, error) {
+	f.s = worklog.Sender{Store: f.st, Tracker: tracker.InEffect{Open: func() (tracker.Client, error) {
 		if f.jira == nil {
 			return nil, config.ErrNotConfigured
 		}
 		return f.jira, nil
-	}}
+	}}}
 	return f
 }
 
@@ -131,8 +131,7 @@ func TestStopSendsTheWorklogAndMarksItSynced(t *testing.T) {
 func TestStopWithNoTrackerLogsLocallyAndNeverOpensOne(t *testing.T) {
 	f := newFixture(t, nil)
 	opened := 0
-	f.s.NoTracker = true
-	f.s.Tracker = func() (tracker.Client, error) { opened++; return nil, tracker.ErrNoTracker }
+	f.s.Tracker = tracker.InEffect{None: true, Open: func() (tracker.Client, error) { opened++; return nil, tracker.ErrNoTracker }}
 	f.start("09:00", "payroll")
 	f.now = at("09:30")
 

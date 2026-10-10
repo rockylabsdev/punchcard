@@ -28,16 +28,21 @@ const PostBudget = 10 * time.Second
 // the worklog, so giving up early would invite a duplicate POST.
 const markTries = 5
 
-// Sender sends worklogs through Store, to the tracker that Tracker
-// opens.
+// Sender sends worklogs through Store, to the tracker in effect. Its
+// client is opened only when there is something to send, and any error
+// opening it is treated as not configured. With none, Stop records a
+// local worklog, which is final and owed to no one, and nothing is
+// opened.
 type Sender struct {
-	Store *store.Store
-	// Tracker opens the client; it is called only when there is
-	// something to send. Any error from it is treated as not configured.
-	Tracker func() (tracker.Client, error)
-	// NoTracker: none is in effect. Stop records a local worklog, which
-	// is final and owed to no one, so Tracker is never called.
-	NoTracker bool
+	Store   *store.Store
+	Tracker tracker.InEffect
+}
+
+// Prepare is c as this sender records it: local when no tracker is in
+// effect. Stop applies it; a caller previewing a stop applies it first.
+func (s Sender) Prepare(c core.Stop) core.Stop {
+	c.Local = s.Tracker.None
+	return c
 }
 
 // StopResult is a stop that happened, and what became of its worklog.
@@ -70,7 +75,7 @@ type StopResult struct {
 // non-nil SyncErr: the caller reports a success with debt, never stops
 // again.
 func (s Sender) Stop(ctx context.Context, c core.Stop) (StopResult, error) {
-	c.Local = s.NoTracker
+	c = s.Prepare(c)
 	var notices []string
 	if c.EntryID == "" {
 		w, ns, err := s.Store.Read()
@@ -167,7 +172,10 @@ func (s Sender) sendAll(ctx context.Context, scope func(core.State) []core.Unsen
 	if len(targets) == 0 {
 		return nil
 	}
-	client, err := s.Tracker()
+	if s.Tracker.Open == nil {
+		return config.ErrNotConfigured
+	}
+	client, err := s.Tracker.Open()
 	if err != nil {
 		if !errors.Is(err, config.ErrNotConfigured) {
 			err = fmt.Errorf("%w: %w", config.ErrNotConfigured, err)

@@ -131,7 +131,7 @@ type fakeSender struct {
 	st      *fakeStore
 	syncErr error
 	jira    *tracker.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
-	// noTracker: none is configured, as worklog.Sender{NoTracker}: a
+	// noTracker: none is configured, as worklog.Sender with no tracker: a
 	// stop is local and nothing is sent (open sets it from hs.noTracker).
 	noTracker bool
 	mu        sync.Mutex
@@ -258,18 +258,18 @@ func (hs *harness) open(when string, w, h int) {
 		Store:    hs.st,
 		Now:      func() time.Time { return hs.now },
 		NewID:    func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
-		Tracking: Tracking{Sender: hs.sender, Grammar: jira.Grammar, NoTracker: hs.noTracker},
+		Tracking: Tracking{Sender: hs.sender, InEffect: tracker.InEffect{Grammar: jira.Grammar, None: hs.noTracker}},
 	}
 	if hs.noTracker {
 		// As the binary wires it: the seam answers ErrNoTracker.
 		o.Grammar = tracker.Slug
-		o.Tracker = func() (tracker.Client, error) { return nil, tracker.ErrNoTracker }
+		o.Open = func() (tracker.Client, error) { return nil, tracker.ErrNoTracker }
 	}
 	if hs.jira != nil {
-		o.Tracker = func() (tracker.Client, error) { return hs.jira, nil }
+		o.Open = func() (tracker.Client, error) { return hs.jira, nil }
 	}
 	if hs.openErr != nil {
-		o.Tracker = func() (tracker.Client, error) { return nil, hs.openErr }
+		o.Open = func() (tracker.Client, error) { return nil, hs.openErr }
 	}
 	hs.sender.jira, hs.sender.noTracker = hs.jira, hs.noTracker
 	hs.m = New(o)

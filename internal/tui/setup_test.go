@@ -41,7 +41,7 @@ func TestSSuspendsIntoSetupAndRereads(t *testing.T) {
 		hs.st.Apply(core.ClearAuthFailure{})
 	}, nil)
 	opened := false
-	hs.m.jira = func() (tracker.Client, error) {
+	hs.m.open = func() (tracker.Client, error) {
 		if !opened {
 			return nil, config.ErrNotConfigured
 		}
@@ -89,7 +89,7 @@ func TestSPicksUpTheTrackerSetupChose(t *testing.T) {
 	hs.suspend(func() {}, nil)
 	jiraSender := &fakeSender{st: hs.st}
 	hs.m.retrack = func() Tracking {
-		return Tracking{Sender: jiraSender, Tracker: func() (tracker.Client, error) { return nil, config.ErrNotConfigured }}
+		return Tracking{Sender: jiraSender, InEffect: tracker.InEffect{Open: func() (tracker.Client, error) { return nil, config.ErrNotConfigured }}}
 	}
 
 	hs.key("S")

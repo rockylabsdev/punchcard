@@ -60,7 +60,7 @@ func (a *app) stopCmd() *cobra.Command {
 
 // sender is the worklog seam over this invocation's store and tracker.
 func (a *app) sender() worklog.Sender {
-	return worklog.Sender{Store: a.env.Store, Tracker: a.env.OpenTracker, NoTracker: !a.env.HasTracker()}
+	return worklog.Sender{Store: a.env.Store, Tracker: a.env.InEffect()}
 }
 
 // stop previews the worklog from a fresh read, applies the CLI's rules
@@ -70,7 +70,7 @@ func (a *app) sender() worklog.Sender {
 func (a *app) stop(s core.Stop, f stopFlags) {
 	// With no tracker the worklog is local: the preview, --no-sync and
 	// the send all record it so.
-	s.Local = !a.env.HasTracker()
+	s = a.sender().Prepare(s)
 	w, now, err := a.read()
 	if err != nil {
 		a.code = a.failure("stop", err)

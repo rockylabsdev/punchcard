@@ -34,7 +34,7 @@ type Model struct {
 	store     Store
 	newID     func() string
 	sender    Sender                         // nil: stops leave the worklog pending
-	jira      func() (tracker.Client, error) // nil: the tracker is not configured
+	open      func() (tracker.Client, error) // nil: the tracker is not configured
 	noTracker bool                           // none configured: nothing to look up
 	grammar   tracker.Grammar
 	retrack   func() Tracking // nil: the tracker never changes
@@ -145,7 +145,7 @@ func New(o Options) Model {
 
 // track puts t in effect.
 func (m Model) track(t Tracking) Model {
-	m.sender, m.jira, m.noTracker, m.grammar = t.Sender, t.Tracker, t.NoTracker, t.Grammar
+	m.sender, m.open, m.noTracker, m.grammar = t.Sender, t.Open, t.None, t.Grammar
 	return m
 }
 
