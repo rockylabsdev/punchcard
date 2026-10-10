@@ -150,7 +150,8 @@ type ClearAuthFailure struct{}
 // that it exists (clearing Unverified), and, since Jira answered, clears
 // AuthFailedAt. An untracked key is ErrNotTracked.
 // Start, Add and Touch carrying a confirmed NewTicket (Unverified false)
-// confirm a tracked unverified ticket the same way, in one transition.
+// confirm a tracked unverified ticket the same way, in one transition;
+// MarkSynced confirms it too, but leaves the summary for a Verify.
 type Verify struct {
 	Key     string
 	Summary string

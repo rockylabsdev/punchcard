@@ -3,7 +3,6 @@ package worklog_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -73,13 +72,10 @@ func (f *fixture) world() core.World {
 
 func (f *fixture) worklogOf(key string) core.Worklog {
 	f.t.Helper()
-	for _, tk := range f.world().State.TrackedTickets {
-		if tk.Key == key {
-			for _, e := range tk.Entries {
-				if e.Worklog != nil {
-					return *e.Worklog
-				}
-			}
+	tk, _ := f.world().State.Ticket(key)
+	for _, e := range tk.Entries {
+		if e.Worklog != nil {
+			return *e.Worklog
 		}
 	}
 	f.t.Fatalf("%s has no worklog", key)
@@ -374,74 +370,107 @@ func TestSyncWithNothingOwedNeverOpensJira(t *testing.T) {
 	}
 }
 
-// unverifiedStopped puts one pending worklog per span on key, a ticket
-// added while the tracker could not be reached.
-func (f *fixture) unverifiedStopped(key string, spans ...[2]string) {
-	f.t.Helper()
-	for i, sp := range spans {
-		f.apply(sp[0], core.Start{Key: key, Unverified: true, Origin: core.OriginHand, NewEntryID: fmt.Sprintf("E%s-%d", key, i)})
-		f.apply(sp[1], core.Stop{Key: key, Origin: core.OriginHand})
-	}
+// unverifiedStopped puts a pending worklog with this entry id on key, a
+// ticket added while the tracker could not be reached.
+func (f *fixture) unverifiedStopped(key, entryID, from, to string) {
+	f.apply(from, core.Start{Key: key, Unverified: true, Origin: core.OriginHand, NewEntryID: entryID})
+	f.apply(to, core.Stop{Key: key, Origin: core.OriginHand})
 }
 
 func (f *fixture) ticket(key string) core.TrackedTicket {
 	f.t.Helper()
-	for _, tk := range f.world().State.TrackedTickets {
-		if tk.Key == key {
-			return tk
-		}
+	tk, ok := f.world().State.Ticket(key)
+	if !ok {
+		f.t.Fatalf("%s is not tracked", key)
 	}
-	f.t.Fatalf("%s is not tracked", key)
-	return core.TrackedTicket{}
+	return tk
+}
+
+// removing is a tracker whose Summary first removes the ticket, as a
+// user's rm --force between the POST and the Verify would.
+type removing struct {
+	*tracker.Fake
+	f *fixture
+}
+
+func (r removing) Summary(ctx context.Context, key string) (string, error) {
+	if _, err := r.f.st.Apply(core.Remove{Key: key, Force: true, Origin: core.OriginHand}); err != nil {
+		r.f.t.Fatal(err)
+	}
+	return r.Fake.Summary(ctx, key)
 }
 
 // #42: an accepted worklog confirms an unverified ticket, and the
 // sender fetches its summary once per ticket per run.
 func TestASyncedWorklogConfirmsAnUnverifiedTicket(t *testing.T) {
-	t.Run("with its summary, fetched once for two worklogs", func(t *testing.T) {
-		fake := &tracker.Fake{Summaries: map[string]string{"NEW-1": "Fix it"}}
-		f := newFixture(t, fake)
-		f.unverifiedStopped("NEW-1", [2]string{"08:00", "08:30"}, [2]string{"08:30", "09:00"})
-		f.now = at("10:00")
-		if _, err := f.s.Sync(context.Background(), ""); err != nil {
-			t.Fatal(err)
-		}
-		if d := cmp.Diff([]string{"worklog NEW-1", "summary NEW-1", "worklog NEW-1"}, fake.Calls()); d != "" {
-			t.Errorf("calls (-want +got)\n%s", d)
-		}
-		if tk := f.ticket("NEW-1"); tk.Unverified || tk.Summary != "Fix it" {
-			t.Errorf("ticket unverified %v summary %q, want confirmed with Fix it", tk.Unverified, tk.Summary)
-		}
-	})
-	t.Run("a failed summary fetch is silent", func(t *testing.T) {
-		fake := &tracker.Fake{} // every Summary is a 404
-		f := newFixture(t, fake)
-		f.unverifiedStopped("NEW-1", [2]string{"08:00", "08:30"})
+	sync := func(t *testing.T, f *fixture) worklog.Report {
+		t.Helper()
 		f.now = at("10:00")
 		rep, err := f.s.Sync(context.Background(), "")
 		if err != nil {
 			t.Fatalf("sync reported %v", err)
 		}
-		if len(rep.Sent) != 1 || len(rep.Remaining) != 0 {
-			t.Errorf("sent %v remaining %v", rep.Sent, rep.Remaining)
+		return rep
+	}
+	confirmed := func(t *testing.T, f *fixture, key, summary string) {
+		t.Helper()
+		if tk := f.ticket(key); tk.Unverified || tk.Summary != summary {
+			t.Errorf("ticket unverified %v summary %q, want confirmed with %q", tk.Unverified, tk.Summary, summary)
 		}
-		if f.worklogOf("NEW-1").State != core.WorklogSynced {
-			t.Error("worklog not synced")
+	}
+	calls := func(t *testing.T, fake *tracker.Fake, want ...string) {
+		t.Helper()
+		if d := cmp.Diff(want, fake.Calls()); d != "" {
+			t.Errorf("calls (-want +got)\n%s", d)
 		}
-		if tk := f.ticket("NEW-1"); tk.Unverified || tk.Summary != "" {
-			t.Errorf("ticket unverified %v summary %q, want confirmed with none", tk.Unverified, tk.Summary)
+	}
+
+	t.Run("with its summary, fetched once for two worklogs", func(t *testing.T) {
+		fake := &tracker.Fake{Summaries: map[string]string{"NEW-1": "Fix it"}}
+		f := newFixture(t, fake)
+		f.unverifiedStopped("NEW-1", "E1", "08:00", "08:30")
+		f.unverifiedStopped("NEW-1", "E2", "08:30", "09:00")
+		sync(t, f)
+		calls(t, fake, "worklog NEW-1", "summary NEW-1", "worklog NEW-1")
+		confirmed(t, f, "NEW-1", "Fix it")
+	})
+	t.Run("a failed summary fetch is silent and not retried", func(t *testing.T) {
+		fake := &tracker.Fake{} // every Summary is a 404
+		f := newFixture(t, fake)
+		f.unverifiedStopped("NEW-1", "E1", "08:00", "08:30")
+		f.unverifiedStopped("NEW-1", "E2", "08:30", "09:00")
+		rep := sync(t, f)
+		calls(t, fake, "worklog NEW-1", "summary NEW-1", "worklog NEW-1")
+		if len(rep.Sent) != 2 || len(rep.Remaining) != 0 || len(rep.Events) != 2 {
+			t.Errorf("sent %v remaining %v events %v", rep.Sent, rep.Remaining, rep.Events)
 		}
+		confirmed(t, f, "NEW-1", "")
 	})
 	t.Run("a verified ticket asks for no summary", func(t *testing.T) {
 		fake := &tracker.Fake{Summaries: map[string]string{"AA-1": "Known"}}
 		f := newFixture(t, fake)
 		f.stopped("AA-1", "08:00", "08:30")
-		f.now = at("10:00")
-		if _, err := f.s.Sync(context.Background(), ""); err != nil {
+		sync(t, f)
+		calls(t, fake, "worklog AA-1")
+	})
+	t.Run("a ticket removed before the summary lands is skipped", func(t *testing.T) {
+		fake := &tracker.Fake{Summaries: map[string]string{"NEW-1": "Fix it"}}
+		f := newFixture(t, nil)
+		f.jira = removing{fake, f}
+		f.unverifiedStopped("NEW-1", "E1", "08:00", "08:30")
+		sync(t, f)
+		if _, ok := f.world().State.Ticket("NEW-1"); ok {
+			t.Error("the removed ticket came back")
+		}
+	})
+	t.Run("stop confirms it too", func(t *testing.T) {
+		fake := &tracker.Fake{Summaries: map[string]string{"NEW-1": "Fix it"}}
+		f := newFixture(t, fake)
+		f.apply("08:00", core.Start{Key: "NEW-1", Unverified: true, Origin: core.OriginHand, NewEntryID: "E1"})
+		f.now = at("08:30")
+		if _, err := f.s.Stop(context.Background(), core.Stop{Key: "NEW-1", Origin: core.OriginHand}); err != nil {
 			t.Fatal(err)
 		}
-		if d := cmp.Diff([]string{"worklog AA-1"}, fake.Calls()); d != "" {
-			t.Errorf("calls (-want +got)\n%s", d)
-		}
+		confirmed(t, f, "NEW-1", "Fix it")
 	})
 }

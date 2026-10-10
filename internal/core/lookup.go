@@ -12,12 +12,20 @@ func (t TrackedTicket) Entry(id string) (TimeEntry, bool) {
 	return TimeEntry{}, false
 }
 
-// Entry finds the entry with this id on the ticket with this key.
-func (s State) Entry(key, id string) (TimeEntry, bool) {
+// Ticket finds the tracked ticket with this key.
+func (s State) Ticket(key string) (TrackedTicket, bool) {
 	for _, t := range s.TrackedTickets {
 		if t.Key == key {
-			return t.Entry(id)
+			return t, true
 		}
+	}
+	return TrackedTicket{}, false
+}
+
+// Entry finds the entry with this id on the ticket with this key.
+func (s State) Entry(key, id string) (TimeEntry, bool) {
+	if t, ok := s.Ticket(key); ok {
+		return t.Entry(id)
 	}
 	return TimeEntry{}, false
 }

@@ -23,9 +23,10 @@ import (
 // PostBudget bounds one worklog POST.
 const PostBudget = 10 * time.Second
 
-// markTries is how many times recording a sent worklog retries a busy
-// state.lock (each try waits the store's LockWait). Jira already has
-// the worklog, so giving up early would invite a duplicate POST.
+// markTries is how many times recording what the tracker said retries a
+// busy state.lock (each try waits the store's LockWait). After a POST,
+// Jira already has the worklog, so giving up early would invite a
+// duplicate POST.
 const markTries = 5
 
 // Sender sends worklogs through Store, to the tracker in effect. Its
@@ -223,13 +224,7 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 	cancel()
 	switch {
 	case perr == nil:
-		var res store.Result
-		for range markTries {
-			res, err = s.Store.Apply(core.MarkSynced{Key: t.Key, EntryID: t.EntryID, WorklogID: id})
-			if !errors.Is(err, store.ErrBusy) {
-				break
-			}
-		}
+		res, err := s.applyRetrying(core.MarkSynced{Key: t.Key, EntryID: t.EntryID, WorklogID: id})
 		s.record(rep, res)
 		if err != nil {
 			return fmt.Errorf("the tracker took worklog %s for %s but it could not be recorded: %w", id, t.Key, err)
@@ -237,7 +232,7 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 		if e, ok := res.World.State.Entry(t.Key, t.EntryID); ok && e.Worklog != nil {
 			rep.Sent = append(rep.Sent, core.UnsentWorklog{Key: t.Key, EntryID: t.EntryID, Worklog: *e.Worklog})
 		}
-		if unverified(w.State, t.Key) {
+		if tk, _ := w.State.Ticket(t.Key); tk.Unverified {
 			s.fetchSummary(ctx, client, t.Key, rep)
 		}
 		return nil
@@ -257,16 +252,6 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 	}
 }
 
-// unverified reports whether key is tracked and unverified in st.
-func unverified(st core.State, key string) bool {
-	for _, tk := range st.TrackedTickets {
-		if tk.Key == key {
-			return tk.Unverified
-		}
-	}
-	return false
-}
-
 // fetchSummary is the best-effort follow-up to a MarkSynced that
 // confirmed an unverified ticket: ask the tracker for its summary and
 // record it with a Verify. Any failure is silent; the ticket stays
@@ -280,16 +265,20 @@ func (s Sender) fetchSummary(ctx context.Context, client tracker.Client, key str
 	if err != nil {
 		return
 	}
-	var res store.Result
+	if res, err := s.applyRetrying(core.Verify{Key: key, Summary: summary}); err == nil {
+		s.record(rep, res)
+	}
+}
+
+// applyRetrying applies c, retrying a busy state.lock up to markTries.
+func (s Sender) applyRetrying(c core.Command) (res store.Result, err error) {
 	for range markTries {
-		res, err = s.Store.Apply(core.Verify{Key: key, Summary: summary})
+		res, err = s.Store.Apply(c)
 		if !errors.Is(err, store.ErrBusy) {
 			break
 		}
 	}
-	if err == nil {
-		s.record(rep, res)
-	}
+	return res, err
 }
 
 func (s Sender) record(rep *Report, res store.Result) {
