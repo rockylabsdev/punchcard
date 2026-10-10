@@ -100,12 +100,16 @@ export function parseEnvelope(stdout) {
 
 /**
  * A release version without its leading v, or "" for one that is not a
- * release (dev, unknown, empty): those never count as skew, as in setup.
+ * release: those never count as skew, as in setup (comparable in
+ * internal/setup/plugin.go). Not releases: dev, unknown, empty, a Go
+ * pseudo-version (what `go install ./cmd/punchcard` stamps, e.g.
+ * v0.0.0-20261009220046-aaacff0d8d07) and a build of a dirty tree (+dirty).
  * @param {unknown} v
  */
 function release(v) {
   const s = String(v ?? '').replace(/^v/, '')
-  return /^\d/.test(s) ? s : ''
+  if (!/^\d/.test(s) || /[-.]\d{14}-[0-9a-f]{12}(\+|$)/.test(s) || s.includes('+dirty')) return ''
+  return s
 }
 
 /**

@@ -216,7 +216,7 @@ This works with or without Jira; where the two differ, both are given. Until the
 claude --plugin-dir /path/to/your/clone/punchcard/plugin
 ```
 
-Expect a band above the prompt within a few seconds. Because this is a build from a clone it will say `plugin 0.1.0 ≠ punchcard 0.0.0-… · run punchcard setup`; that is expected and not a bug. Because nothing is running yet it also says `ABC-123 not running · /punch start`; with another ticket running it would say `timer on <that ticket> … · here: ABC-123` instead. With no tracker the band never mentions Jira, a token or a connection. Put a `.punchcard` naming another key in the checkout (scenario 3) and the band names that key instead of the branch's within ten seconds; remove it again.
+Expect a band above the prompt within a few seconds. Because this is a build from a clone (a pseudo-version, not a release) it never says `plugin 0.1.0 ≠ punchcard …`; if it does, that is a bug. Because nothing is running yet it also says `ABC-123 not running · /punch start`; with another ticket running it would say `timer on <that ticket> … · here: ABC-123` instead. With no tracker the band never mentions Jira, a token or a connection. Put a `.punchcard` naming another key in the checkout (scenario 3) and the band names that key instead of the branch's within ten seconds; remove it again.
 
 - Type `/punch start` and send it. Expect `▶ ABC-123 0:00 · held` in the band, followed by the ticket's summary with Jira (and a `+ ABC-123 added` toast if the ticket was not on your list yet).
 - `/punch pause`, then `/punch resume`. The band follows.

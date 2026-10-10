@@ -24,7 +24,7 @@ The marketplace pins the plugin to the binary's release tag, so an install alway
 claude --plugin-dir /path/to/punchcard/plugin
 ```
 
-The band will then warn that `plugin 0.1.0 ≠ punchcard 0.0.0-…` because a build from a clone has no release version. That warning is expected until there is a release.
+A build from a clone has no release version (`go install` stamps a pseudo-version such as `v0.0.0-20261009220046-aaacff0d8d07+dirty`), so the band and `punchcard setup` never compare it with the plugin's version: there is no `plugin ≠ punchcard` warning for it, as for `dev`.
 
 After `brew upgrade`, the binary leads and the plugin follows: the band says the versions differ and `punchcard setup` offers `claude plugin update punchcard@punchcard`. Why it works this way: [ADR 0007](../adr/0007-plugin-pinned-to-binary-release-tag.md).
 

@@ -22,6 +22,13 @@ func TestDecidePlugin(t *testing.T) {
 		{"older plugin", true, true, "0.1.0", "v0.2.0", pluginOutdated},
 		{"dev binary never offers an update", true, true, "0.1.0", "dev", pluginCurrent},
 		{"unknown plugin version", true, true, "unknown", "v0.2.0", pluginCurrent},
+		// go install ./cmd/punchcard stamps a pseudo-version: not a release.
+		{"go install pseudo-version never offers an update", true, true, "0.1.0", "v0.0.0-20261009220046-aaacff0d8d07+dirty", pluginCurrent},
+		{"clean pseudo-version", true, true, "0.1.0", "v0.0.0-20261009220046-aaacff0d8d07", pluginCurrent},
+		{"pseudo-version after a tag", true, true, "0.1.0", "v0.1.1-0.20261009220046-aaacff0d8d07", pluginCurrent},
+		{"pseudo-version after a pre-release", true, true, "0.1.0", "v0.2.0-rc.1.0.20261009220046-aaacff0d8d07", pluginCurrent},
+		{"a dirty tag is not a release", true, true, "0.1.0", "v0.2.0+dirty", pluginCurrent},
+		{"a pre-release tag is a release", true, true, "0.1.0", "v0.2.0-rc.1", pluginOutdated},
 	}
 	for _, c := range cases {
 		if got := decidePlugin(c.found, c.installed, c.have, c.binary); got != c.want {

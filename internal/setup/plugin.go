@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -104,10 +105,20 @@ func decidePlugin(found, installed bool, have, binary string) pluginAction {
 	return pluginCurrent
 }
 
+// comparable reports whether v is a release, so that a difference is
+// skew. dev, unknown and empty are not; nor is a Go pseudo-version
+// (what `go install ./cmd/punchcard` stamps, e.g.
+// v0.0.0-20261009220046-aaacff0d8d07) or a build of a dirty tree (+dirty).
+// The plugin's release() in plugin/hooks/logic.mjs applies the same rule.
 func comparable(v string) bool {
 	v = strings.TrimPrefix(v, "v")
-	return v != "" && v != "dev" && v != "unknown" && v[0] >= '0' && v[0] <= '9'
+	return v != "" && v[0] >= '0' && v[0] <= '9' &&
+		!pseudoVersion.MatchString(v) && !strings.Contains(v, "+dirty")
 }
+
+// pseudoVersion is a Go pseudo-version's tail, in each of its three
+// forms (-TIMESTAMP-HASH, -pre.0.TIMESTAMP-HASH, -0.TIMESTAMP-HASH).
+var pseudoVersion = regexp.MustCompile(`[-.][0-9]{14}-[0-9a-f]{12}(\+|$)`)
 
 func command(args []string) string { return "claude " + strings.Join(args, " ") }
 

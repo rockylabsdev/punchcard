@@ -42,6 +42,13 @@ describe('versionSkew', () => {
     ['plugin ahead of the binary', 'v0.3.0', '0.2.0', { plugin: '0.3.0', binary: '0.2.0' }],
     ['a dev binary never skews', '0.1.0', 'dev', null],
     ['an unknown binary never skews', '0.1.0', 'unknown', null],
+    // go install ./cmd/punchcard stamps a pseudo-version: not a release.
+    ['a go install pseudo-version never skews', '0.1.0', 'v0.0.0-20261009220046-aaacff0d8d07+dirty', null],
+    ['a clean pseudo-version never skews', '0.1.0', 'v0.0.0-20261009220046-aaacff0d8d07', null],
+    ['a pseudo-version after a tag never skews', '0.1.0', 'v0.1.1-0.20261009220046-aaacff0d8d07', null],
+    ['a pseudo-version after a pre-release never skews', '0.1.0', 'v0.2.0-rc.1.0.20261009220046-aaacff0d8d07', null],
+    ['a dirty build never skews', '0.1.0', 'v0.2.0+dirty', null],
+    ['a pre-release tag is a release', '0.1.0', 'v0.2.0-rc.1', { plugin: '0.1.0', binary: '0.2.0-rc.1' }],
     ['no plugin version', '', '0.2.0', null],
     ['no binary version yet', '0.1.0', '', null],
     ['not a version', '0.1.0', undefined, null],
