@@ -291,3 +291,35 @@ func TestANewerSchemaIsRefusedAndNothingIsWritten(t *testing.T) {
 		})
 	}
 }
+
+// A state.json from before the last focus existed reads as having none,
+// so its first prompt moves the timer as it always did (ADR 0009); the
+// touch then persists the last focus.
+func TestAStateFileWithoutALastFocusReadsAsEmpty(t *testing.T) {
+	c := newClock()
+	s, dir := open(t, c)
+	at := c.t.Format(core.TimeLayout)
+	write(t, filepath.Join(dir, store.StateFile), `{"schemaVersion": 1, "trackedTickets": [
+		{"key": "OPS-77", "unverified": false, "addedAt": "`+at+`", "entries": [
+			{"id": "E1", "segments": [{"startedAt": "`+at+`"}], "held": false, "origin": "agent", "recovered": false}]}]}`)
+	write(t, filepath.Join(dir, store.HeartbeatFile), `{"schemaVersion": 1, "lastSeen": "`+at+`"}`)
+
+	w, notices, err := s.Read()
+	if err != nil || len(notices) > 0 {
+		t.Fatalf("Read: %v %v", err, notices)
+	}
+	if w.State.LastFocus != "" {
+		t.Fatalf("last focus = %q, want empty", w.State.LastFocus)
+	}
+	c.t = c.t.Add(time.Minute)
+	if _, err := s.Apply(core.Touch{Key: "PUN-1", Origin: core.OriginPrompt, NewEntryID: "E2"}); err != nil {
+		t.Fatal(err)
+	}
+	w, _, err = store.New(dir, c.now).Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk, _, _ := core.Running(w.State); tk.Key != "PUN-1" || w.State.LastFocus != "PUN-1" {
+		t.Errorf("running %q, last focus %q; want both PUN-1", tk.Key, w.State.LastFocus)
+	}
+}

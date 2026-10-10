@@ -67,7 +67,9 @@ func owes(t TrackedTicket) bool {
 
 // touch applies focus and reports whether the call vouches for presence:
 // a presence origin always does, whether or not it moves the timer.
-// Focus moves only an un-held timer, and never starts one from idle.
+// Focus moves only an un-held timer, never starts one from idle, and
+// moves nothing unless it differs from the last focus, which every keyed
+// presence touch records (ADR 0009).
 func (a *applier) touch(c Touch) (bool, error) {
 	if !c.Origin.IsPresence() {
 		return false, nil
@@ -78,8 +80,12 @@ func (a *applier) touch(c Touch) (bool, error) {
 	if !c.Grammar.Valid(c.Key) {
 		return false, fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
+	changed := c.Key != a.w.State.LastFocus
+	a.w.State.LastFocus = c.Key
 	rt, re := a.running()
 	switch {
+	case !changed:
+		return true, nil // the same focus again: a switch away from it stands
 	case re == nil:
 		return true, nil // focus never starts a timer from idle
 	case rt.Key == c.Key:

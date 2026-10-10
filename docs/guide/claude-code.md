@@ -69,7 +69,7 @@ When you submit a prompt that you typed yourself, the mod runs:
 punchcard touch --cwd <session directory> --origin prompt --json
 ```
 
-That is **presence** (the timer is yours, you are here) and, if the directory names a ticket (`here`), **focus**: an un-held timer running on another ticket moves to this one. A held timer stays where it is. Nothing starts a timer when nothing is running: today a prompt only moves a timer that already runs, so start one first (by hand, with `/punch start`, or by asking the agent).
+That is **presence** (the timer is yours, you are here) and, if the directory names a ticket (`here`), **focus**: an un-held timer running on another ticket moves to this one, but only when focus *changes*, meaning this prompt's ticket differs from your last prompt's that named one. A held timer stays where it is. So if, in a session on PUN-1, you ask the agent to start OPS-77 (or run `! punchcard start OPS-77`), your next prompt in that session leaves OPS-77 running. A prompt in a session on another ticket moves it, and so does a later prompt back on PUN-1 after that. To go back to PUN-1 directly, say so or use `/punch start`. Nothing starts a timer when nothing is running: today a prompt only moves a timer that already runs, so start one first (by hand, with `/punch start`, or by asking the agent).
 
 A prompt that is a slash command (`/punch pause`) is presence only, so the pause is not undone by the same keypress. Typing in the prompt box is presence, at most once every 30 seconds, and never moves anything. Scheduled prompts, subagents and messages from other sessions are none of these.
 
