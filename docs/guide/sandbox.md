@@ -4,11 +4,13 @@ Punchcard needs no tracker: with none, every surface works and worklogs stay on 
 
 ## Start it
 
-From a clone of the repository:
+It comes in the release tarball next to `punchcard` (see the [testers' guide](testers.md#install)):
 
 ```sh
-go run ./cmd/fakejira
+fakejira
 ```
+
+From a clone of the repository, `go run ./cmd/fakejira` does the same.
 
 ```
 fakejira on http://127.0.0.1:8181 (mode ok)

@@ -23,6 +23,21 @@ builds:
       - -s -w -X github.com/j-dsmith/punchcard/internal/cli.version={{.Version}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+  # The stand-in Jira from docs/guide/sandbox.md, shipped in the same
+  # tarball so testers can try the Jira tracker without building anything.
+  # The Homebrew formula installs punchcard alone.
+  - id: fakejira
+    main: ./cmd/fakejira
+    binary: fakejira
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
 archives:
   - id: default
     formats: [tar.gz]
@@ -44,6 +59,9 @@ release:
   github:
     owner: j-dsmith
     name: punchcard
+  # A vX.Y.Z-rc.N tag (scripts/release.sh X.Y.Z-rc.N) is a pre-release for
+  # testers: GitHub does not show it as the latest release.
+  prerelease: auto
 
 # A Homebrew FORMULA, on purpose, although GoReleaser deprecates `brews` in
 # favour of `homebrew_casks`. Homebrew sets com.apple.quarantine on cask
@@ -66,6 +84,8 @@ brews:
       name: goreleaserbot
       email: bot@goreleaser.com
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    # Pre-releases never reach the tap: `brew install` gets releases only.
+    skip_upload: auto
     install: |
       bin.install "punchcard"
     test: |
