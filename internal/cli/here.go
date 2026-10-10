@@ -17,12 +17,19 @@ import (
 // PunchcardFile is the file a directory names its ticket in.
 const PunchcardFile = ".punchcard"
 
-// Here is a directory's key and where it came from: "file" (a
-// .punchcard) or "branch" (the git branch name).
+// Here is a directory's key and where it came from.
 type Here struct {
-	Key    string `json:"key"`
-	Source string `json:"source"`
+	Key    string     `json:"key"`
+	Source HereSource `json:"source"`
 }
+
+// HereSource is where a directory's key came from.
+type HereSource string
+
+const (
+	HereFile   HereSource = "file"   // a .punchcard
+	HereBranch HereSource = "branch" // the git branch name
+)
 
 // resolveHere is the one answer to "what is dir's key". The nearest
 // .punchcard at dir or an ancestor wins, looking no higher than the git
@@ -44,11 +51,11 @@ func resolveHere(dir string, g tracker.Grammar) (*Here, []string) {
 		case !g.Valid(k):
 			notices = append(notices, fmt.Sprintf("%s: %q is not a key (like %s); using the branch", path, line, g.Example()))
 		default:
-			return &Here{Key: k, Source: "file"}, nil
+			return &Here{Key: k, Source: HereFile}, nil
 		}
 	}
 	if k := branchKey(dir); k != "" && g.Valid(g.Normalize(k)) {
-		return &Here{Key: g.Normalize(k), Source: "branch"}, notices
+		return &Here{Key: g.Normalize(k), Source: HereBranch}, notices
 	}
 	return nil, notices
 }

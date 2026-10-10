@@ -128,7 +128,7 @@ func (a *applier) markSynced(c MarkSynced) error {
 	}
 	wl := e.Worklog
 	wl.State, wl.WorklogID, wl.SyncedAt = WorklogSynced, c.WorklogID, a.now
-	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
+	wl.clearFailure()
 	a.w.State.AuthFailedAt = Timestamp{}
 	a.emit(EventSynced, c.Key)
 	return nil
@@ -152,6 +152,11 @@ func (a *applier) markLocal(c MarkLocal) error {
 	}
 	wl := e.Worklog
 	wl.State = WorklogLocal
-	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
+	wl.clearFailure()
 	return nil
+}
+
+// clearFailure forgets a failed send: the worklog is logged now.
+func (wl *Worklog) clearFailure() {
+	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
 }
