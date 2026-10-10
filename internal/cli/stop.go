@@ -96,10 +96,14 @@ func (a *app) stop(s core.Stop, f stopFlags) {
 		a.code = a.out.ok("stop", pd, nil, previewText(p, now.Location()))
 		return
 	case a.origin == core.OriginAgent && !f.yes:
+		does := "sends"
+		if p.Worklog.State == core.WorklogLocal {
+			does = "logs"
+		}
 		a.code = a.out.fail("stop", ExitNeedsConfirmation, failure{
 			code: "needs_confirmation",
 			msg:  "an agent's stop is a proposal: " + strings.TrimSuffix(previewText(p, now.Location()), "\n"),
-			hint: "show the user this worklog; only `punchcard stop --yes` sends it",
+			hint: "show the user this worklog; only `punchcard stop --yes` " + does + " it",
 			data: pd,
 		})
 		return

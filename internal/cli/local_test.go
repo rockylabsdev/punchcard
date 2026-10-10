@@ -77,13 +77,16 @@ func TestWithoutATrackerNothingSaysJira(t *testing.T) {
 	say("payroll: would log 30m", "stop", "--dry-run")
 	say("refused while it has unlogged time", "rm", "--help")
 	say("stop it first, or pass --force", "rm", "payroll")
+	h.env["CLAUDECODE"] = "1"
+	say("only `punchcard stop --yes` logs it", "stop")
+	delete(h.env, "CLAUDECODE")
 	say("payroll stopped: 30m, logged", "stop", "--yes")
 	say("Nothing running.", "status")
 	say("punchcard", "--help")
 	say("Stop an entry and log its worklog", "stop", "--help")
 	say("tracker", "sync", "--help")
 	say("no tracker", "sync")
-	for _, word := range []string{"Jira", "sync it", "unsent time"} {
+	for _, word := range []string{"Jira", "sync it", "unsent time", "sends it"} {
 		if strings.Contains(all.String(), word) {
 			t.Errorf("with no tracker the output says %q:\n%s", word, all.String())
 		}
