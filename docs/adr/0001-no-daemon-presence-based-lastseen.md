@@ -12,7 +12,7 @@ We rejected a daemon because its heartbeat measures the wrong thing. It tells yo
 
 ## Consequences
 
-- **The timer measures the user's attention, so there is one timer however many agents run in parallel.** Switching follows the user's own prompts, and a timer set by hand is **held** against them (see `CONTEXT.md`: Presence, Focus, Held). Telling a typed prompt from a scheduled, subagent or peer one needs a Claude Code mod (`prompt.submit` `e.origin.kind`). Settings hooks cannot tell the difference.
+- **The timer measures the user's attention, so there is one timer however many agents run in parallel.** Switching follows the user's own prompts, and a timer set by hand is **held** against them (see `CONTEXT.md`: Presence, Focus, Held). A prompt switches only when its focus changes (ADR 0009). Telling a typed prompt from a scheduled, subagent or peer one needs a Claude Code mod (`prompt.submit` `e.origin.kind`). Settings hooks cannot tell the difference.
 - **Reads (`status`, `ls`) are pure.** They report a timer as `stale` with its capped elapsed, but never write.
 - **Stretches longer than the threshold with no input anywhere get capped.** The duration edit at stop is where that gets corrected, and the recovered marker stays until stop (not until resume) so the user gets there.
 - `heartbeat.json` is no longer written on a 30-second tick. It is written on presence events, rate-limited.
