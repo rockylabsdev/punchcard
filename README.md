@@ -26,14 +26,14 @@ macOS and Linux, on arm64 and amd64.
 
 ## Install
 
-**Before the first release** there is no tap, no release tarball and no installable plugin. Build from a clone (the repository is private, so you need access and an SSH key on GitHub):
+**Before the first release** there is no tap. Testers install a pre-release (`vX.Y.Z-rc.N`, a GitHub pre-release with no Homebrew formula) from the [Releases](https://github.com/j-dsmith/punchcard/releases) page with `gh release download`, as the [testers' guide](docs/guide/testers.md#install) shows; `punchcard setup` then installs the plugin at the same version. The repository is private, so either way you need access. To build from a clone instead:
 
 ```sh
 git clone git@github.com:j-dsmith/punchcard.git && cd punchcard
 go install ./cmd/punchcard
 ```
 
-Or without a clone: `GOPRIVATE=github.com/j-dsmith go install github.com/j-dsmith/punchcard/cmd/punchcard@latest`. Either way, make sure `$(go env GOPATH)/bin` is on your `PATH`. Load the plugin per session with `claude --plugin-dir /path/to/punchcard/plugin` until `punchcard setup` can install it. The rest of this section describes the released install.
+Or without a clone: `GOPRIVATE=github.com/j-dsmith go install github.com/j-dsmith/punchcard/cmd/punchcard@latest`. Either way, make sure `$(go env GOPATH)/bin` is on your `PATH`, and load the plugin per session with `claude --plugin-dir /path/to/punchcard/plugin`. The rest of this section describes the released install.
 
 ```sh
 brew install j-dsmith/tap/punchcard
@@ -97,3 +97,5 @@ scripts/release.sh 0.2.0
 ```
 
 The script sets the plugin's `version` and the marketplace entry's `ref` to the new version, commits, and tags `v0.2.0`. It does not push. It prints the push command; pushing the tag runs the release workflow. That workflow runs CI first, then GoReleaser, which publishes the tarballs and the Homebrew formula.
+
+For testers, `scripts/release.sh 0.2.0-rc.1` tags `v0.2.0-rc.1` the same way. GoReleaser marks that GitHub release a pre-release and skips the Homebrew tap, so `brew` only ever sees real releases. Each tarball also holds `fakejira`, the stand-in Jira from [Testing without a real Jira](docs/guide/sandbox.md); the formula installs `punchcard` alone.

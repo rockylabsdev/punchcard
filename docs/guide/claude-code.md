@@ -18,7 +18,7 @@ claude plugin marketplace add j-dsmith/punchcard
 claude plugin install punchcard@punchcard -s user
 ```
 
-The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. **Until the first release is tagged, the install fails**: `fatal: Remote branch v0.1.0 not found in upstream origin`. Setup reports the failure and leaves your credentials alone. Until then, load it from your clone for one session at a time:
+The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. A pre-release (`vX.Y.Z-rc.N`) is pinned the same way, so a tester's install matches their pre-release binary. The marketplace needs git access to the repository, which is private for now. On a branch the marketplace does not point at yet, `main` between releases included, the install fails with `fatal: Remote branch vX.Y.Z not found in upstream origin`; setup reports it and leaves your credentials alone. To run the plugin from a clone instead, load it for one session at a time:
 
 ```sh
 claude --plugin-dir /path/to/punchcard/plugin

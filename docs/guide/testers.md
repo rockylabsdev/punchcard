@@ -7,8 +7,8 @@ Read the [Getting started](getting-started.md) page first if you like, but every
 ## What you need
 
 - **macOS** (Apple Silicon or Intel) or Linux. On Linux the token goes in a file instead of the Keychain; everything else is the same.
-- **Go 1.26 or newer** to build it. `brew install go` gives you a current Go. An older Go from 1.21 up downloads 1.26 by itself when it builds this.
-- **Access to the repository.** It is private. I will add you as a collaborator; you need an SSH key on your GitHub account (`ssh -T git@github.com` should greet you).
+- **Access to the repository.** It is private. I will add you as a collaborator; you need an SSH key on your GitHub account (`ssh -T git@github.com` should greet you), because Claude Code fetches the plugin with git.
+- **The GitHub CLI**, signed in: `brew install gh`, then `gh auth login`. It downloads the build from the private repository.
 - **Claude Code** 2.1.29x or newer for the plugin part (`claude --version`), and a git checkout whose branch name contains a ticket key, such as `feature/ABC-123-try-punchcard`.
 
 Only for the optional Jira part (scenarios 4 to 14):
@@ -20,25 +20,30 @@ Punchcard writes to `~/.local/share/punchcard` and, once you run `punchcard setu
 
 ## Install
 
-There is no release yet, so build from a clone:
+You test a **pre-release**: a build tagged `vX.Y.Z-rc.N` on the repository's [Releases](https://github.com/j-dsmith/punchcard/releases) page. I will tell you which one. The commands below use `v0.1.0-rc.1`; change both places if yours differs. Pick the tarball for your machine: `darwin_arm64` (Apple Silicon), `darwin_amd64` (Intel Mac), `linux_arm64` or `linux_amd64`.
+
+```sh
+cd "$(mktemp -d)"
+gh release download v0.1.0-rc.1 -R j-dsmith/punchcard -p '*_darwin_arm64.tar.gz'
+tar -xzf punchcard_*.tar.gz
+mkdir -p ~/.local/bin && mv punchcard fakejira ~/.local/bin/
+export PATH="$HOME/.local/bin:$PATH"   # put this line in your shell's rc file too
+punchcard version
+```
+
+Expect `punchcard 0.1.0-rc.1 (contract v1, …)`, with your platform. If `punchcard` is not found, the `PATH` line is the problem. `fakejira` is the stand-in Jira from [Testing without a real Jira](sandbox.md); you only need it to try the Jira tracker without a real site.
+
+The binary is not signed. Downloaded with `gh` it runs as is. If you downloaded the tarball in a browser instead, macOS refuses to open it; run `xattr -d com.apple.quarantine ~/.local/bin/punchcard ~/.local/bin/fakejira` once.
+
+To try an unreleased change, build from a clone instead (needs Go 1.26 or newer, `brew install go`):
 
 ```sh
 git clone git@github.com:j-dsmith/punchcard.git
 cd punchcard
 go install ./cmd/punchcard
-export PATH="$(go env GOPATH)/bin:$PATH"   # put this line in your shell's rc file too
-punchcard version
 ```
 
-Expect `punchcard v0.0.0-<date>-<commit> (contract v1, go1.26.9 darwin/arm64)`, with your platform. If `punchcard` is not found, the `PATH` line is the problem.
-
-The same thing without a clone also works, because the repository is private the `GOPRIVATE` part is required:
-
-```sh
-GOPRIVATE=github.com/j-dsmith go install github.com/j-dsmith/punchcard/cmd/punchcard@latest
-```
-
-Both were run while writing this page.
+A build from a clone reports `v0.0.0-<date>-<commit>` as its version, and its plugin is loaded per session with `claude --plugin-dir`, as described in [Claude Code](claude-code.md#installing-the-plugin).
 
 ## The test script
 
@@ -91,7 +96,7 @@ Scenarios 4 to 14 connect Punchcard to Jira and try what that adds: summaries fe
 
 Run `punchcard setup`. The first question is the tracker: choose **Jira**. Type your site any way you like (`acme.atlassian.net`, the full URL, a board URL from the address bar) and watch it echo the normalised `https://…` form under the field. Type your email. **First paste a wrong token** (change one character): expect `✗ Jira rejected these credentials.` with the scoped-token note, and the wizard back at the token step. Paste the right one: expect `✓ Connected as <your name>` and `Save these credentials?`. Save.
 
-Then: **answer No to "Install the Claude Code plugin?"** (it cannot work until there is a release; scenario 15 covers the plugin another way) and **Yes to "Add the ask rule"**. Expect `✓ Created …/settings.json with the ask rule` or `✓ Added the ask rule (old file kept as …/settings.json.bak)`.
+Then: **answer Yes to "Install the Claude Code plugin?"** and expect it to print `$ claude plugin marketplace add j-dsmith/punchcard` and `$ claude plugin install punchcard@punchcard -s user` with no `✗` line after them, and **Yes to "Add the ask rule"**. Expect `✓ Created …/settings.json with the ask rule` or `✓ Added the ask rule (old file kept as …/settings.json.bak)`.
 
 Then `punchcard status`: expect `Nothing running.` and `Jira token: Keychain` (`file` on Linux).
 
@@ -210,24 +215,24 @@ Quit the TUI. Edit `~/.config/punchcard/config.json` and change `siteUrl` to `ht
 
 ### 15. The Claude Code plugin
 
-This works with or without Jira; where the two differ, both are given. Until there is a release the plugin is loaded per session from your clone. In a git checkout on a branch named for a ticket (for example `git checkout -b feature/ABC-123-punchcard`; with Jira, use your throwaway ticket):
+This works with or without Jira; where the two differ, both are given. If you skipped Jira, run `punchcard setup` now, keep **none** as the tracker, and say Yes to "Install the Claude Code plugin?" (scenario 4 says what to expect). `claude plugin list` should show `punchcard@punchcard` at the same version as `punchcard version`. If the install fails, send me its output, and meanwhile load the plugin from a clone for one session with `claude --plugin-dir /path/to/clone/plugin`. Then, in a git checkout on a branch named for a ticket (for example `git checkout -b feature/ABC-123-punchcard`; with Jira, use your throwaway ticket):
 
 ```sh
-claude --plugin-dir /path/to/your/clone/punchcard/plugin
+claude
 ```
 
-Expect a band above the prompt within a few seconds. Because this is a build from a clone (a pseudo-version, not a release) it never says `plugin 0.1.0 ≠ punchcard …`; if it does, that is a bug. Because nothing is running yet it also says `ABC-123 not running · /punch start`; with another ticket running it would say `timer on <that ticket> … · here: ABC-123` instead. With no tracker the band never mentions Jira, a token or a connection. Put a `.punchcard` naming another key in the checkout (scenario 3) and the band names that key instead of the branch's within ten seconds; remove it again.
+Expect a band above the prompt within a few seconds. The plugin and the binary come from the same pre-release, so it never says `plugin … ≠ punchcard …`; if it does, that is a bug. Because nothing is running yet it also says `ABC-123 not running · /punch start`; with another ticket running it would say `timer on <that ticket> … · here: ABC-123` instead. With no tracker the band never mentions Jira, a token or a connection. Put a `.punchcard` naming another key in the checkout (scenario 3) and the band names that key instead of the branch's within ten seconds; remove it again.
 
 - Type `/punch start` and send it. Expect `▶ ABC-123 0:00 · held` in the band, followed by the ticket's summary with Jira (and a `+ ABC-123 added` toast if the ticket was not on your list yet).
 - `/punch pause`, then `/punch resume`. The band follows.
 - Ask the agent, in words: "stop my punchcard timer with the comment 'plugin test'". Expect it to show you a preview (ticket, duration, comment) **before** anything is sent, then to run `punchcard stop --yes …`, at which point Claude Code shows a permission dialog mentioning Punchcard. Approve it. Expect the agent to report the time logged and the band to go back to showing nothing (or just the version line). With Jira the worklog is in Jira; delete it.
 - Do the stop again, but **decline** the dialog. Expect the timer still running (`punchcard status` in a shell) and the agent to tell you so, without trying again.
-- Start Claude Code with `claude --dangerously-skip-permissions --plugin-dir …` and ask for a stop once more. Expect the dialog anyway.
+- Start Claude Code with `claude --dangerously-skip-permissions` and ask for a stop once more. Expect the dialog anyway.
 - Press shift+tab until the status line says `auto mode on`, and ask for a stop once more. Expect a dialog from the plugin itself this time. With no tracker it asks `Punchcard: this command stops the timer and logs the worklog. Log it?`, with **Log it** and **Keep the timer running**; with Jira, `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?`, with **Send to Jira** and **Keep the timer running**. Choose Keep: the timer is untouched and the agent says so. (If you added the ask rule in setup, Claude Code's own dialog appears instead; either way, exactly one.)
 
 ### 16. Your prompts move the timer between sessions
 
-This needs a timer that was **not** started by hand. In the session from scenario 15, ask the agent "start the punchcard timer on this ticket". Expect the band `▶ ABC-123 0:00` without `held`. Now open a second Claude Code session (same `--plugin-dir`) in a checkout on a branch named for your second ticket, `feature/ABC-124-x`, and send any prompt, even "hi". Expect `punchcard status` in a shell to show `ABC-124` running and `ABC-123` paused, and the second session's band to show `▶ ABC-124 …`. If the TUI is open, its rows say `started by prompt` and `paused by prompt`.
+This needs a timer that was **not** started by hand. In the session from scenario 15, ask the agent "start the punchcard timer on this ticket". Expect the band `▶ ABC-123 0:00` without `held`. Now open a second Claude Code session in a checkout on a branch named for your second ticket, `feature/ABC-124-x`, and send any prompt, even "hi". Expect `punchcard status` in a shell to show `ABC-124` running and `ABC-123` paused, and the second session's band to show `▶ ABC-124 …`. If the TUI is open, its rows say `started by prompt` and `paused by prompt`.
 
 Then in the first session send `/punch start` (by hand: held) and prompt again in the second. Expect `ABC-123` to stay running: a held timer never follows a prompt.
 
