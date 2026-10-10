@@ -11,11 +11,19 @@ import (
 // The list commands: add and rm.
 
 func (a *app) addCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "add KEY...",
+	var summary string
+	c := &cobra.Command{
+		Use:   "add KEY... [--summary TEXT]",
 		Short: "Put tickets on the list without starting a timer",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			typed := cmd.Flags().Changed("summary")
+			switch {
+			case typed && a.env.HasTracker():
+				return usageError("--summary is for no tracker: with one, the summary is the tracker's")
+			case typed && len(args) > 1:
+				return usageError("--summary names one ticket: add one KEY with it")
+			}
 			c := core.Add{Origin: a.origin, Grammar: a.env.Grammar()}
 			keys := make([]string, len(args))
 			for i, k := range args {
@@ -24,6 +32,9 @@ func (a *app) addCmd() *cobra.Command {
 				if err != nil {
 					a.code = a.failure("add", err)
 					return nil
+				}
+				if typed {
+					n.Summary = strings.TrimSpace(summary)
 				}
 				c.Tickets = append(c.Tickets, n)
 			}
@@ -45,6 +56,8 @@ func (a *app) addCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&summary, "summary", "", "with no tracker, the ticket's summary as it should read on the list (one KEY)")
+	return c
 }
 
 func (a *app) rmCmd() *cobra.Command {

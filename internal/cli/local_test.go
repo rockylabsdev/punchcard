@@ -135,3 +135,51 @@ func TestWithoutATrackerNothingIsOwed(t *testing.T) {
 	}
 	h.neverAsked()
 }
+
+// With no tracker the summary is what the user typed: add --summary
+// records it, and ls shows it.
+func TestWithoutATrackerAddTakesATypedSummary(t *testing.T) {
+	h := noTracker(t)
+	r := h.run("add", "payroll", "--summary", "  Monthly payroll run ", "--json")
+	if r.code != 0 {
+		t.Fatalf("exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	var add struct {
+		Data struct {
+			Tickets []map[string]any `json:"tickets"`
+		} `json:"data"`
+	}
+	decodeInto(t, r.stdout, &add)
+	if got := add.Data.Tickets[0]["summary"]; got != "Monthly payroll run" {
+		t.Errorf("summary %v, want Monthly payroll run", got)
+	}
+	if r := h.run("ls"); !strings.Contains(r.stdout, "Monthly payroll run") {
+		t.Errorf("ls does not show the summary:\n%s", r.stdout)
+	}
+	h.neverAsked()
+}
+
+// --summary names one ticket, and with a tracker the summary is the
+// tracker's: both are usage, and nothing is added.
+func TestAddSummaryUsage(t *testing.T) {
+	cases := []struct {
+		name string
+		h    func(*testing.T) *harness
+		args []string
+	}{
+		{"two keys", noTracker, []string{"add", "payroll", "invoices", "--summary", "x"}},
+		{"with Jira", newHarness, []string{"add", "AA-1", "--summary", "x"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := c.h(t)
+			r := h.run(append(c.args, "--json")...)
+			if r.code != 64 {
+				t.Fatalf("exit %d, want 64\n%s%s", r.code, r.stdout, r.stderr)
+			}
+			if r := h.run("ls"); strings.Contains(r.stdout, "added") || !strings.Contains(r.stdout, "No tickets yet") {
+				t.Errorf("a refused add changed the list:\n%s", r.stdout)
+			}
+		})
+	}
+}

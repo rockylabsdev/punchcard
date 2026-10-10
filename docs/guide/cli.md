@@ -15,7 +15,7 @@ All output below was produced by running the binary in throwaway directories, mo
 | `status` | The running ticket, paused tickets, the tracker; with Jira, unsent worklogs and the connection. | no call (reads the token) |
 | `status --short` | One line for a shell prompt. | no call |
 | `ls` | The list, most recently active first. | no call |
-| `add KEY...` | Put tickets on the list without starting anything. | as `start` |
+| `add KEY... [--summary TEXT]` | Put tickets on the list without starting anything. | as `start` |
 | `rm KEY` | Take a ticket off the list. | no call |
 | `log` | Worklogs over a range (this week by default) as Markdown, CSV or JSON. | no call |
 | `sync [KEY]` | With a tracker: send every pending and failed worklog, or only KEY's. Without one: exit 3, nothing to send. | yes |
@@ -370,6 +370,13 @@ DEMO-3 is already on the list
 ```
 
 With Jira, each new key is looked up as `start` does, and a 404 refuses the whole command with exit 5. Without a tracker nothing is looked up.
+
+Without a tracker, `--summary TEXT` gives the ticket its summary, the way it should read in `ls` and the TUI (trimmed; a ticket already on the list keeps its own). It takes one KEY. With a tracker it is usage (exit 64): the summary is the tracker's.
+
+```
+$ punchcard add payroll --summary "Monthly payroll run"
++ payroll added
+```
 
 ### `rm KEY`
 

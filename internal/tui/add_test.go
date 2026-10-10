@@ -127,6 +127,35 @@ func TestAddWithNoTrackerAddsTheSlugAsTyped(t *testing.T) {
 	frameHas(t, hs, "pay roll is not a ticket key")
 }
 
+// With no tracker the summary is what the user types after the key: tab
+// moves to it, and enter adds from either field.
+func TestAddWithNoTrackerTakesATypedSummary(t *testing.T) {
+	hs := listed(newHarness(t))
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	hs.key("a")
+	frameHas(t, hs, "Summary (optional)")
+	hs.typeText("payroll")
+	hs.key("tab")
+	hs.typeText("  Monthly payroll run  ")
+	hs.key("enter")
+
+	want := []core.Command{core.Add{Tickets: []core.NewTicket{{Key: "payroll", Summary: "Monthly payroll run"}}, Origin: core.OriginHand}}
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
+		t.Errorf("changes (-want +got)\n%s", d)
+	}
+	frameHas(t, hs, "Monthly payroll run")
+}
+
+// With Jira the summary is the lookup's: the dialog never asks for one.
+func TestAddWithATrackerAsksForNoSummary(t *testing.T) {
+	hs := listed(newHarness(t))
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"PUN-7": "Recents ordering"}}
+	hs.open("09:00:00", 120, 32)
+	hs.key("a")
+	frameLacks(t, hs, "Summary (optional)")
+}
+
 func TestAddPicksARecentTicket(t *testing.T) {
 	hs := listed(newHarness(t))
 	hs.jira = &tracker.Fake{}

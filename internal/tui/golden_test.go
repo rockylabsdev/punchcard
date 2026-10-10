@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +64,9 @@ var scenarios = []struct {
 	{"no_tracker_logged", localDay, nil},
 	// No tracker: the stop dialog logs, it does not send.
 	{"no_tracker_stop", localDay, []string{"x"}},
+	// No tracker: the add dialog takes a summary after the key, since
+	// nothing will look one up.
+	{"no_tracker_add", localDay, []string{"a", "type:standup", "tab", "type:Daily standup"}},
 }
 
 // localDay is a morning with no tracker: payroll stopped (a local
@@ -94,13 +98,18 @@ func (hs *harness) configure() {
 	}
 }
 
-// play presses keys; "wait" lets the toast time out instead, and a
-// name from outside is that change made elsewhere, then a tick.
+// play presses keys; "wait" lets the toast time out instead, "type:TEXT"
+// types TEXT, and a name from outside is that change made elsewhere,
+// then a tick.
 func (hs *harness) play(keys ...string) {
 	hs.t.Helper()
 	for _, k := range keys {
 		if k == "wait" {
 			hs.tick(hs.now.Add(toastFor + time.Second).Format("15:04:05"))
+			continue
+		}
+		if text, ok := strings.CutPrefix(k, "type:"); ok {
+			hs.typeText(text)
 			continue
 		}
 		if c, ok := outside[k]; ok {
