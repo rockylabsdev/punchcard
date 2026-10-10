@@ -45,22 +45,27 @@ type Account struct {
 }
 
 // Outcomes every caller distinguishes. Match with errors.Is (and
-// *Refusal with errors.As). The words are still Jira's, the only
-// tracker; they are reworded when the copy stops naming it.
+// *Refusal with errors.As). The words name no tracker: an
+// implementation that wants its own name in them wraps them (as
+// jira.APIError does a Refusal).
 var (
 	// ErrNoTracker: none is configured. It is what opening a client
 	// answers with `tracker: none`, and is not ErrNotConfigured: there is
 	// nothing to do, not something to set up.
 	ErrNoTracker = errors.New("no tracker")
+	// ErrNotConfigured: a tracker is chosen but cannot be opened yet (no
+	// config, a field or the token missing). Being unconfigured is
+	// treated like being offline. config.ErrNotConfigured matches it.
+	ErrNotConfigured = errors.New("the tracker is not set up")
 	// ErrNotFound: the tracker does not know the key, or this account
 	// cannot see it.
 	ErrNotFound = errors.New("not found or not visible to this account")
 	// ErrUnauthorized: the credentials were rejected.
-	ErrUnauthorized = errors.New("credentials rejected by Jira")
+	ErrUnauthorized = errors.New("credentials rejected by the tracker")
 	// ErrUnreachable: no answer at all (network, DNS, timeout).
-	ErrUnreachable = errors.New("could not reach Jira")
+	ErrUnreachable = errors.New("could not reach the tracker")
 	// ErrBadSite: the site is not one this tracker can talk to.
-	ErrBadSite = errors.New("not a reachable Jira Cloud site")
+	ErrBadSite = errors.New("not a site this tracker can reach")
 )
 
 // Refusal is any other answer the tracker gave: an HTTP-like status and
@@ -72,9 +77,9 @@ type Refusal struct {
 
 func (r *Refusal) Error() string {
 	if r.Message == "" {
-		return fmt.Sprintf("Jira answered %d", r.Status)
+		return fmt.Sprintf("the tracker answered %d", r.Status)
 	}
-	return fmt.Sprintf("Jira answered %d: %s", r.Status, r.Message)
+	return fmt.Sprintf("the tracker answered %d: %s", r.Status, r.Message)
 }
 
 func (r *Refusal) Is(target error) bool {

@@ -234,7 +234,9 @@ func TestAPIErrorIsATrackerRefusal(t *testing.T) {
 	if !errors.As(fmt.Errorf("wrapped: %w", err), &r) {
 		t.Fatalf("err = %v, want a *tracker.Refusal", err)
 	}
-	if r.Status != 400 || !strings.HasPrefix(r.Message, "started: Invalid date format") || r.Error() != err.Error() {
+	// The refusal is neutral; the error itself says it in Jira's words.
+	if r.Status != 400 || !strings.HasPrefix(r.Message, "started: Invalid date format") ||
+		err.Error() != "Jira answered 400: "+r.Message || r.Error() != "the tracker answered 400: "+r.Message {
 		t.Errorf("refusal = %#v (%q), err %q", r, r.Error(), err.Error())
 	}
 }

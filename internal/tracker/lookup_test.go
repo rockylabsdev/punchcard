@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
@@ -29,9 +28,9 @@ func TestLookUpSummary(t *testing.T) {
 		{"a 401", opened(&tracker.Fake{Err: tracker.ErrUnauthorized}), tracker.Lookup{Outcome: tracker.LookupAuthFailed}},
 		{"unreachable", opened(&tracker.Fake{Err: tracker.ErrUnreachable}), tracker.Lookup{Outcome: tracker.LookupUnknown}},
 		{"a 503", opened(&tracker.Fake{Err: &tracker.Refusal{Status: 503}}), tracker.Lookup{Outcome: tracker.LookupUnknown}},
-		{"not configured", failing(fmt.Errorf("%w: no config.json", config.ErrNotConfigured)), tracker.Lookup{Outcome: tracker.LookupUnknown}},
+		{"not configured", failing(fmt.Errorf("%w: no config.json", tracker.ErrNotConfigured)), tracker.Lookup{Outcome: tracker.LookupUnknown}},
 		{"a broken config is a notice, then not configured", failing(errors.New("config.json: bad json")),
-			tracker.Lookup{Outcome: tracker.LookupUnknown, Notice: "config.json: bad json; treating Jira as not configured"}},
+			tracker.Lookup{Outcome: tracker.LookupUnknown, Notice: "config.json: bad json; treating the tracker as not configured"}},
 		{"no tracker configured", failing(tracker.ErrNoTracker), tracker.Lookup{Outcome: tracker.LookupUnknown}},
 		{"no Jira at all", nil, tracker.Lookup{Outcome: tracker.LookupUnknown}},
 	}

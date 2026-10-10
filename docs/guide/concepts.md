@@ -90,7 +90,7 @@ Without a tracker, a stopped entry's worklog is **local**: final the moment it s
 
 With Jira, a stopped entry's worklog is **pending** until Jira accepts it (**synced**, with Jira's worklog id stored) or refuses it (**failed**, with the message). Pending and failed are both "unsent" and both retried by `sync` or the TUI's `r`. A synced worklog is never sent again, and a local one is never sent at all. Local and synced both count as logged.
 
-*Scenario:* You stop with Jira down. The worklog is failed with "could not reach Jira". `status` says `1 unsent worklog(s), 0:25:00`, every later change warns about it, and the TUI's Jira strip shows `✗ failed — unreachable · r`. An hour later `punchcard sync` sends it and the row becomes `✓ logged 11:02`.
+*Scenario:* You stop with Jira down. The worklog is failed with "could not reach the tracker". `status` says `1 unsent worklog(s), 0:25:00`, every later change warns about it, and the TUI's Jira strip shows `✗ failed — unreachable · r`. An hour later `punchcard sync` sends it and the row becomes `✓ logged 11:02`.
 
 If you leave Jira for no tracker, `setup` offers to mark any pending or failed worklogs local, showing how many and how much time. Declined, they stay owed.
 

@@ -6,6 +6,7 @@
 package jira
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/j-dsmith/punchcard/internal/tracker"
@@ -33,7 +34,14 @@ func (e *APIError) refusal() *tracker.Refusal {
 	return &tracker.Refusal{Status: e.Status, Message: strings.Join(parts, "; ")}
 }
 
-func (e *APIError) Error() string { return e.refusal().Error() }
+// Error is the refusal in Jira's words: "Jira answered 503: ...".
+func (e *APIError) Error() string {
+	r := e.refusal()
+	if r.Message == "" {
+		return fmt.Sprintf("Jira answered %d", r.Status)
+	}
+	return fmt.Sprintf("Jira answered %d: %s", r.Status, r.Message)
+}
 
 func (e *APIError) Is(target error) bool { return e.refusal().Is(target) }
 

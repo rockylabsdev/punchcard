@@ -3,8 +3,6 @@ package tracker
 import (
 	"context"
 	"errors"
-
-	"github.com/j-dsmith/punchcard/internal/config"
 )
 
 // LookupOutcome is what a summary fetch found, as the CLI and the TUI
@@ -45,10 +43,10 @@ func LookUp(open func() (Client, error), key string) Lookup {
 	}
 	c, err := open()
 	if err != nil {
-		if errors.Is(err, config.ErrNotConfigured) || errors.Is(err, ErrNoTracker) {
+		if errors.Is(err, ErrNotConfigured) || errors.Is(err, ErrNoTracker) {
 			return Lookup{}
 		}
-		return Lookup{Notice: err.Error() + "; treating Jira as not configured"}
+		return Lookup{Notice: err.Error() + "; treating the tracker as not configured"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), SummaryBudget)
 	defer cancel()

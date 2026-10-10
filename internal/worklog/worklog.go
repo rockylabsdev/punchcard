@@ -224,7 +224,7 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 		}
 		s.record(rep, res)
 		if err != nil {
-			return fmt.Errorf("jira took worklog %s for %s but it could not be recorded: %w", id, t.Key, err)
+			return fmt.Errorf("the tracker took worklog %s for %s but it could not be recorded: %w", id, t.Key, err)
 		}
 		if e, ok := res.World.State.Entry(t.Key, t.EntryID); ok && e.Worklog != nil {
 			rep.Sent = append(rep.Sent, core.UnsentWorklog{Key: t.Key, EntryID: t.EntryID, Worklog: *e.Worklog})

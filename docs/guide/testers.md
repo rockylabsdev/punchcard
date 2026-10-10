@@ -152,7 +152,7 @@ punchcard status
 punchcard start ABC-124
 ```
 
-Expect the stop to print `■ ABC-123 stopped: 5m, worklog failed` and `the worklog is saved but not sent: could not reach Jira …` with exit 7. `status` shows `1 unsent worklog(s), 0:05:00`. The start works and warns `punchcard: 1 unsent worklog(s), 0:05:00; run punchcard sync`. Turn Wi-Fi on:
+Expect the stop to print `■ ABC-123 stopped: 5m, worklog failed` and `the worklog is saved but not sent: could not reach the tracker …` with exit 7. `status` shows `1 unsent worklog(s), 0:05:00`. The start works and warns `punchcard: 1 unsent worklog(s), 0:05:00; run punchcard sync`. Turn Wi-Fi on:
 
 ```sh
 punchcard sync

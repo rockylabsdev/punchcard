@@ -63,7 +63,7 @@ Switch modes while the TUI or a session is open and watch the surfaces react:
 | `ok` | Everything succeeds. | `✓ logged` rows, `sent to Jira`. |
 | `401` | Every call is rejected as unauthenticated. | `stop` exits 7 with `auth_failed`; `status` shows `! Jira rejected the token`; the TUI banner `✗ Jira rejected the token at …`; the band `Jira auth failed`; `sync` exits 8. Switch back to `ok` and `sync`: the marker clears. |
 | `503` | Worklog POSTs fail; reads still work. | `stop` exits 7 with `worklog failed`; `✗ failed — 503 · r` in the TUI's day's log; `r` or `sync` after `ok` sends it. |
-| `slow` | Every call takes 20 seconds, longer than any budget. | A start adds the ticket unverified; `stop` says `could not reach Jira` after 10 s; the TUI shows `✗ failed — unreachable`. |
+| `slow` | Every call takes 20 seconds, longer than any budget. | A start adds the ticket unverified; `stop` says `could not reach the tracker` after 10 s; the TUI shows `✗ failed — unreachable`. |
 
 ```sh
 curl 'http://127.0.0.1:8181/_fake/mode?set=503'

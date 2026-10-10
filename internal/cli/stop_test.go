@@ -57,8 +57,8 @@ func TestStopEnvelopes(t *testing.T) {
 			owed("stop", stopData(`{"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}`), noEvents, "auth_failed"), 1},
 		{"Jira refuses: worklog failed, exit 7", &tracker.Fake{Err: &tracker.Refusal{Status: 503}}, startAA1, "09:30",
 			[]string{"stop"}, 7,
-			owed("stop", stopData(`{"state": "failed", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "message": "Jira answered 503", "refusedStatus": 503, "failedAt": `+nineThirty+`}`),
-				`[{"kind": "syncFailed", "key": "AA-1", "message": "Jira answered 503"}]`, "sync_failed"), 1},
+			owed("stop", stopData(`{"state": "failed", "startedAt": `+nine+`, "timeSpentSeconds": 1800, "message": "the tracker answered 503", "refusedStatus": 503, "failedAt": `+nineThirty+`}`),
+				`[{"kind": "syncFailed", "key": "AA-1", "message": "the tracker answered 503"}]`, "sync_failed"), 1},
 		{"unconfigured: stopped, exit 7 not_configured", nil, startAA1, "09:30",
 			[]string{"stop"}, 7,
 			owed("stop", stopData(`{"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}`), noEvents, "not_configured"), 0},
@@ -186,8 +186,8 @@ func TestSyncEnvelopes(t *testing.T) {
 			ok("sync", `{"sent": [`+synced("AA-2", "ID-2", nine, "W1")+`], "remaining": []}`, `[{"kind": "synced", "key": "AA-2"}]`)},
 		{"some remain: exit 7", &tracker.Fake{PostErrs: map[string]error{"AA-1": &tracker.Refusal{Status: 503}}}, twoOwed, []string{"sync"}, 7,
 			fmt.Sprintf(`{"v": 1, "ok": true, "outcome": "sync_pending", "command": "sync",
-				"data": {"sent": [%s], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "failed", "startedAt": %s, "timeSpentSeconds": 1800, "message": "Jira answered 503", "refusedStatus": 503, "failedAt": %s}}]},
-				"events": [{"kind": "syncFailed", "key": "AA-1", "message": "Jira answered 503"}, {"kind": "synced", "key": "AA-2"}],
+				"data": {"sent": [%s], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "failed", "startedAt": %s, "timeSpentSeconds": 1800, "message": "the tracker answered 503", "refusedStatus": 503, "failedAt": %s}}]},
+				"events": [{"kind": "syncFailed", "key": "AA-1", "message": "the tracker answered 503"}, {"kind": "synced", "key": "AA-2"}],
 				"error": {"code": "sync_failed", "message": "*", "hint": "run `+"`punchcard sync`"+` again later"}}`,
 				synced("AA-2", "ID-2", nine, "W1"), eight, ten)},
 		{"a 401 exits 8 and leaves them pending", &tracker.Fake{Err: tracker.ErrUnauthorized}, twoOwed, []string{"sync"}, 8,
@@ -308,5 +308,5 @@ func TestStopUnsentHumanOutput(t *testing.T) {
 		t.Fatalf("exit %d", r.code)
 	}
 	wantLines(t, r.stdout, "AA-1 stopped: 30m")
-	wantLines(t, r.stderr, "could not reach Jira", "punchcard sync")
+	wantLines(t, r.stderr, "could not reach the tracker", "punchcard sync")
 }

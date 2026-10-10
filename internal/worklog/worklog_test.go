@@ -299,7 +299,7 @@ func TestSyncSendsEveryPendingAndFailedWorklogOneAtATime(t *testing.T) {
 	if d := cmp.Diff([]string{"AA-1 synced", "AA-3 synced"}, sent); d != "" {
 		t.Errorf("sent (-want +got)\n%s", d)
 	}
-	if d := cmp.Diff([]string{"AA-2 failed Jira answered 503: down"}, left); d != "" {
+	if d := cmp.Diff([]string{"AA-2 failed the tracker answered 503: down"}, left); d != "" {
 		t.Errorf("remaining (-want +got)\n%s", d)
 	}
 	if d := cmp.Diff([]string{"synced AA-1", "syncFailed AA-2", "synced AA-3"}, kinds(rep.Events)); d != "" {

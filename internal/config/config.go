@@ -12,6 +12,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // SchemaVersion is the config file version this binary writes and reads.
@@ -37,14 +39,23 @@ const (
 
 var (
 	// ErrNotConfigured: no config file, a field missing, or no token.
-	// Being unconfigured is treated like being offline.
-	ErrNotConfigured = errors.New("not connected to Jira")
+	// Being unconfigured is treated like being offline. It matches
+	// tracker.ErrNotConfigured, so the tracker seam need not import config.
+	ErrNotConfigured error = notConfigured{}
 	// ErrNewerSchema: the file was written by a newer punchcard.
 	ErrNewerSchema = errors.New("config written by a newer punchcard")
 	// ErrNoConfigDir: neither XDG_CONFIG_HOME nor HOME is set. The path
 	// is never guessed relative to the working directory.
 	ErrNoConfigDir = errors.New("neither XDG_CONFIG_HOME nor HOME is set")
 )
+
+// notConfigured is ErrNotConfigured: Jira's words for the tracker seam's
+// tracker.ErrNotConfigured, which it matches.
+type notConfigured struct{}
+
+func (notConfigured) Error() string { return "not connected to Jira" }
+
+func (notConfigured) Is(target error) bool { return target == tracker.ErrNotConfigured }
 
 // Path is the config file's path, or ErrNoConfigDir.
 func Path(getenv func(string) string) (string, error) {

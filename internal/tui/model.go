@@ -345,9 +345,8 @@ func sendProblem(err error) string {
 	case worklog.ProblemUnreachable:
 		return "Jira not reachable"
 	case worklog.ProblemRejected:
-		var refused *tracker.Refusal
-		errors.As(err, &refused)
-		return "Jira answered " + refused.Error()
+		// The implementation's own words: "Jira answered 503: ...".
+		return err.Error()
 	case worklog.ProblemBusy:
 		return "another punchcard is sending"
 	}

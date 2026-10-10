@@ -322,3 +322,10 @@ func TestJiraStripRowsLeadWithTheOutcome(t *testing.T) {
 		t.Errorf("strip:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+// A refusal is said once, in the words of the error that carries it.
+func TestSendProblemSaysARefusalOnce(t *testing.T) {
+	if got := sendProblem(&tracker.Refusal{Status: 503, Message: "down"}); got != "the tracker answered 503: down" {
+		t.Errorf("sendProblem = %q", got)
+	}
+}
