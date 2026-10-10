@@ -188,3 +188,23 @@ func TestABrokenConfigIsReportedAndStartsUnverified(t *testing.T) {
 		t.Errorf("exit %d, stderr %q", r.code, r.stderr)
 	}
 }
+
+// #42: a ticket added while Jira was unreachable is confirmed, with its
+// summary, once Jira accepts a worklog for it.
+func TestSyncConfirmsAnUnverifiedTicket(t *testing.T) {
+	h := newHarness(t)
+	h.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
+	h.do("09:00", "start", "NEW-1")
+	h.do("09:30", "stop") // exit 7: owed
+	h.jira = knows("NEW-1", "Fix the thing")
+	h.now = at("10:00")
+	if r := h.run("sync"); r.code != 0 {
+		t.Fatalf("sync: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	r := h.run("ls", "--json")
+	tickets := decode(t, r.stdout)["data"].(map[string]any)["tickets"].([]any)
+	tk := tickets[0].(map[string]any)
+	if tk["key"] != "NEW-1" || tk["unverified"] != false || tk["summary"] != "Fix the thing" {
+		t.Errorf("ls --json ticket = %v", tk)
+	}
+}

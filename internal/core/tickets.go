@@ -129,6 +129,7 @@ func (a *applier) markSynced(c MarkSynced) error {
 	wl := e.Worklog
 	wl.State, wl.WorklogID, wl.SyncedAt = WorklogSynced, c.WorklogID, a.now
 	wl.clearFailure()
+	a.ticket(c.Key).Unverified = false // an accepted worklog proves the key
 	a.w.State.AuthFailedAt = Timestamp{}
 	a.emit(EventSynced, c.Key)
 	return nil

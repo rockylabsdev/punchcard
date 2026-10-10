@@ -237,6 +237,9 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 		if e, ok := res.World.State.Entry(t.Key, t.EntryID); ok && e.Worklog != nil {
 			rep.Sent = append(rep.Sent, core.UnsentWorklog{Key: t.Key, EntryID: t.EntryID, Worklog: *e.Worklog})
 		}
+		if unverified(w.State, t.Key) {
+			s.fetchSummary(ctx, client, t.Key, rep)
+		}
 		return nil
 	case errors.Is(perr, tracker.ErrUnauthorized):
 		// A fact about Jira, not about the worklog: it stays pending.
@@ -251,6 +254,41 @@ func (s Sender) sendOne(ctx context.Context, client tracker.Client, t core.Unsen
 		res, err := s.Store.Apply(mark)
 		s.record(rep, res)
 		return errors.Join(perr, err)
+	}
+}
+
+// unverified reports whether key is tracked and unverified in st.
+func unverified(st core.State, key string) bool {
+	for _, tk := range st.TrackedTickets {
+		if tk.Key == key {
+			return tk.Unverified
+		}
+	}
+	return false
+}
+
+// fetchSummary is the best-effort follow-up to a MarkSynced that
+// confirmed an unverified ticket: ask the tracker for its summary and
+// record it with a Verify. Any failure is silent; the ticket stays
+// confirmed with no summary, and a ticket removed meanwhile is skipped.
+// The MarkSynced already confirmed it, so later worklogs of the same
+// ticket in this run never ask again.
+func (s Sender) fetchSummary(ctx context.Context, client tracker.Client, key string, rep *Report) {
+	sctx, cancel := context.WithTimeout(ctx, tracker.SummaryBudget)
+	summary, err := client.Summary(sctx, key)
+	cancel()
+	if err != nil {
+		return
+	}
+	var res store.Result
+	for range markTries {
+		res, err = s.Store.Apply(core.Verify{Key: key, Summary: summary})
+		if !errors.Is(err, store.ErrBusy) {
+			break
+		}
+	}
+	if err == nil {
+		s.record(rep, res)
 	}
 }
 

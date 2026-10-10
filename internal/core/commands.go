@@ -108,7 +108,8 @@ type Touch struct {
 
 // MarkSynced records that the tracker accepted an entry's worklog. It refuses a
 // worklog already synced (ErrAlreadySynced) or local (ErrLocal) and
-// clears AuthFailedAt.
+// clears AuthFailedAt. Since the tracker accepted the key, it also clears
+// the ticket's Unverified; the summary is left as it is, for a Verify.
 type MarkSynced struct {
 	Key       string
 	EntryID   string

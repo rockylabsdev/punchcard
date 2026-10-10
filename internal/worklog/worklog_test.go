@@ -3,6 +3,7 @@ package worklog_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -371,4 +372,76 @@ func TestSyncWithNothingOwedNeverOpensJira(t *testing.T) {
 	if _, err := f.s.Sync(context.Background(), ""); !errors.Is(err, config.ErrNotConfigured) {
 		t.Errorf("err = %v, want ErrNotConfigured", err)
 	}
+}
+
+// unverifiedStopped puts one pending worklog per span on key, a ticket
+// added while the tracker could not be reached.
+func (f *fixture) unverifiedStopped(key string, spans ...[2]string) {
+	f.t.Helper()
+	for i, sp := range spans {
+		f.apply(sp[0], core.Start{Key: key, Unverified: true, Origin: core.OriginHand, NewEntryID: fmt.Sprintf("E%s-%d", key, i)})
+		f.apply(sp[1], core.Stop{Key: key, Origin: core.OriginHand})
+	}
+}
+
+func (f *fixture) ticket(key string) core.TrackedTicket {
+	f.t.Helper()
+	for _, tk := range f.world().State.TrackedTickets {
+		if tk.Key == key {
+			return tk
+		}
+	}
+	f.t.Fatalf("%s is not tracked", key)
+	return core.TrackedTicket{}
+}
+
+// #42: an accepted worklog confirms an unverified ticket, and the
+// sender fetches its summary once per ticket per run.
+func TestASyncedWorklogConfirmsAnUnverifiedTicket(t *testing.T) {
+	t.Run("with its summary, fetched once for two worklogs", func(t *testing.T) {
+		fake := &tracker.Fake{Summaries: map[string]string{"NEW-1": "Fix it"}}
+		f := newFixture(t, fake)
+		f.unverifiedStopped("NEW-1", [2]string{"08:00", "08:30"}, [2]string{"08:30", "09:00"})
+		f.now = at("10:00")
+		if _, err := f.s.Sync(context.Background(), ""); err != nil {
+			t.Fatal(err)
+		}
+		if d := cmp.Diff([]string{"worklog NEW-1", "summary NEW-1", "worklog NEW-1"}, fake.Calls()); d != "" {
+			t.Errorf("calls (-want +got)\n%s", d)
+		}
+		if tk := f.ticket("NEW-1"); tk.Unverified || tk.Summary != "Fix it" {
+			t.Errorf("ticket unverified %v summary %q, want confirmed with Fix it", tk.Unverified, tk.Summary)
+		}
+	})
+	t.Run("a failed summary fetch is silent", func(t *testing.T) {
+		fake := &tracker.Fake{} // every Summary is a 404
+		f := newFixture(t, fake)
+		f.unverifiedStopped("NEW-1", [2]string{"08:00", "08:30"})
+		f.now = at("10:00")
+		rep, err := f.s.Sync(context.Background(), "")
+		if err != nil {
+			t.Fatalf("sync reported %v", err)
+		}
+		if len(rep.Sent) != 1 || len(rep.Remaining) != 0 {
+			t.Errorf("sent %v remaining %v", rep.Sent, rep.Remaining)
+		}
+		if f.worklogOf("NEW-1").State != core.WorklogSynced {
+			t.Error("worklog not synced")
+		}
+		if tk := f.ticket("NEW-1"); tk.Unverified || tk.Summary != "" {
+			t.Errorf("ticket unverified %v summary %q, want confirmed with none", tk.Unverified, tk.Summary)
+		}
+	})
+	t.Run("a verified ticket asks for no summary", func(t *testing.T) {
+		fake := &tracker.Fake{Summaries: map[string]string{"AA-1": "Known"}}
+		f := newFixture(t, fake)
+		f.stopped("AA-1", "08:00", "08:30")
+		f.now = at("10:00")
+		if _, err := f.s.Sync(context.Background(), ""); err != nil {
+			t.Fatal(err)
+		}
+		if d := cmp.Diff([]string{"worklog AA-1"}, fake.Calls()); d != "" {
+			t.Errorf("calls (-want +got)\n%s", d)
+		}
+	})
 }
