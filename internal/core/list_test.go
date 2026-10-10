@@ -100,16 +100,16 @@ func TestApplyTouch(t *testing.T) {
 			name:     "touch of the running ticket vouches for it",
 			w:        unheldA(),
 			cmd:      core.Touch{Key: "AA-1", Origin: prompt},
-			want:     unheldA().State,
+			want:     focused(unheldA().State, "AA-1"),
 			lastSeen: at("09:30"),
 		},
 		{
 			name: "focus moves an un-held timer",
 			w:    unheldA(),
 			cmd:  core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
-			want: state(
+			want: focused(state(
 				ticket("AA-1", entry("EA", prompt, seg("09:00", "09:30"))),
-				ticket("BB-2", entry("EB", prompt, seg("09:30", "")))),
+				ticket("BB-2", entry("EB", prompt, seg("09:30", "")))), "BB-2"),
 			events:   []core.Event{{Kind: core.EventPaused, Key: "AA-1"}, {Kind: core.EventStarted, Key: "BB-2"}},
 			lastSeen: at("09:30"),
 		},
@@ -119,7 +119,7 @@ func TestApplyTouch(t *testing.T) {
 			name:     "focus never moves a held timer, but the prompt is still presence",
 			w:        heldA(),
 			cmd:      core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
-			want:     heldA().State,
+			want:     focused(heldA().State, "BB-2"),
 			lastSeen: at("09:30"),
 		},
 		{
@@ -133,7 +133,7 @@ func TestApplyTouch(t *testing.T) {
 			name:     "focus does not start a timer when nothing runs",
 			w:        world("09:00", ticket("AA-1", entry("EA", hand, seg("08:00", "08:30")))),
 			cmd:      core.Touch{Key: "AA-1", Origin: prompt, NewEntryID: "X"},
-			want:     state(ticket("AA-1", entry("EA", hand, seg("08:00", "08:30")))),
+			want:     focused(state(ticket("AA-1", entry("EA", hand, seg("08:00", "08:30")))), "AA-1"),
 			lastSeen: at("09:30"),
 		},
 		{

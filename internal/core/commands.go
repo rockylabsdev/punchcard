@@ -92,9 +92,11 @@ type Remove struct {
 
 // Touch is the mod's presence call. With no Key it is presence only.
 // With a Key it is also focus: an un-held timer on another ticket moves
-// to Key (EventPaused, EventStarted); a held timer is never moved. A
-// prompt or hand Touch is always presence, whatever it moves. Focus
-// never starts a timer when nothing runs. An agent's Touch does nothing.
+// to Key (EventPaused, EventStarted), but only when Key differs from
+// State.LastFocus, which it then records (ADR 0009); a held timer is
+// never moved. A prompt or hand Touch is always presence, whatever it
+// moves. Focus never starts a timer when nothing runs. An agent's Touch
+// does nothing.
 type Touch struct {
 	Key        string
 	Summary    string // used only if Key is not tracked yet

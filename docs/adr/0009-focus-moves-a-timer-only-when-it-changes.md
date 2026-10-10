@@ -2,7 +2,7 @@
 
 A prompt's focus moves an un-held running timer only when the prompt's session ticket differs from the **last focus**, the session ticket of the user's previous keyed prompt (see `CONTEXT.md`). Before this, every prompt re-asserted its session's ticket. That undid any switch the user made from inside that session that was not **held**. In #41 the user asked the agent to "start OPS-77" in a session on PUN-1, and the next prompt moved the timer back to PUN-1. The same happened to a `!` command and to an agent's own start. Edge-triggered focus fixes every one of those routes at once. The timer still follows the user between sessions, and **held** keeps meaning "set by hand".
 
-Every keyed prompt records the last focus, including when the timer is idle or held. If it didn't, a stale last focus would make the next prompt look like a change and bring the bug back. A prompt from a session with no ticket leaves it alone. Hand starts, agent starts, pauses and stops never write it, and it never expires: a reset of any kind would make the next prompt a "change" and pull the timer back.
+Every keyed prompt records the last focus, including when the timer is idle or held. So does a `punchcard touch KEY` typed by hand, which is the same presence call; an agent's touch does not. If it didn't, a stale last focus would make the next prompt look like a change and bring the bug back. A prompt from a session with no ticket leaves it alone. Hand starts, agent starts, pauses and stops never write it, and it never expires: a reset of any kind would make the next prompt a "change" and pull the timer back.
 
 ## Considered Options
 
@@ -13,4 +13,5 @@ Every keyed prompt records the last focus, including when the timer is idle or h
 ## Consequences
 
 - Focus no longer pulls the timer back to the session's ticket. To return, the user says so, or uses `/punch start`. The status line already shows "`KEY` not running · /punch start".
-- One more stored value, written on presence.
+- One more stored value, `lastFocus` in `state.json`, written on presence. It is additive: a file without it reads as empty, which differs from every key, so the first prompt after the upgrade behaves as before.
+- A prompt that finds the state lock busy is skipped, as presence always was, so its last focus is not recorded. A quick prompt from another session's ticket can then go unseen as a change. This is rare and self-correcting at the next change of focus, so the touch does not wait for the lock.

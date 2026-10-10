@@ -502,7 +502,7 @@ $ punchcard version --json
 
 ### `touch [KEY] [--cwd DIR]` (hidden)
 
-The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: an un-held running timer on another ticket moves to that key. It never starts a timer when nothing runs, never moves a held timer, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
+The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: an un-held running timer on another ticket moves to that key, but only if the key differs from the last focus, the key of the previous touch from a prompt or by hand that had one. Every such touch records it, even when it moves nothing. It never starts a timer when nothing runs, never moves a held timer, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
 
 ```
 $ punchcard touch --cwd ~/src/app --origin prompt

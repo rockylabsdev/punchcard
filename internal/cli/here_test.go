@@ -82,6 +82,28 @@ func TestThePunchcardFileNamesTheKeyAndTouchFocusesOnIt(t *testing.T) {
 	wantLines(t, r.stdout, "▶ payroll started")
 }
 
+// #41: a session on PUN-1 asks its agent to start OPS-77; the next prompt
+// in that session has the same focus, so it leaves OPS-77 running.
+func TestAnUnchangedFocusLeavesAnAgentsStartRunning(t *testing.T) {
+	repo := gitRepo(t, "main")
+	punchcardFile(t, filepath.Join(repo, ".punchcard"), "PUN-1\n")
+	h := newHarness(t)
+	h.tracker = config.TrackerNone
+	h.env["CLAUDECODE"] = "1"
+
+	h.do("09:00", "touch", "--cwd", repo, "--origin", "prompt")
+	h.do("09:05", "start", "OPS-77")
+	h.now = at("09:10")
+	r := h.run("touch", "--cwd", repo, "--origin", "prompt")
+	if r.code != 0 || r.stdout != "" {
+		t.Fatalf("second touch: exit %d stdout %q stderr %q, want a silent 0", r.code, r.stdout, r.stderr)
+	}
+	r = h.run("status")
+	if !strings.Contains(r.stdout, "OPS-77") || strings.Contains(r.stdout, "PUN-1") {
+		t.Errorf("status after the second touch:\n%s", r.stdout)
+	}
+}
+
 func TestTheNearestPunchcardWinsAndNoneAboveTheRepository(t *testing.T) {
 	repo := gitRepo(t, "main")
 	sub := filepath.Join(repo, "services", "billing")

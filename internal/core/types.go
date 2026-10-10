@@ -27,7 +27,11 @@ func (o Origin) IsPresence() bool { return o == OriginHand || o == OriginPrompt 
 type State struct {
 	SchemaVersion int `json:"schemaVersion"`
 	// AuthFailedAt is set by a Jira 401 and cleared by a successful call.
-	AuthFailedAt   Timestamp       `json:"authFailedAt,omitzero"`
+	AuthFailedAt Timestamp `json:"authFailedAt,omitzero"`
+	// LastFocus is the key of the last presence Touch that carried one;
+	// focus moves a timer only when it changes (ADR 0009). Empty, as in
+	// a file written before it existed, differs from every key.
+	LastFocus      string          `json:"lastFocus,omitempty"`
 	TrackedTickets []TrackedTicket `json:"trackedTickets"`
 }
 
