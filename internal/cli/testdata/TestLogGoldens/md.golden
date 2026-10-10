@@ -3,7 +3,7 @@
 | key | summary | time | comment |
 |---|---|---|---|
 | AA-1 | Fix the thing | 1:30 | Fixed the formatter |
-| AA-2 | Other thing | 1:15 | Split \| "quoted", and<br>newline |
+| AA-2 | Other thing | 1:15 | Split \| "quoted", C:\\\| and<br>newline |
 
 ## 2026-08-04 Tue · 2h 30m · 1 pending
 

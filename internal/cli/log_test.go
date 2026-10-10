@@ -47,7 +47,7 @@ func TestLogOfAnEmptyRangeIsOK(t *testing.T) {
 }
 
 // awkward is a comment no table or CSV cell can hold unescaped.
-const awkward = "Split | \"quoted\", and\nnewline"
+const awkward = "Split | \"quoted\", C:\\| and\nnewline"
 
 // week scripts Saturday 1 August through Wednesday the 5th against a fake
 // Jira: a worklog on Saturday (last week), a synced one and one spanning

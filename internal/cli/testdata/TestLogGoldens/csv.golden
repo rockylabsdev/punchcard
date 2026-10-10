@@ -1,6 +1,6 @@
 date,started,key,summary,minutes,comment,state,remote_id,entry_id,recovered
 2026-08-03,09:00,AA-1,Fix the thing,90,Fixed the formatter,synced,W2,ID-2,false
-2026-08-03,23:30,AA-2,Other thing,75,"Split | ""quoted"", and
+2026-08-03,23:30,AA-2,Other thing,75,"Split | ""quoted"", C:\| and
 newline",synced,W3,ID-3,false
 2026-08-04,09:00,AA-1,Fix the thing,120,Recovered morning,synced,W4,ID-4,true
 2026-08-04,14:00,AA-3,Pipes | in a summary,30,,pending,,ID-6,false

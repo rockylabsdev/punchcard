@@ -297,9 +297,11 @@ func logMarkdown(d LogData) string {
 	return b.String()
 }
 
-// mdCell keeps a table cell one cell on one line: pipes are escaped and
-// line breaks become <br>, which GitHub renders inside a table.
+// mdCell keeps a table cell one cell on one line: backslashes and pipes
+// are escaped (so a typed \| renders as typed) and line breaks become
+// <br>, which GitHub renders inside a table.
 func mdCell(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, "|", `\|`)
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
