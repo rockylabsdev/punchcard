@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -31,10 +31,13 @@ type Store interface {
 // touches the store itself (requests run as tea.Cmds and come back as
 // resultMsg) and never waits on Jira (lookups come back as fetchMsg).
 type Model struct {
-	store  Store
-	newID  func() string
-	sender Sender                      // nil: stops leave the worklog pending
-	jira   func() (jira.Client, error) // nil: Jira is not configured
+	store     Store
+	newID     func() string
+	sender    Sender                         // nil: stops leave the worklog pending
+	open      func() (tracker.Client, error) // nil: the tracker is not configured
+	noTracker bool                           // none configured: nothing to look up
+	grammar   tracker.Grammar
+	retrack   func() Tracking // nil: the tracker never changes
 
 	w, h  int
 	now   time.Time
@@ -134,8 +137,16 @@ type intent struct {
 // (which Init starts). o.Now is read once, to seed the clock until the
 // first tick.
 func New(o Options) Model {
-	return Model{store: o.Store, newID: o.NewID, sender: o.Sender, jira: o.Jira, now: o.Now(), inflight: true, ticker: tick,
+	m := Model{store: o.Store, newID: o.NewID, retrack: o.Retrack,
+		now: o.Now(), inflight: true, ticker: tick,
 		setup: o.Setup, execProcess: tea.ExecProcess, pal: newPalette(true)}
+	return m.track(o.Tracking)
+}
+
+// track puts t in effect.
+func (m Model) track(t Tracking) Model {
+	m.sender, m.open, m.noTracker, m.grammar = t.Sender, t.Open, t.None, t.Grammar
+	return m
 }
 
 // Init loads the store, asks whether Jira is set up, asks the terminal
@@ -187,6 +198,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case setupDoneMsg:
 		return m.setupDone(msg)
+	case trackingMsg:
+		m = m.track(Tracking(msg))
+		m.link = link{} // about the old tracker; the probe asks again
+		return m, m.probe()
 	case tea.ColorProfileMsg:
 		m.profile = msg.Profile
 		return m, nil
@@ -215,7 +230,7 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 	case "space", "enter":
 		if t, ok := m.selected(); ok {
 			m, cmd = m.enqueue(intent{kind: intentToggle, key: t.Key})
-			if t.Unverified && m.stateOf(t) != core.TimerRunning {
+			if t.Unverified && !m.noTracker && m.stateOf(t) != core.TimerRunning {
 				// Confirm on contact: the start goes ahead now; Jira's
 				// answer, if any, lands as its own change.
 				cmd = tea.Batch(cmd, m.fetch(t.Key, true, false))
@@ -330,9 +345,8 @@ func sendProblem(err error) string {
 	case worklog.ProblemUnreachable:
 		return "Jira not reachable"
 	case worklog.ProblemRejected:
-		var api *jira.APIError
-		errors.As(err, &api)
-		return "Jira answered " + api.Error()
+		// The implementation's own words: "Jira answered 503: ...".
+		return err.Error()
 	case worklog.ProblemBusy:
 		return "another punchcard is sending"
 	}
@@ -350,7 +364,7 @@ func (m Model) command(i intent) core.Command {
 	case intentStop:
 		return i.stop
 	case intentAdd:
-		return core.Add{Tickets: []core.NewTicket{i.ticket}, Origin: core.OriginHand}
+		return core.Add{Tickets: []core.NewTicket{i.ticket}, Origin: core.OriginHand, Grammar: m.grammar}
 	case intentRemove:
 		return core.Remove{Key: i.key, Force: i.force, Origin: core.OriginHand}
 	case intentAuthFailure:
@@ -375,7 +389,8 @@ func (m Model) command(i intent) core.Command {
 		if r, _, ok := core.Running(shown.State); ok && r.Key == t.Key {
 			return core.Pause{Origin: core.OriginHand}
 		}
-		return core.Start{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, Origin: core.OriginHand, NewEntryID: m.newID()}
+		return core.Start{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, Origin: core.OriginHand, NewEntryID: m.newID(),
+			Grammar: m.grammar}
 	}
 	return nil // the ticket left the list meanwhile
 }
@@ -435,7 +450,7 @@ func describe(err error) string {
 	case errors.Is(err, core.ErrNoTimer):
 		return "nothing is running"
 	case errors.Is(err, core.ErrUnlogged):
-		return "it has time not yet in Jira; nothing removed"
+		return "it has time not yet logged; nothing removed"
 	case errors.Is(err, store.ErrBusy):
 		return "another punchcard holds the state file; try again"
 	case errors.Is(err, store.ErrNewerSchema):

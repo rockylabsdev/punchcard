@@ -30,6 +30,14 @@ func TestApplyStop(t *testing.T) {
 			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:20"), seg("09:40", "09:50:59")), pending("09:00", 1800, "Fixed the formatter")))),
 		},
 		{
+			name: "with no tracker the worklog is local: final, nothing to send",
+			w:    world("09:30", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
+			cmd:  core.Stop{Origin: hand, Local: true},
+			now:  "09:30",
+			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:30")),
+				core.Worklog{State: core.WorklogLocal, StartedAt: at("09:00"), TimeSpentSeconds: 1800}))),
+		},
+		{
 			name: "a user duration may exceed measured elapsed",
 			w:    world("09:30", ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			cmd:  core.Stop{Origin: hand, Duration: 2 * time.Hour},
@@ -74,11 +82,12 @@ func TestApplyStop(t *testing.T) {
 			err:  core.ErrTooShort,
 		},
 		{
-			name: "recovered clears only at stop",
+			name: "recovered clears at stop, and the worklog remembers it (log reports it)",
 			w:    world("09:30", ticket("AA-1", recovered(entry("EA", hand, seg("09:00", "09:10"), seg("09:20", ""))))),
 			cmd:  core.Stop{Origin: hand, Duration: 40 * time.Minute},
 			now:  "09:30",
-			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:10"), seg("09:20", "09:30")), pending("09:00", 2400, "")))),
+			want: state(ticket("AA-1", withWorklog(entry("EA", hand, seg("09:00", "09:10"), seg("09:20", "09:30")),
+				core.Worklog{State: core.WorklogPending, StartedAt: at("09:00"), TimeSpentSeconds: 2400, Recovered: true}))),
 		},
 		{
 			name: "with nothing running, stop takes the single paused entry",

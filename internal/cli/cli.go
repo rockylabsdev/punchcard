@@ -15,8 +15,8 @@ import (
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/exitcode"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/spf13/cobra"
 )
 
@@ -93,10 +93,15 @@ type Env struct {
 	// TUI runs the full-screen app for bare `punchcard` on a TTY; main
 	// wires it to tui.Run. Nil (tests) prints status instead.
 	TUI func(Env) int
-	// Jira opens the Jira client; only commands that call Jira call it.
-	// Nil means jira.Open(Getenv): the config file plus the token
-	// lookup. Tests inject a *jira.Fake.
-	Jira func() (jira.Client, error)
+	// Tracker is the tracker in effect. Empty means config's answer
+	// (config.Chosen): no config file is none. Tests set it.
+	Tracker config.Tracker
+	// OpenTracker opens the tracker's client; only commands that call
+	// the tracker call it. After defaults it answers
+	// tracker.ErrNoTracker with no tracker; with Jira, nil means
+	// jira.Open(Getenv): the config file plus the token lookup. Tests
+	// inject a *tracker.Fake.
+	OpenTracker func() (tracker.Client, error)
 	// Keychain is the token lookup's Keychain read (config.Keychain).
 	// Nil means config.SystemKeychain(): /usr/bin/security on macOS, no
 	// Keychain on Linux. Tests always inject a fake.
@@ -133,10 +138,10 @@ func (e Env) withDefaults() Env {
 	if e.Setup == nil {
 		e.Setup = runWizard
 	}
-	if e.Jira == nil {
-		getenv, kc := e.Getenv, e.Keychain
-		e.Jira = func() (jira.Client, error) { return jira.Open(getenv, kc) }
+	if e.Tracker == "" {
+		e.Tracker = chosenTracker(e.Getenv)
 	}
+	e.OpenTracker = e.openTracker(e.OpenTracker)
 	return e
 }
 
@@ -144,7 +149,8 @@ func (e Env) withDefaults() Env {
 func Run(args []string, env Env) int {
 	env = env.withDefaults()
 	a := &app{env: env}
-	a.out = output{env: env, json: wantJSON(args, env.Getenv), color: env.TTY && env.Getenv("NO_COLOR") == ""}
+	a.out = output{env: env, json: wantJSON(args, env.Getenv), color: env.TTY && env.Getenv("NO_COLOR") == "",
+		noticed: new([]string)}
 	root := a.root()
 	root.SetArgs(append([]string{}, args...)) // never nil: cobra would read os.Args
 	root.SetIn(env.Stdin)
@@ -210,8 +216,8 @@ func (a *app) root() *cobra.Command {
 	var jsonFlag bool
 	root := &cobra.Command{
 		Use:           "punchcard",
-		Short:         "Time work against Jira tickets",
-		Long:          "Punchcard times work against Jira tickets and sends the time to Jira as worklogs.\nBare `punchcard` opens the TUI on a terminal and prints status otherwise.",
+		Short:         "Time work against tickets",
+		Long:          "Punchcard times work against tickets and logs the time as worklogs, sent to a tracker when one is set up.\nBare `punchcard` opens the TUI on a terminal and prints status otherwise.",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -227,16 +233,10 @@ func (a *app) root() *cobra.Command {
 			// Without a data directory the TUI has nothing to show: status
 			// reports why (exit 1).
 			if a.env.TTY && a.env.TUI != nil && !a.out.json && a.env.Store.Err() == nil {
-				if firstRun(a.env) {
-					a.env.Setup(a.env) // finished or cancelled, the TUI opens next
-					if err := a.env.Store.Introduce(); err != nil {
-						a.out.notices([]string{"could not write state.json: " + err.Error()})
-					}
-				}
 				a.code = a.env.TUI(a.env)
 				return nil
 			}
-			return a.status(false)
+			return a.status(false, "")
 		},
 	}
 	root.PersistentFlags().BoolVar(&jsonFlag, "json", false, "print one JSON envelope on stdout (also PUNCHCARD_JSON=1)")
@@ -246,7 +246,7 @@ func (a *app) root() *cobra.Command {
 	root.AddCommand(
 		a.startCmd(), a.pauseCmd(), a.resumeCmd(), a.stopCmd(), a.statusCmd(), a.lsCmd(),
 		a.addCmd(), a.rmCmd(), a.syncCmd("sync", false), a.syncCmd("retry", true), a.setupCmd(),
-		a.versionCmd(), a.touchCmd(),
+		a.versionCmd(), a.touchCmd(), a.logCmd(),
 	)
 	return root
 }
@@ -268,12 +268,16 @@ func (a *app) failure(cmd string, err error) int {
 			data: CandidatesData{Candidates: amb.Keys},
 		})
 	case errors.Is(err, core.ErrTooShort):
-		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: "a worklog under one minute is never sent", hint: "pass --duration"})
+		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: "a worklog under one minute is never logged", hint: "pass --duration"})
 	case errors.Is(err, core.ErrUsage):
 		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: err.Error()})
 	case errors.Is(err, core.ErrUnlogged):
-		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error(),
-			hint: "stop and sync it first, or pass --force to drop the unsent time"})
+		// With no tracker only an open entry is unlogged: stopping logs it.
+		hint := "stop and sync it first, or pass --force to drop the unsent time"
+		if !a.env.HasTracker() {
+			hint = "stop it first, or pass --force to drop its time"
+		}
+		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error(), hint: hint})
 	case errors.Is(err, core.ErrHeld):
 		return a.out.fail(cmd, ExitNoTimer, failure{code: "held", msg: err.Error(),
 			hint: "the user started it by hand; only they can move or pause it"})

@@ -21,6 +21,7 @@ func TestApplySyncOutcomes(t *testing.T) {
 	}
 	synced := with(core.WorklogSynced, func(w *core.Worklog) { w.WorklogID = "110001"; w.SyncedAt = at("10:00") })
 	failed := with(core.WorklogFailed, func(w *core.Worklog) { w.Message = "timeout"; w.FailedAt = at("10:00") })
+	local := with(core.WorklogLocal, nil)
 	authFailed := func(s core.State) core.State { s.AuthFailedAt = at("09:45"); return s }
 
 	runApply(t, []applyCase{
@@ -49,6 +50,26 @@ func TestApplySyncOutcomes(t *testing.T) {
 			events: []core.Event{{Kind: core.EventSyncFailed, Key: "AA-1", Message: "timeout"}},
 		},
 		{
+			name: "a refusal keeps the tracker's status",
+			w:    world("", stoppedAs(with(core.WorklogPending, nil))),
+			cmd:  core.MarkFailed{Key: "AA-1", EntryID: "EA", Message: "Service Unavailable", Status: 503},
+			now:  "10:00",
+			want: state(stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt = "Service Unavailable", 503, at("10:00")
+			}))),
+			events: []core.Event{{Kind: core.EventSyncFailed, Key: "AA-1", Message: "Service Unavailable"}},
+		},
+		{
+			name: "a retry that succeeds after a refusal drops its status",
+			w: world("", stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt = "Service Unavailable", 503, at("09:45")
+			}))),
+			cmd:    core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "110001"},
+			now:    "10:00",
+			want:   state(stoppedAs(synced)),
+			events: []core.Event{{Kind: core.EventSynced, Key: "AA-1"}},
+		},
+		{
 			name: "never mark a synced worklog synced again",
 			w:    world("", stoppedAs(synced)),
 			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "999"},
@@ -58,6 +79,40 @@ func TestApplySyncOutcomes(t *testing.T) {
 			name: "never downgrade a synced worklog to failed",
 			w:    world("", stoppedAs(synced)),
 			cmd:  core.MarkFailed{Key: "AA-1", EntryID: "EA", Message: "late timeout"},
+			now:  "11:00", err: core.ErrAlreadySynced,
+		},
+		{
+			name: "never mark a local worklog synced: there is no tracker to have told",
+			w:    world("", stoppedAs(local)),
+			cmd:  core.MarkSynced{Key: "AA-1", EntryID: "EA", WorklogID: "999"},
+			now:  "11:00", err: core.ErrLocal,
+		},
+		{
+			name: "never mark a local worklog failed",
+			w:    world("", stoppedAs(local)),
+			cmd:  core.MarkFailed{Key: "AA-1", EntryID: "EA", Message: "timeout"},
+			now:  "11:00", err: core.ErrLocal,
+		},
+		{
+			name: "mark local makes a pending worklog logged with no tracker",
+			w:    world("", stoppedAs(with(core.WorklogPending, nil))),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
+			now:  "10:00",
+			want: state(stoppedAs(local)),
+		},
+		{
+			name: "mark local clears a failure but keeps the time and comment",
+			w: world("", stoppedAs(with(core.WorklogFailed, func(w *core.Worklog) {
+				w.Message, w.RefusedStatus, w.FailedAt, w.Comment = "Service Unavailable", 503, at("09:45"), "pairing"
+			}))),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
+			now:  "10:00",
+			want: state(stoppedAs(with(core.WorklogLocal, func(w *core.Worklog) { w.Comment = "pairing" }))),
+		},
+		{
+			name: "never mark a synced worklog local: the tracker has it",
+			w:    world("", stoppedAs(synced)),
+			cmd:  core.MarkLocal{Key: "AA-1", EntryID: "EA"},
 			now:  "11:00", err: core.ErrAlreadySynced,
 		},
 		{
@@ -90,13 +145,14 @@ func TestApplySyncOutcomes(t *testing.T) {
 	})
 }
 
-func TestUnsentNeverOffersASyncedWorklog(t *testing.T) {
+func TestUnsentNeverOffersALoggedWorklog(t *testing.T) {
 	wl := func(id string, s core.WorklogState, secs int) core.TimeEntry {
 		return withWorklog(entry(id, hand, seg("09:00", "09:30")), core.Worklog{State: s, StartedAt: at("09:00"), TimeSpentSeconds: secs})
 	}
 	s := state(
 		ticket("AA-1", wl("E1", core.WorklogSynced, 600), wl("E2", core.WorklogPending, 1200)),
 		ticket("BB-2", wl("E3", core.WorklogFailed, 1800), entry("E4", hand, seg("10:00", ""))),
+		ticket("payroll", wl("E5", core.WorklogLocal, 2400)),
 	)
 	var got []string
 	for _, u := range core.Unsent(s) {

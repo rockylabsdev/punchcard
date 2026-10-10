@@ -47,6 +47,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		err = a.markSynced(c)
 	case MarkFailed:
 		err = a.markFailed(c)
+	case MarkLocal:
+		err = a.markLocal(c)
 	case RecordAuthFailure:
 		a.w.State.AuthFailedAt = a.now
 	case ClearAuthFailure:
@@ -77,7 +79,7 @@ func (a *applier) emit(kind EventKind, key string) {
 }
 
 func (a *applier) start(c Start) error {
-	if !ValidKey(c.Key) {
+	if !c.Grammar.Valid(c.Key) {
 		return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
 	if t, e := a.running(); e != nil {
@@ -125,7 +127,7 @@ func (a *applier) pause(c Pause) error {
 
 func (a *applier) resume(c Resume) error {
 	if c.Key != "" {
-		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID})
+		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
 	}
 	if _, e := a.running(); e != nil {
 		return nil
@@ -146,13 +148,14 @@ func (a *applier) stop(c Stop) error {
 	if c.EntryID != "" && e.ID != c.EntryID {
 		return fmt.Errorf("%w: entry %s is no longer open", ErrNoTimer, c.EntryID)
 	}
-	wl, err := worklogFor(*e, c.Duration, c.Comment, a.now)
+	wl, err := worklogFor(*e, c, a.now)
 	if err != nil {
 		return err
 	}
 	if e.Running() {
 		e.Segments[len(e.Segments)-1].EndedAt = a.now
 	}
+	wl.Recovered = e.Recovered
 	e.Worklog = &wl
 	e.Origin = c.Origin
 	e.Recovered = false
@@ -194,8 +197,9 @@ func (a *applier) stopTarget(key string) (*TrackedTicket, *TimeEntry, error) {
 	}
 }
 
-// worklogFor is the pending worklog stopping e at now would produce.
-func worklogFor(e TimeEntry, d time.Duration, comment string, now Timestamp) (Worklog, error) {
+// worklogFor is the worklog stopping e with c at now would produce.
+func worklogFor(e TimeEntry, c Stop, now Timestamp) (Worklog, error) {
+	d := c.Duration
 	if d == 0 {
 		d = Elapsed(e, now.Time)
 	}
@@ -203,11 +207,15 @@ func worklogFor(e TimeEntry, d time.Duration, comment string, now Timestamp) (Wo
 	if d < time.Minute {
 		return Worklog{}, fmt.Errorf("%w: %s", ErrTooShort, d)
 	}
+	state := WorklogPending
+	if c.Local {
+		state = WorklogLocal
+	}
 	return Worklog{
-		State:            WorklogPending,
+		State:            state,
 		StartedAt:        e.Segments[0].StartedAt,
 		TimeSpentSeconds: int(d / time.Second),
-		Comment:          comment,
+		Comment:          c.Comment,
 	}, nil
 }
 

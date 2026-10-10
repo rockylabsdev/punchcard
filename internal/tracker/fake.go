@@ -1,4 +1,4 @@
-package jira
+package tracker
 
 import (
 	"context"
@@ -10,11 +10,11 @@ import (
 // client. The zero value knows no tickets (every Summary is a 404) and
 // accepts every worklog.
 type Fake struct {
-	// Summaries are the tickets Jira knows, key → summary. Any other key
+	// Summaries are the tickets the tracker knows, key → summary. Any other key
 	// is a 404 (ErrNotFound).
 	Summaries map[string]string
 	// Err, when set, is what every call returns instead: ErrUnreachable,
-	// ErrUnauthorized, an *APIError (e.g. a 503), ...
+	// ErrUnauthorized, a *Refusal (e.g. a 503), ...
 	Err error
 	// PostErrs, keyed by ticket, is what PostWorklog to that key returns
 	// when Err is nil (e.g. one ticket answers 503 and the rest succeed).
@@ -62,7 +62,7 @@ func (f *Fake) Summary(ctx context.Context, key string) (string, error) {
 	}
 	s, ok := f.Summaries[key]
 	if !ok {
-		return "", &APIError{Status: 404, Messages: []string{"Issue does not exist or you do not have permission to see it."}}
+		return "", &Refusal{Status: 404, Message: "Issue does not exist or you do not have permission to see it."}
 	}
 	return s, nil
 }

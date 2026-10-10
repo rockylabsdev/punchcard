@@ -11,17 +11,30 @@ import (
 // The list commands: add and rm.
 
 func (a *app) addCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "add KEY...",
+	var summary string
+	c := &cobra.Command{
+		Use:   "add KEY... [--summary TEXT]",
 		Short: "Put tickets on the list without starting a timer",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := core.Add{Origin: a.origin}
-			for _, k := range args {
-				n, err := a.newTicket(k)
+			typed := cmd.Flags().Changed("summary")
+			switch {
+			case typed && a.env.HasTracker():
+				return usageError("--summary is for no tracker: with one, the summary is the tracker's")
+			case typed && len(args) > 1:
+				return usageError("--summary names one ticket: add one KEY with it")
+			}
+			c := core.Add{Origin: a.origin, Grammar: a.env.Grammar()}
+			keys := make([]string, len(args))
+			for i, k := range args {
+				keys[i] = a.key(k)
+				n, err := a.newTicket(keys[i])
 				if err != nil {
 					a.code = a.failure("add", err)
 					return nil
+				}
+				if typed {
+					n.Summary = strings.TrimSpace(summary)
 				}
 				c.Tickets = append(c.Tickets, n)
 			}
@@ -30,7 +43,7 @@ func (a *app) addCmd() *cobra.Command {
 				a.code = a.failure("add", err)
 				return nil
 			}
-			d := listData(res.World, res.Now, args)
+			d := listData(res.World, res.Now, keys)
 			var b strings.Builder
 			for _, t := range d.Tickets {
 				if t.AddedAt.Equal(core.At(res.Now).Time) {
@@ -43,6 +56,8 @@ func (a *app) addCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&summary, "summary", "", "with no tracker, the ticket's summary as it should read on the list (one KEY)")
+	return c
 }
 
 func (a *app) rmCmd() *cobra.Command {
@@ -52,15 +67,16 @@ func (a *app) rmCmd() *cobra.Command {
 		Short: "Take a ticket off the list (refused while it has unlogged time)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := a.apply(core.Remove{Key: args[0], Force: force, Origin: a.origin})
+			key := a.key(args[0])
+			res, err := a.apply(core.Remove{Key: key, Force: force, Origin: a.origin})
 			if err != nil {
 				a.code = a.failure("rm", err)
 				return nil
 			}
-			a.done("rm", res, RemoveData{Key: args[0]}, fmt.Sprintf("- %s removed\n", args[0]))
+			a.done("rm", res, RemoveData{Key: key}, fmt.Sprintf("- %s removed\n", key))
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&force, "force", false, "remove it even with a running or paused entry or an unsent worklog")
+	c.Flags().BoolVar(&force, "force", false, "remove it even with a running or paused entry or a worklog not yet sent")
 	return c
 }

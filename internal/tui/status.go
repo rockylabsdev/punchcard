@@ -66,7 +66,13 @@ func (m Model) toasting() bool {
 // configuration arrive through the probe as m.link.err; "not connected"
 // matches config.ErrNotConfigured, so a condition whose error wraps it
 // must sit above that case to be seen.
+//
+// Every condition is about reaching Jira, so with no tracker there is
+// no banner: the gate is the tracker, never the state file's fields.
 func (m Model) banner() (text string, st lipgloss.Style, ok bool) {
+	if m.noTracker {
+		return "", lipgloss.Style{}, false
+	}
 	s := m.shown().State
 	owed, _ := core.Owed(s)
 	failed := 0
@@ -137,7 +143,7 @@ func originTag(o core.Origin) string {
 	return sBold.Render(string(o))
 }
 
-// link is what the TUI knows about reaching Jira: whether Options.Jira
+// link is what the TUI knows about reaching Jira: whether Options.Tracker
 // opens a client. It never calls Jira to find out.
 type link struct {
 	known bool
@@ -150,9 +156,13 @@ type linkMsg struct{ err error }
 // probe opens the Jira client (config and token, no network) in a
 // tea.Cmd, since reading the token may wait on the Keychain. Any error
 // counts as not configured, as it does for worklog.Sender; the cause
-// stays inside it for errors.As.
+// stays inside it for errors.As. With no tracker there is nothing to
+// connect to, so nothing is opened and nothing is wrong.
 func (m Model) probe() tea.Cmd {
-	open := m.jira
+	open := m.open
+	if m.noTracker {
+		return func() tea.Msg { return linkMsg{} }
+	}
 	return func() tea.Msg {
 		if open == nil {
 			return linkMsg{err: config.ErrNotConfigured}

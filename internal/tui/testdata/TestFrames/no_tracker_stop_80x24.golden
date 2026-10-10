@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 22m────────────────────╮╭─Stop invoices───────────────╮
+│›▶ invoices                           0:42:34  ││invoices                     │
+│ · payroll                                40m  ││measured 0:42:34 across 1    │
+│                                               ││stretch                      │
+│                                               ││                             │
+│                                               ││Duration                     │
+│                                               ││  42m                        │
+│                                               ││Comment                      │
+│                                               ││  optional                   │
+│                                               ││                             │
+│                                               ││→ logs 42m as one worklog    │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Today · logged 40m───────────────────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                    │
+│ ✓ logged                      payroll       40m   07:45                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ enter stop & log  tab field  esc cancel — keep timer                           

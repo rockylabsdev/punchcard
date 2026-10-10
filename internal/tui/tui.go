@@ -13,7 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -22,12 +22,11 @@ type Options struct {
 	Store Store
 	Now   func() time.Time // read once, to seed the clock before the first tick
 	NewID func() string    // entry ids for starts
-	// Sender stops an entry and sends its worklog (worklog.Sender in the
-	// binary). Nil: a stop is recorded and its worklog left pending.
-	Sender Sender
-	// Jira opens the client for summary lookups (add, and confirming an
-	// unverified ticket on start). Nil: Jira is not configured.
-	Jira func() (jira.Client, error)
+	// Tracking is the tracker in effect when the TUI opens.
+	Tracking
+	// Retrack reads the tracker in effect again, after S: setup may
+	// have chosen another. Nil: it never changes while the TUI is open.
+	Retrack func() Tracking
 	// Setup builds the `punchcard setup` command that S suspends into
 	// (tea.ExecProcess hands it the terminal). Nil: S says to run it
 	// from the shell.
@@ -35,6 +34,18 @@ type Options struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+}
+
+// Tracking is the tracker in effect and the sender over it. With none
+// (InEffect.None), a stop is local, nothing is looked up, a ticket added
+// is never unverified and the Jira conditions never show. InEffect.Open
+// opens the client for summary lookups (add, and confirming an
+// unverified ticket on start); nil is a tracker not configured.
+type Tracking struct {
+	// Sender stops an entry and sends its worklog (worklog.Sender in the
+	// binary). Nil: a stop is recorded and its worklog left pending.
+	Sender Sender
+	tracker.InEffect
 }
 
 // Sender is the worklog seam, the only code that POSTs. Stop applies the

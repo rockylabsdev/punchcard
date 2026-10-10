@@ -1,6 +1,10 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/j-dsmith/punchcard/internal/tracker"
+)
 
 // Command is one requested transition. The concrete types in this file
 // are the whole set; Apply refuses anything else.
@@ -19,6 +23,9 @@ type Start struct {
 	Unverified bool
 	Origin     Origin
 	NewEntryID string // used only when a new entry is created
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // Pause closes the running segment. The entry stays open.
@@ -32,9 +39,13 @@ type Resume struct {
 	Key        string
 	Origin     Origin
 	NewEntryID string
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
-// Stop ends an entry and produces its pending Worklog. With no Key it
+// Stop ends an entry and produces its Worklog: pending, or local when
+// Local says no tracker is in effect. With no Key it
 // targets the running entry, else the single paused one (several paused:
 // *AmbiguousError). Duration zero means "use the measured elapsed";
 // either way it is truncated to the minute and refused under one minute
@@ -48,9 +59,13 @@ type Stop struct {
 	Duration time.Duration
 	Comment  string
 	Origin   Origin
+	// Local: no tracker is in effect, so the worklog is local (final)
+	// rather than pending. Core never reads config; the caller decides.
+	Local bool
 }
 
-// NewTicket is a ticket to put on the list, with what Jira said of it.
+// NewTicket is a ticket to put on the list, with what the tracker said
+// of it.
 type NewTicket struct {
 	Key        string
 	Summary    string
@@ -61,6 +76,9 @@ type NewTicket struct {
 type Add struct {
 	Tickets []NewTicket
 	Origin  Origin
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
 // Remove takes a ticket off the list. It refuses (ErrUnlogged) while the
@@ -83,10 +101,14 @@ type Touch struct {
 	Unverified bool
 	Origin     Origin
 	NewEntryID string
+	// Grammar is the key grammar in effect (the tracker's); the zero
+	// value is the slug, for no tracker.
+	Grammar tracker.Grammar
 }
 
-// MarkSynced records that Jira accepted an entry's worklog. It refuses a
-// worklog already synced (ErrAlreadySynced) and clears AuthFailedAt.
+// MarkSynced records that the tracker accepted an entry's worklog. It refuses a
+// worklog already synced (ErrAlreadySynced) or local (ErrLocal) and
+// clears AuthFailedAt.
 type MarkSynced struct {
 	Key       string
 	EntryID   string
@@ -94,11 +116,25 @@ type MarkSynced struct {
 }
 
 // MarkFailed records a failed POST; the worklog stays retryable. It
-// never downgrades a synced worklog (ErrAlreadySynced).
+// never downgrades a synced worklog (ErrAlreadySynced) and never marks a
+// local one (ErrLocal).
 type MarkFailed struct {
 	Key     string
 	EntryID string
 	Message string
+	// Status is the tracker's refusal status, when it refused (0: no
+	// answer at all).
+	Status int
+}
+
+// MarkLocal records that a pending or failed worklog is logged with no
+// tracker: the user removed the tracker and chose not to owe it. It
+// clears the failure and keeps the time and comment. It refuses a synced
+// worklog (ErrAlreadySynced) and one already local (ErrLocal). Only the
+// setup wizard's removal offer applies it; it has no CLI surface.
+type MarkLocal struct {
+	Key     string
+	EntryID string
 }
 
 // RecordAuthFailure records a Jira 401 at now.
@@ -128,6 +164,7 @@ func (Remove) command()            {}
 func (Touch) command()             {}
 func (MarkSynced) command()        {}
 func (MarkFailed) command()        {}
+func (MarkLocal) command()         {}
 func (RecordAuthFailure) command() {}
 func (ClearAuthFailure) command()  {}
 func (Verify) command()            {}

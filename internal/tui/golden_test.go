@@ -3,13 +3,14 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // plain renders a frame through a colour-profile writer forced to NoTTY,
@@ -26,8 +27,9 @@ func plain(frame string) string {
 
 // scenarios are the named states the goldens pin, each built through the
 // store the way the CLI would build it.
-// Jira is configured (a jira.Fake that takes everything) unless the
-// build sets hs.unconfigured.
+// Jira is configured (a tracker.Fake that takes everything) unless the
+// build sets hs.unconfigured (Jira without credentials) or hs.noTracker
+// (no tracker at all).
 var scenarios = []struct {
 	name  string
 	build func(hs *harness)
@@ -45,7 +47,7 @@ var scenarios = []struct {
 	// the banner holds the status line.
 	{"sync_failure", func(hs *harness) {
 		runningDay(hs)
-		hs.jira = &jira.Fake{Err: jira.ErrUnreachable}
+		hs.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	}, []string{"r", "wait"}},
 	{"not_configured", func(hs *harness) {
 		runningDay(hs)
@@ -55,6 +57,26 @@ var scenarios = []struct {
 	// An agent starts a ticket while the TUI is open: the next tick
 	// tags the row and the status line says who.
 	{"changed_elsewhere", pausedDay, []string{"agent starts OPS-77"}},
+	// No tracker: the empty list says so once, and nothing about Jira
+	// shows anywhere.
+	{"no_tracker_empty", func(hs *harness) { hs.noTracker = true }, nil},
+	// No tracker, one worklog stopped today: it is logged, nothing owed.
+	{"no_tracker_logged", localDay, nil},
+	// No tracker: the stop dialog logs, it does not send.
+	{"no_tracker_stop", localDay, []string{"x"}},
+	// No tracker: the add dialog takes a summary after the key, since
+	// nothing will look one up.
+	{"no_tracker_add", localDay, []string{"a", "type:standup", "tab", "type:Daily standup"}},
+}
+
+// localDay is a morning with no tracker: payroll stopped (a local
+// worklog) and invoices running.
+func localDay(hs *harness) {
+	hs.noTracker = true
+	hs.setup("07:00:00", core.Add{Origin: core.OriginHand, Tickets: []core.NewTicket{{Key: "payroll"}, {Key: "invoices"}}})
+	hs.setup("07:05:00", start("payroll", "E-p"))
+	hs.setup("07:45:00", core.Stop{Origin: core.OriginHand, Local: true})
+	hs.setup("08:30:00", start("invoices", "E-i"))
 }
 
 // outside are changes another process makes, by name, for play.
@@ -71,18 +93,23 @@ func pausedDay(hs *harness) {
 // configure gives a scenario its Jira: a Fake that takes everything,
 // unless the build chose one or chose none.
 func (hs *harness) configure() {
-	if hs.jira == nil && !hs.unconfigured {
-		hs.jira = &jira.Fake{}
+	if hs.jira == nil && !hs.unconfigured && !hs.noTracker {
+		hs.jira = &tracker.Fake{}
 	}
 }
 
-// play presses keys; "wait" lets the toast time out instead, and a
-// name from outside is that change made elsewhere, then a tick.
+// play presses keys; "wait" lets the toast time out instead, "type:TEXT"
+// types TEXT, and a name from outside is that change made elsewhere,
+// then a tick.
 func (hs *harness) play(keys ...string) {
 	hs.t.Helper()
 	for _, k := range keys {
 		if k == "wait" {
 			hs.tick(hs.now.Add(toastFor + time.Second).Format("15:04:05"))
+			continue
+		}
+		if text, ok := strings.CutPrefix(k, "type:"); ok {
+			hs.typeText(text)
 			continue
 		}
 		if c, ok := outside[k]; ok {

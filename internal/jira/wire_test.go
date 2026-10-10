@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // fixture reads one committed response from the curl spike.
@@ -93,7 +94,7 @@ func TestDecodeConnection(t *testing.T) {
 // shape; the bad-started fixture's colon offset is what Jira rejects.
 func TestEncodeWorklogRequest(t *testing.T) {
 	started := time.Date(2026, 8, 8, 19, 28, 1, 0, time.UTC)
-	got, err := json.Marshal(newWireWorklogRequest(Worklog{Started: started, TimeSpentSeconds: 300, Comment: "Punchcard slice-0 spike — delete me"}))
+	got, err := json.Marshal(newWireWorklogRequest(tracker.Worklog{Started: started, TimeSpentSeconds: 300, Comment: "Punchcard slice-0 spike — delete me"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestEncodeWorklogRequest(t *testing.T) {
 }
 
 func TestEncodeWorklogRequestOmitsEmptyComment(t *testing.T) {
-	got, err := json.Marshal(newWireWorklogRequest(Worklog{Started: time.Date(2026, 8, 8, 19, 28, 1, 0, time.UTC), TimeSpentSeconds: 60}))
+	got, err := json.Marshal(newWireWorklogRequest(tracker.Worklog{Started: time.Date(2026, 8, 8, 19, 28, 1, 0, time.UTC), TimeSpentSeconds: 60}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,14 +1,14 @@
 package tui
 
 import (
-	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // ticketPane is [2] Ticket: what happened on the selected ticket. The
@@ -48,7 +48,7 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 		if e.Recovered && e.Running() {
 			lines = append(lines, indent(sRecov, "recovered earlier — check the duration at stop", w)...)
 		}
-		lines = append(lines, indent(sDim, "stop sends this as one worklog — x", w)...)
+		lines = append(lines, indent(sDim, "stop "+m.sends()+" this as one worklog — x", w)...)
 		lines = append(lines, "")
 		lines = append(lines, m.stretches(e, w)...)
 	}
@@ -56,8 +56,8 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 	n := 0
 	for i := len(t.Entries) - 1; i >= 0; i-- {
 		wl := t.Entries[i].Worklog
-		if wl == nil || (wl.State == core.WorklogSynced && !sameDay(wl.SyncedAt.Time, m.now)) {
-			continue // owed from any day, sent only from today
+		if wl == nil || !m.inDayLog(*wl) {
+			continue
 		}
 		d := time.Duration(wl.TimeSpentSeconds) * time.Second
 		lines = append(lines, "  "+rfit(hm(d), 6)+"  "+outcome(*wl, m.now))
@@ -119,6 +119,15 @@ func indent(st lipgloss.Style, text string, w int) []string {
 	return out
 }
 
+// sends is what a stop does with the worklog: sends it to the tracker,
+// or with none, logs it.
+func (m Model) sends() string {
+	if m.noTracker {
+		return "logs"
+	}
+	return "sends"
+}
+
 // openEntry is t's running or paused entry, if any.
 func openEntry(t core.TrackedTicket) (core.TimeEntry, bool) {
 	for _, e := range t.Entries {
@@ -129,15 +138,17 @@ func openEntry(t core.TrackedTicket) (core.TimeEntry, bool) {
 	return core.TimeEntry{}, false
 }
 
-// outcome is a worklog's standing with Jira, leading with the outcome,
-// in the words [2] and the Jira strip share. An owed one ends "· r":
-// r sends it.
+// outcome is a worklog's standing, leading with the outcome, in the
+// words [2] and the day's log share. An owed one ends "· r": r sends
+// it. A local one is logged and has no moment the tracker took it.
 func outcome(wl core.Worklog, now time.Time) string {
 	switch wl.State {
 	case core.WorklogFailed:
-		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl.Message)) + retry
+		return sFail.Render(gFailed+" failed") + sDim.Render(" — "+shortReason(wl)) + retry
 	case core.WorklogPending:
 		return sSync.Render(gPending+" not sent yet") + retry
+	case core.WorklogLocal:
+		return sDim.Render(gSynced + " logged")
 	}
 	return sDim.Render(gSynced + " logged " + wl.SyncedAt.In(now.Location()).Format("15:04"))
 }
@@ -145,19 +156,18 @@ func outcome(wl core.Worklog, now time.Time) string {
 // retry is the r key after an owed worklog; the key is sync blue.
 var retry = sDim.Render(" · ") + sSyncKey.Render("r")
 
-var statusPattern = regexp.MustCompile(`^Jira answered (\d{3})`)
-
-// shortReason is a failure message cut to what fits a row: the HTTP
-// status when Jira answered, "unreachable" when it did not, else the
-// message itself cut short, so the row's "· r" always shows.
-func shortReason(msg string) string {
-	if m := statusPattern.FindStringSubmatch(msg); m != nil {
-		return m[1]
+// shortReason is a failed worklog's reason cut to what fits a row: the
+// refusal's status when the tracker answered, "unreachable" when it did
+// not, else the message itself cut short, so the row's "· r" always
+// shows.
+func shortReason(wl core.Worklog) string {
+	if wl.RefusedStatus != 0 {
+		return strconv.Itoa(wl.RefusedStatus)
 	}
-	if strings.HasPrefix(msg, jira.ErrUnreachable.Error()) {
+	if strings.HasPrefix(wl.Message, tracker.ErrUnreachable.Error()) {
 		return "unreachable"
 	}
-	return ansi.Truncate(msg, 14, "…")
+	return ansi.Truncate(wl.Message, 14, "…")
 }
 
 func sameDay(a, b time.Time) bool {

@@ -26,13 +26,20 @@ func TestApplyAddRemove(t *testing.T) {
 		{
 			name: "add refuses a malformed key and adds nothing",
 			w:    world("10:00"),
-			cmd:  core.Add{Tickets: []core.NewTicket{{Key: "BB-2"}, {Key: "nope"}}},
+			cmd:  core.Add{Tickets: []core.NewTicket{{Key: "BB-2"}, {Key: "nope"}}, Grammar: strict},
 			now:  "10:00",
 			err:  core.ErrUsage,
 		},
 		{
 			name: "remove drops a ticket with nothing owed",
 			w:    world("10:00", ticket("AA-1", stopped(core.WorklogSynced)), ticket("BB-2")),
+			cmd:  core.Remove{Key: "AA-1"},
+			now:  "10:00",
+			want: state(ticket("BB-2")),
+		},
+		{
+			name: "remove drops a ticket whose time is logged locally",
+			w:    world("10:00", ticket("AA-1", stopped(core.WorklogLocal)), ticket("BB-2")),
 			cmd:  core.Remove{Key: "AA-1"},
 			now:  "10:00",
 			want: state(ticket("BB-2")),

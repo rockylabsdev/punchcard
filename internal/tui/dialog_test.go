@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 func frameHas(t *testing.T, hs *harness, want ...string) {
@@ -44,7 +44,7 @@ func TestStopDialogSendsTheMeasuredDuration(t *testing.T) {
 
 	hs.key("x")
 	frameHas(t, hs, "Stop PUN-1", "Duration", "Comment", "→ sends 1h 12m to Jira as one worklog")
-	if d := cmp.Diff([]core.Command{core.Touch{Origin: core.OriginHand}}, hs.st.commands()); d != "" {
+	if d := cmp.Diff([]core.Command{core.Touch{Origin: core.OriginHand}}, hs.st.commands(), anyGrammar); d != "" {
 		t.Fatalf("opening the dialog is only presence (-want +got)\n%s", d)
 	}
 	hs.key("enter")
@@ -129,7 +129,7 @@ func TestStopDialogAsksARecoveredEntryForADuration(t *testing.T) {
 
 func TestStopThatCannotSendStillStops(t *testing.T) {
 	hs := running(t)
-	hs.sender.syncErr = jira.ErrUnreachable
+	hs.sender.syncErr = tracker.ErrUnreachable
 	hs.key("x", "enter")
 
 	if got := hs.running(); got != "" {

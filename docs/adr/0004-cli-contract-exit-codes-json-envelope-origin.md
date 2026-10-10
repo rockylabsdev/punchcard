@@ -35,3 +35,7 @@ Every change has an **Origin** (see `CONTEXT.md`): `hand`, `prompt` or `agent`. 
 
 - Reads (`status`, `ls`) never call Jira and never write. Only `stop` (once, for its own worklog) and `sync` POST. Nothing syncs in the background.
 - `start KEY` on a ticket that isn't on the list fetches the summary once, with a ~2 s budget. On a 404 it exits 5 and changes nothing. If Jira can't be reached, it starts anyway and the ticket is **unverified**.
+
+## Amendment (2026-10-09, ADR 0008): a format asked for by name is printed raw
+
+`punchcard log --csv` and `log --md` print the CSV or the Markdown itself on stdout, even when `PUNCHCARD_JSON=1` is set; only `log --json` (or `PUNCHCARD_JSON=1` with no format flag) is the envelope. This is deliberate: a format the user names on the command line is what they want to pipe into a file or a spreadsheet, and an environment variable set for an agent must not turn it into JSON. `--json` together with `--csv` or `--md` is still usage (exit 64). It is the one exception to "every command writes the envelope when JSON is on"; the exit codes are unchanged.

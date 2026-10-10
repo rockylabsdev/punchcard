@@ -7,13 +7,14 @@ import {
   KEEP,
   SUBMIT,
   bandFrom,
-  branchKey,
   clock,
   editPresenceDue,
   eventText,
   gateNeedsDialog,
+  gateLabel,
   gateQuestion,
   gateVerdict,
+  hereKey,
   isGatedStop,
   manifestVersion,
   needsDuration,
@@ -22,13 +23,16 @@ import {
   previewArgv,
   replyText,
   stopArgv,
+  stopOptions,
   stopQuestion,
   submitTouch,
   tighten,
   tokenize,
+  trackerOf,
   versionSkew,
   worklogDuration,
 } from '../hooks/logic.mjs'
+import * as logic from '../hooks/logic.mjs'
 
 describe('versionSkew', () => {
   const cases = [
@@ -38,6 +42,13 @@ describe('versionSkew', () => {
     ['plugin ahead of the binary', 'v0.3.0', '0.2.0', { plugin: '0.3.0', binary: '0.2.0' }],
     ['a dev binary never skews', '0.1.0', 'dev', null],
     ['an unknown binary never skews', '0.1.0', 'unknown', null],
+    // go install ./cmd/punchcard stamps a pseudo-version: not a release.
+    ['a go install pseudo-version never skews', '0.1.0', 'v0.0.0-20261009220046-aaacff0d8d07+dirty', null],
+    ['a clean pseudo-version never skews', '0.1.0', 'v0.0.0-20261009220046-aaacff0d8d07', null],
+    ['a pseudo-version after a tag never skews', '0.1.0', 'v0.1.1-0.20261009220046-aaacff0d8d07', null],
+    ['a pseudo-version after a pre-release never skews', '0.1.0', 'v0.2.0-rc.1.0.20261009220046-aaacff0d8d07', null],
+    ['a dirty build never skews', '0.1.0', 'v0.2.0+dirty', null],
+    ['a pre-release tag is a release', '0.1.0', 'v0.2.0-rc.1', { plugin: '0.1.0', binary: '0.2.0-rc.1' }],
     ['no plugin version', '', '0.2.0', null],
     ['no binary version yet', '0.1.0', '', null],
     ['not a version', '0.1.0', undefined, null],
@@ -65,29 +76,19 @@ describe('bandFrom with version skew', () => {
     },
   }
   test('shows even when idle, as a warning', () =>
-    assert.deepEqual(bandFrom(idle, '', skew), { tone: 'warning', text: said }))
+    assert.deepEqual(bandFrom(idle, skew), { tone: 'warning', text: said }))
   test('follows the timer without changing its tone', () =>
-    assert.deepEqual(bandFrom(running, '', skew), { tone: 'success', text: `▶ ABC-1 0:01 · ${said}` }))
-  test('no skew, no change', () => assert.equal(bandFrom(idle, '', null), null))
+    assert.deepEqual(bandFrom(running, skew), { tone: 'success', text: `▶ ABC-1 0:01 · ${said}` }))
+  test('no skew, no change', () => assert.equal(bandFrom(idle, null), null))
   test('a missing binary says only that', () =>
-    assert.deepEqual(bandFrom({ missing: true }, '', skew), { tone: 'error', text: 'punchcard not found on PATH' }))
+    assert.deepEqual(bandFrom({ missing: true }, skew), { tone: 'error', text: 'punchcard not found on PATH' }))
 })
 
-describe('branchKey', () => {
-  const cases = [
-    ['feature/ABC-123-thing', 'ABC-123'],
-    ['ABC-123', 'ABC-123'],
-    ['jds/PROJ2-9', 'PROJ2-9'],
-    ['fix/AB-1-and-CD-2', 'AB-1'],
-    ['main', ''],
-    ['feature/abc-123', ''],
-    ['A-1', ''], // one letter is no project key
-    ['1AB-2', 'AB-2'],
-    ['', ''],
-  ]
-  for (const [branch, want] of cases) {
-    test(`${JSON.stringify(branch)} -> ${JSON.stringify(want)}`, () => assert.equal(branchKey(branch), want))
-  }
+// The binary alone knows what a directory's key is (its .punchcard, else
+// its branch); the mod has no key rule of its own to disagree with it.
+test('the mod exports no key rule', () => {
+  assert.equal(logic.KEY_PATTERN, undefined)
+  assert.equal(logic.branchKey, undefined)
 })
 
 describe('submitTouch', () => {
@@ -154,31 +155,31 @@ const status = (data) => ({
 describe('bandFrom', () => {
   const cases = [
     ['idle with nothing owed shows no band', status({}), '', null],
-    ['idle on a keyed branch names the ticket and the next action', status({}), 'DEF-9',
+    ['idle in a keyed directory names the ticket and the next action', status({}), 'DEF-9',
       { tone: 'subtle', text: 'DEF-9 not running · /punch start' }],
     ['running', status({ running: timer({ summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · Fix login' }],
     ['running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · held · Fix login' }],
-    ['another ticket running: grey, says where the time goes and what this branch is for', status({ running: timer() }), 'DEF-9',
-      { tone: 'subtle', text: 'timer on ABC-123 1:12 · this branch is DEF-9' }],
+    ['another ticket running: grey, says where the time goes and what this session is for', status({ running: timer() }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · here: DEF-9' }],
     ['another ticket running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), 'DEF-9',
-      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · this branch is DEF-9' }],
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · here: DEF-9' }],
     ['another ticket running, worklogs owed: the debt still warns', status({ running: timer(), unsent: { count: 1, seconds: 60 } }), 'DEF-9',
-      { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · this branch is DEF-9' }],
+      { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · here: DEF-9' }],
     ['another ticket recovered: still red here', status({ running: timer({ recovered: true }) }), 'DEF-9',
-      { tone: 'error', text: '! ABC-123 recovered · fix at stop · this branch is DEF-9' }],
-    ['a branch with no ticket: green, nothing to compare', status({ running: timer() }), '',
+      { tone: 'error', text: '! ABC-123 recovered · fix at stop · here: DEF-9' }],
+    ['a directory with no ticket: green, nothing to compare', status({ running: timer() }), '',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
-    ['nothing extra on the running ticket\'s own branch', status({ running: timer() }), 'ABC-123',
+    ['nothing extra in the running ticket\'s own directory', status({ running: timer() }), 'ABC-123',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
     ['paused', status({ paused: [timer({ state: 'paused', elapsedSeconds: 600 })] }), '',
       { tone: 'warning', text: '⏸ ABC-123 0:10' }],
-    ['several paused, the first on this branch', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
+    ['several paused, the first the session\'s', status({ paused: [timer({ state: 'paused' }), timer({ key: 'X-2', state: 'paused' })] }), 'ABC-123',
       { tone: 'warning', text: '⏸ ABC-123 1:12 · +1 paused' }],
     ['paused on another ticket', status({ paused: [timer({ state: 'paused' })] }), 'DEF-9',
-      { tone: 'warning', text: '⏸ ABC-123 1:12 · this branch is DEF-9' }],
-    ['idle and owed on a keyed branch', status({ unsent: { count: 1, seconds: 300 } }), 'DEF-9',
+      { tone: 'warning', text: '⏸ ABC-123 1:12 · here: DEF-9' }],
+    ['idle and owed in a keyed directory', status({ unsent: { count: 1, seconds: 300 } }), 'DEF-9',
       { tone: 'warning', text: '1 unsent · DEF-9 not running · /punch start' }],
     ['recovered', status({ running: timer({ recovered: true }) }), '',
       { tone: 'error', text: '! ABC-123 recovered · fix at stop' }],
@@ -205,14 +206,43 @@ describe('bandFrom', () => {
     ['a rejected token outranks not connected', status({ authFailedAt: '2026-10-09T09:00:00.000+0000', configured: false }), '',
       { tone: 'error', text: 'Jira auth failed' }],
     ['connected says nothing', status({ configured: true }), '', null],
+    ['Jira named: the band is as before', status({ tracker: 'jira', running: timer(), configured: false }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · Jira not connected' }],
+    ['no tracker, idle: no band, and not connected is no warning', status({ tracker: 'none' }), '', null],
+    ['no tracker, idle in a keyed directory', status({ tracker: 'none' }), 'payroll',
+      { tone: 'subtle', text: 'payroll not running · /punch start' }],
+    ['no tracker, running: the timer alone', status({ tracker: 'none', running: timer({ key: 'payroll' }) }), 'payroll',
+      { tone: 'success', text: '▶ payroll 1:12' }],
+    ['no tracker: never the Jira words, whatever else is set',
+      status({ tracker: 'none', running: timer(), configured: false, notConfigured: 'x', keychainError: 'macOS Keychain: x',
+        authFailedAt: '2026-10-09T09:00:00.000+0000', unsent: { count: 2, seconds: 600 } }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12' }],
     ['binary missing', { missing: true }, 'ABC-123', { tone: 'error', text: 'punchcard not found on PATH' }],
     ['refusal', { envelope: { ok: false, outcome: 'state_unreadable', error: { message: 'state is newer' } } }, '',
       { tone: 'error', text: 'punchcard: state is newer' }],
     ['not JSON', { envelope: null }, '', { tone: 'error', text: 'punchcard: status gave no JSON' }],
     ['timed out', { failed: 'timed out' }, '', { tone: 'error', text: 'punchcard: timed out' }],
   ]
+  // The case's here is what status --cwd reported for the session.
+  const at = (poll, here) =>
+    poll.envelope?.data ? { envelope: { ...poll.envelope, data: { ...poll.envelope.data, here: here ? { key: here, source: 'file' } : null } } } : poll
   for (const [name, poll, here, want] of cases) {
-    test(name, () => assert.deepEqual(bandFrom(poll, here), want))
+    test(name, () => assert.deepEqual(bandFrom(at(poll, here)), want))
+  }
+})
+
+describe('hereKey', () => {
+  const cases = [
+    ['from a .punchcard', status({ here: { key: 'payroll', source: 'file' } }), 'payroll'],
+    ['from the branch', status({ here: { key: 'ABC-123', source: 'branch' } }), 'ABC-123'],
+    ['the directory names none', status({ here: null }), ''],
+    ['an older binary that does not say', status({}), ''],
+    ['no JSON', { envelope: null }, ''],
+    ['binary missing', { missing: true }, ''],
+    ['timed out', { failed: 'timed out' }, ''],
+  ]
+  for (const [name, poll, want] of cases) {
+    test(name, () => assert.equal(hereKey(poll), want))
   }
 })
 
@@ -292,10 +322,44 @@ describe('gateNeedsDialog', () => {
   }
 })
 
-test('gateQuestion names the command', () => {
-  const q = gateQuestion('  punchcard stop --yes --duration 1h  ')
-  assert.match(q, /Send it\?/)
-  assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+describe('the gate dialog says what the stop does', () => {
+  const command = '  punchcard stop --yes --duration 1h  '
+  test('no tracker: "Log it"', () => {
+    assert.equal(gateLabel('none'), 'Log it')
+    const q = gateQuestion(command, 'none')
+    assert.match(q, /logs the worklog\. Log it\?/)
+    assert.doesNotMatch(q, /Jira/)
+    assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+  })
+  test('Jira: "Send to Jira"', () => {
+    assert.equal(gateLabel('jira'), 'Send to Jira')
+    const q = gateQuestion(command, 'jira')
+    assert.match(q, /sends the worklog to Jira\. Send it\?/)
+    assert.match(q, /\npunchcard stop --yes --duration 1h$/)
+  })
+  // An older binary reports no tracker, and every older binary sent to
+  // Jira; a poll that failed has no answer, and the stop it guards will
+  // most likely fail the same way. Either way the words are Jira's, so
+  // the label is fixed before the dialog opens.
+  test('unknown: the Jira words', () => {
+    assert.equal(gateLabel(''), 'Send to Jira')
+    assert.equal(gateLabel(undefined), 'Send to Jira')
+    assert.match(gateQuestion(command, ''), /Send it\?/)
+  })
+})
+
+describe('trackerOf', () => {
+  const cases = [
+    ['none', status({ tracker: 'none' }), 'none'],
+    ['jira', status({ tracker: 'jira' }), 'jira'],
+    ['an older binary that does not say', status({}), ''],
+    ['a refusal', { envelope: { ok: false, outcome: 'busy' } }, ''],
+    ['no JSON', { envelope: null }, ''],
+    ['binary missing', { missing: true }, ''],
+  ]
+  for (const [name, poll, want] of cases) {
+    test(name, () => assert.equal(trackerOf(poll), want))
+  }
 })
 
 describe('tighten', () => {
@@ -323,7 +387,7 @@ describe('parsePunch', () => {
   const cases = [
     ['start', 'ABC-1', { verb: 'start', argv: ['start', 'ABC-1'] }],
     ['start DEF-2', 'ABC-1', { verb: 'start', argv: ['start', 'DEF-2'] }],
-    ['start', '', { error: 'This branch names no ticket: use /punch start KEY.' }],
+    ['start', '', { error: 'No ticket here (no .punchcard, and the branch names none): use /punch start KEY.' }],
     ['pause', '', { verb: 'pause', argv: ['pause'] }],
     ['resume', 'ABC-1', { verb: 'resume', argv: ['resume'] }],
     ['resume DEF-2', '', { verb: 'resume', argv: ['resume', 'DEF-2'] }],
@@ -346,6 +410,11 @@ describe('stop dialog', () => {
   test('previewArgv', () => {
     assert.deepEqual(previewArgv({ verb: 'stop', duration: '', message: '' }), ['stop', '--dry-run'])
     assert.deepEqual(previewArgv({ verb: 'stop', duration: '1h', message: 'x y' }), ['stop', '--dry-run', '--duration', '1h', '-m', 'x y'])
+  })
+  test('stopOptions: keeping a worklog pending means something only with a tracker', () => {
+    assert.deepEqual(stopOptions('jira'), [SUBMIT, KEEP, 'Cancel'])
+    assert.deepEqual(stopOptions(''), [SUBMIT, KEEP, 'Cancel'])
+    assert.deepEqual(stopOptions('none'), [SUBMIT, 'Cancel'])
   })
   test('stopArgv sends exactly what was previewed', () => {
     assert.deepEqual(stopArgv(preview, SUBMIT), ['stop', 'ABC-1', '--yes', '--duration', '72', '-m', 'fixed it'])
@@ -372,10 +441,11 @@ describe('replyText', () => {
     assert.equal(replyText('start', status({ running: timer({ held: true }) }).envelope, 0), '▶ ABC-123 1:12 · held')
     assert.equal(replyText('pause', status({}).envelope, 0), 'Nothing running.')
   })
-  test('stop: synced, pending, owed', () => {
+  test('stop: synced, pending, local, owed', () => {
     const stop = (state, extra = {}) => ({ ok: true, outcome: 'ok', data: { key: 'A-1', worklog: { state, timeSpentSeconds: 3600 } }, ...extra })
     assert.equal(replyText('stop', stop('synced'), 0), 'Logged 1h to A-1.')
     assert.equal(replyText('stop', stop('pending'), 0), 'Stopped A-1: 1h kept pending.')
+    assert.equal(replyText('stop', stop('local'), 0), 'Logged 1h to A-1.')
     assert.equal(replyText('stop', stop('pending', { outcome: 'sync_pending', error: { message: 'unreachable' } }), 7),
       'Stopped A-1: 1h saved but not sent (unreachable). Run `punchcard sync` later; never stop again.')
   })

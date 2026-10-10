@@ -95,11 +95,15 @@ const (
 	WorklogPending WorklogState = "pending"
 	WorklogSynced  WorklogState = "synced"
 	WorklogFailed  WorklogState = "failed"
+	// WorklogLocal: recorded with no tracker in effect. It is final, as a
+	// synced worklog is: nothing is owed and it is never sent.
+	WorklogLocal WorklogState = "local"
 )
 
-// Worklog is what Jira is (or will be) told for a stopped entry. It is a
-// flat tagged shape: WorklogID and SyncedAt only when synced, Message and
-// FailedAt only when failed.
+// Worklog is the record of a stopped entry: what the tracker is (or will
+// be) told, or, with no tracker, the local record of the time.
+// It is a flat tagged shape: WorklogID and SyncedAt only when synced,
+// Message, RefusedStatus and FailedAt only when failed.
 type Worklog struct {
 	State WorklogState `json:"state"`
 	// StartedAt is the entry's first segment start: the worklog's day.
@@ -109,8 +113,19 @@ type Worklog struct {
 	WorklogID        string    `json:"worklogId,omitempty"`
 	SyncedAt         Timestamp `json:"syncedAt,omitzero"`
 	Message          string    `json:"message,omitempty"`
-	FailedAt         Timestamp `json:"failedAt,omitzero"`
+	// RefusedStatus is the tracker's status when it answered with a
+	// refusal; 0 when it could not be reached (or for any other failure).
+	RefusedStatus int       `json:"refusedStatus,omitempty"`
+	FailedAt      Timestamp `json:"failedAt,omitzero"`
+	// Recovered: the entry was recovered when it stopped, so its time was
+	// a correction rather than a measurement. The entry's own flag clears
+	// at stop; this keeps the fact for log. Never sent to the tracker.
+	Recovered bool `json:"recovered,omitempty"`
 }
+
+// Logged reports whether the worklog is done with: synced to the tracker,
+// or local because there is none. A logged worklog is never owed or sent.
+func (w Worklog) Logged() bool { return w.State == WorklogSynced || w.State == WorklogLocal }
 
 // Heartbeat is the whole of heartbeat.json: the last moment of presence.
 type Heartbeat struct {

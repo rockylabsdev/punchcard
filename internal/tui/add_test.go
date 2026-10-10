@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // changes drops presence touches: what the model asked the store to change.
@@ -32,7 +32,7 @@ func listed(hs *harness) *harness {
 
 func TestAddFetchesTheSummaryLikeStart(t *testing.T) {
 	hs := listed(newHarness(t))
-	hs.jira = &jira.Fake{Summaries: map[string]string{"PUN-7": "Recents ordering"}}
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"PUN-7": "Recents ordering"}}
 	hs.open("09:00:00", 120, 32)
 
 	hs.key("a")
@@ -41,7 +41,7 @@ func TestAddFetchesTheSummaryLikeStart(t *testing.T) {
 	hs.key("enter")
 
 	want := []core.Command{core.Add{Tickets: []core.NewTicket{{Key: "PUN-7", Summary: "Recents ordering"}}, Origin: core.OriginHand}}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 	if d := cmp.Diff([]string{"summary PUN-7"}, hs.jira.Calls()); d != "" {
@@ -56,7 +56,7 @@ func TestAddFetchesTheSummaryLikeStart(t *testing.T) {
 
 func TestAddNotFoundChangesNothing(t *testing.T) {
 	hs := listed(newHarness(t))
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:00:00", 120, 32)
 
 	hs.key("a")
@@ -72,12 +72,12 @@ func TestAddNotFoundChangesNothing(t *testing.T) {
 func TestAddWithoutJiraAddsItUnverified(t *testing.T) {
 	cases := []struct {
 		name string
-		jira *jira.Fake
+		jira *tracker.Fake
 		want []core.Command
 	}{
 		{"not configured", nil, nil},
-		{"unreachable", &jira.Fake{Err: jira.ErrUnreachable}, nil},
-		{"token rejected", &jira.Fake{Err: jira.ErrUnauthorized}, []core.Command{core.RecordAuthFailure{}}},
+		{"unreachable", &tracker.Fake{Err: tracker.ErrUnreachable}, nil},
+		{"token rejected", &tracker.Fake{Err: tracker.ErrUnauthorized}, []core.Command{core.RecordAuthFailure{}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestAddWithoutJiraAddsItUnverified(t *testing.T) {
 			hs.key("enter")
 
 			want := append(c.want, core.Add{Tickets: []core.NewTicket{{Key: "PUN-7", Unverified: true}}, Origin: core.OriginHand})
-			if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+			if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 				t.Errorf("changes (-want +got)\n%s", d)
 			}
 			frameHas(t, hs, "added PUN-7 (not verified with Jira yet)")
@@ -97,9 +97,68 @@ func TestAddWithoutJiraAddsItUnverified(t *testing.T) {
 	}
 }
 
+// With no tracker the key is a slug, added as typed: nothing is asked
+// and nothing is unverified.
+func TestAddWithNoTrackerAddsTheSlugAsTyped(t *testing.T) {
+	hs := listed(newHarness(t))
+	hs.noTracker = true
+	hs.jira = &tracker.Fake{} // must never be asked
+	hs.open("09:00:00", 120, 32)
+	hs.key("a")
+	hs.typeText("payroll")
+	hs.key("enter")
+
+	want := []core.Command{core.Add{Tickets: []core.NewTicket{{Key: "payroll"}}, Origin: core.OriginHand}}
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
+		t.Errorf("changes (-want +got)\n%s", d)
+	}
+	if calls := hs.jira.Calls(); len(calls) != 0 {
+		t.Errorf("the tracker was asked: %v", calls)
+	}
+	frameHas(t, hs, "added payroll")
+	frameLacks(t, hs, "not verified")
+	if got := selectedKey(hs); got != "payroll" {
+		t.Errorf("cursor on %q, want payroll", got)
+	}
+
+	hs.key("a")
+	hs.typeText("pay roll")
+	hs.key("enter")
+	frameHas(t, hs, "pay roll is not a ticket key")
+}
+
+// With no tracker the summary is what the user types after the key: tab
+// moves to it, and enter adds from either field.
+func TestAddWithNoTrackerTakesATypedSummary(t *testing.T) {
+	hs := listed(newHarness(t))
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	hs.key("a")
+	frameHas(t, hs, "Summary (optional)")
+	hs.typeText("payroll")
+	hs.key("tab")
+	hs.typeText("  Monthly payroll run  ")
+	hs.key("enter")
+
+	want := []core.Command{core.Add{Tickets: []core.NewTicket{{Key: "payroll", Summary: "Monthly payroll run"}}, Origin: core.OriginHand}}
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
+		t.Errorf("changes (-want +got)\n%s", d)
+	}
+	frameHas(t, hs, "Monthly payroll run")
+}
+
+// With Jira the summary is the lookup's: the dialog never asks for one.
+func TestAddWithATrackerAsksForNoSummary(t *testing.T) {
+	hs := listed(newHarness(t))
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"PUN-7": "Recents ordering"}}
+	hs.open("09:00:00", 120, 32)
+	hs.key("a")
+	frameLacks(t, hs, "Summary (optional)")
+}
+
 func TestAddPicksARecentTicket(t *testing.T) {
 	hs := listed(newHarness(t))
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:00:00", 120, 32)
 
 	hs.key("a", "down", "down", "enter") // BB-2, then AA-1
@@ -130,7 +189,7 @@ func TestAddFiltersRecentsByWhatIsTyped(t *testing.T) {
 
 func TestAddRefusesWhatIsNotAKey(t *testing.T) {
 	hs := listed(newHarness(t))
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:00:00", 120, 32)
 	hs.key("a")
 	hs.typeText("hello")
@@ -147,7 +206,7 @@ func TestAddRefusesWhatIsNotAKey(t *testing.T) {
 func TestStartConfirmsAnUnverifiedTicket(t *testing.T) {
 	hs := newHarness(t)
 	hs.setup("07:00:00", core.Add{Tickets: []core.NewTicket{{Key: "DATA-9", Unverified: true}}, Origin: core.OriginHand})
-	hs.jira = &jira.Fake{Summaries: map[string]string{"DATA-9": "Backfill"}}
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"DATA-9": "Backfill"}}
 	hs.open("09:00:00", 120, 32)
 
 	hs.key("space")
@@ -156,7 +215,7 @@ func TestStartConfirmsAnUnverifiedTicket(t *testing.T) {
 		core.Start{Key: "DATA-9", Unverified: true, Origin: core.OriginHand, NewEntryID: "ID-1"},
 		core.Verify{Key: "DATA-9", Summary: "Backfill"},
 	}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 	frameHas(t, hs, "Backfill")

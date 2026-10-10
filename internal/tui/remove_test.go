@@ -18,7 +18,7 @@ func TestRemoveConfirmsWithY(t *testing.T) {
 	hs.key("y")
 
 	want := []core.Command{core.Remove{Key: "AA-1", Origin: core.OriginHand}}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 	frameLacks(t, hs, "Remove AA-1?", "AA-1 Summary")
@@ -39,6 +39,24 @@ func TestRemoveAnyOtherKeyKeepsIt(t *testing.T) {
 	frameHas(t, hs, "AA-1 Summary")
 }
 
+// A local worklog is logged: removing its ticket loses nothing.
+func TestRemoveDoesNotWarnAboutLocalTime(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("07:00:00", add("AA-1"), start("AA-1", "A"))
+	hs.setup("07:20:00", core.Stop{Origin: core.OriginHand, Local: true})
+	hs.open("09:00:00", 120, 32)
+
+	hs.key("d")
+	frameHas(t, hs, "Remove AA-1?", "y removes it")
+	frameLacks(t, hs, "would be lost")
+	hs.key("y")
+
+	want := []core.Command{core.Remove{Key: "AA-1", Origin: core.OriginHand}}
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
+		t.Errorf("changes (-want +got)\n%s", d)
+	}
+}
+
 func TestRemoveWarnsWhenUnsentTimeWouldBeLost(t *testing.T) {
 	hs := newHarness(t)
 	hs.setup("07:00:00", add("AA-1"), start("AA-1", "A"))
@@ -52,7 +70,7 @@ func TestRemoveWarnsWhenUnsentTimeWouldBeLost(t *testing.T) {
 	hs.key("y")
 
 	want := []core.Command{core.Remove{Key: "AA-1", Force: true, Origin: core.OriginHand}}
-	if d := cmp.Diff(want, changes(hs.st.commands())); d != "" {
+	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
 }

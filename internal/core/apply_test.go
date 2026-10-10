@@ -5,7 +5,11 @@ import (
 	"testing"
 
 	"github.com/j-dsmith/punchcard/internal/core"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
+
+// strict is a tracker's grammar, Jira's shape: ABC-123.
+var strict = tracker.NewGrammar(`^[A-Z][A-Z0-9]+-[0-9]+$`, true, "PUN-123")
 
 const (
 	hand   = core.OriginHand
@@ -120,7 +124,30 @@ func TestApplyStart(t *testing.T) {
 		{
 			name: "a malformed key is refused",
 			w:    world("10:00"),
-			cmd:  core.Start{Key: "abc", Origin: hand, NewEntryID: "E"},
+			cmd:  core.Start{Key: "abc", Origin: hand, NewEntryID: "E", Grammar: strict},
+			now:  "10:00",
+			err:  core.ErrUsage,
+		},
+		{
+			name: "with no tracker a key is a slug, kept as typed",
+			w:    world("10:00"),
+			cmd:  core.Start{Key: "payroll", Origin: hand, NewEntryID: "E"},
+			now:  "10:00",
+			want: state(core.TrackedTicket{Key: "payroll", AddedAt: at("10:00"),
+				Entries: []core.TimeEntry{entry("E", hand, seg("10:00", ""))}}),
+			events: []core.Event{{Kind: core.EventAdded, Key: "payroll"}},
+		},
+		{
+			name: "a slug has no spaces",
+			w:    world("10:00"),
+			cmd:  core.Start{Key: "pay roll", Origin: hand, NewEntryID: "E"},
+			now:  "10:00",
+			err:  core.ErrUsage,
+		},
+		{
+			name: "resume KEY keeps the grammar",
+			w:    world("10:00"),
+			cmd:  core.Resume{Key: "payroll", Origin: hand, NewEntryID: "E", Grammar: strict},
 			now:  "10:00",
 			err:  core.ErrUsage,
 		},

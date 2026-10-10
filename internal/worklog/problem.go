@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/j-dsmith/punchcard/internal/config"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // Problem is why a stopped worklog was not sent: the one classification
@@ -17,22 +17,22 @@ const (
 	ProblemNotConfigured Problem = "not_configured" // no config, token or Keychain
 	ProblemAuthFailed    Problem = "auth_failed"    // a 401
 	ProblemUnreachable   Problem = "unreachable"    // no HTTP answer
-	ProblemRejected      Problem = "sync_failed"    // Jira answered with an error
+	ProblemRejected      Problem = "sync_failed"    // the tracker answered with an error
 	ProblemBusy          Problem = "sync_busy"      // another punchcard is sending
 	ProblemPending       Problem = "sync_pending"   // anything else (recording the outcome failed)
 )
 
 // Why classifies a SyncErr.
 func Why(err error) Problem {
-	var api *jira.APIError
+	var refused *tracker.Refusal
 	switch {
 	case errors.Is(err, config.ErrNotConfigured):
 		return ProblemNotConfigured
-	case errors.Is(err, jira.ErrUnauthorized):
+	case errors.Is(err, tracker.ErrUnauthorized):
 		return ProblemAuthFailed
-	case errors.Is(err, jira.ErrUnreachable):
+	case errors.Is(err, tracker.ErrUnreachable):
 		return ProblemUnreachable
-	case errors.As(err, &api):
+	case errors.As(err, &refused):
 		return ProblemRejected
 	case errors.Is(err, store.ErrSyncBusy):
 		return ProblemBusy

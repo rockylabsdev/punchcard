@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // suspend stubs ExecProcess: "running setup" is done(), then the
@@ -37,11 +37,11 @@ func TestSSuspendsIntoSetupAndRereads(t *testing.T) {
 	}
 	ran := hs.suspend(func() {
 		// What a fresh setup does: config written, authFailedAt cleared.
-		hs.jira = &jira.Fake{}
+		hs.jira = &tracker.Fake{}
 		hs.st.Apply(core.ClearAuthFailure{})
 	}, nil)
 	opened := false
-	hs.m.jira = func() (jira.Client, error) {
+	hs.m.open = func() (tracker.Client, error) {
 		if !opened {
 			return nil, config.ErrNotConfigured
 		}
@@ -62,6 +62,44 @@ func TestSSuspendsIntoSetupAndRereads(t *testing.T) {
 	}
 	if strings.Contains(hs.frame(), "token rejected") || strings.Contains(hs.frame(), "not connected") {
 		t.Errorf("[3] still says Jira is not usable:\n%s", hs.frame())
+	}
+}
+
+// The note is the empty list's: the first ticket takes it away.
+func TestTheNoTrackerNoteGoesWithTheFirstTicket(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	frameHas(t, hs, "no tracker · S to set one up")
+	hs.key("a")
+	hs.typeText("payroll")
+	hs.key("enter")
+	frameHas(t, hs, "payroll")
+	frameLacks(t, hs, "no tracker", "Jira")
+}
+
+// Setup may choose a tracker: after S the TUI reads which one is in
+// effect, so the note goes, the Jira conditions apply again and a stop
+// goes through the new tracker's sender.
+func TestSPicksUpTheTrackerSetupChose(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.open("09:00:00", 120, 32)
+	frameHas(t, hs, "no tracker · S to set one up")
+	hs.suspend(func() {}, nil)
+	jiraSender := &fakeSender{st: hs.st}
+	hs.m.retrack = func() Tracking {
+		return Tracking{Sender: jiraSender, InEffect: tracker.InEffect{Open: func() (tracker.Client, error) { return nil, config.ErrNotConfigured }}}
+	}
+
+	hs.key("S")
+
+	frameLacks(t, hs, "no tracker")
+	if got := statusText(hs); got != "Not connected to Jira · S to set up · worklogs wait here, nothing is lost" {
+		t.Errorf("status line after setup = %q", got)
+	}
+	if hs.m.sender != Sender(jiraSender) {
+		t.Errorf("a stop still goes through the old sender")
 	}
 }
 
@@ -104,7 +142,7 @@ func TestNotConnectedBannerMentionsS(t *testing.T) {
 func TestAddAnsweredByJiraClearsTheAuthFailure(t *testing.T) {
 	hs := listed(newHarness(t))
 	hs.setup("08:20:00", core.RecordAuthFailure{})
-	hs.jira = &jira.Fake{Summaries: map[string]string{"PUN-7": "Fix it"}}
+	hs.jira = &tracker.Fake{Summaries: map[string]string{"PUN-7": "Fix it"}}
 	hs.open("09:00:00", 120, 32)
 	hs.key("a")
 	hs.typeText("PUN-7")

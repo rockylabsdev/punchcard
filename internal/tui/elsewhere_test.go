@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/j-dsmith/punchcard/internal/core"
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // row is key's row in [1] Tickets, squashed.
@@ -29,7 +29,7 @@ func elsewhere(t *testing.T, before ...core.Command) *harness {
 	hs.setup("08:00:00", add("AA-1", "BB-2", "CC-3"),
 		core.Start{Key: "AA-1", Origin: core.OriginPrompt, NewEntryID: "EA"})
 	hs.setup("08:30:00", before...)
-	hs.jira = &jira.Fake{}
+	hs.jira = &tracker.Fake{}
 	hs.open("09:00:00", 120, 32)
 	return hs
 }

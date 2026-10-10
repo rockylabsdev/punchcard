@@ -1,5 +1,7 @@
 package jira
 
+import "github.com/j-dsmith/punchcard/internal/tracker"
+
 // Wire types, transcribed from the curl spike's fixtures in
 // docs/jira-api/responses/. Jira's word "issue" stays in this file; the
 // rest of Punchcard says "ticket". Ids are strings, always.
@@ -45,7 +47,7 @@ type adfNode struct {
 	Content []adfNode `json:"content,omitempty"`
 }
 
-func newWireWorklogRequest(w Worklog) wireWorklogRequest {
+func newWireWorklogRequest(w tracker.Worklog) wireWorklogRequest {
 	r := wireWorklogRequest{TimeSpentSeconds: w.TimeSpentSeconds, Started: w.Started.Format(startedLayout)}
 	if w.Comment != "" {
 		r.Comment = &adfDoc{Type: "doc", Version: 1, Content: []adfNode{

@@ -246,6 +246,25 @@ func (t *Terminal) Confirm(q Question) (bool, error) {
 	return v, nil
 }
 
+func (t *Terminal) Choose(c Choice) (string, error) {
+	v := c.Value
+	opts := make([]huh.Option[string], len(c.Options))
+	label := map[string]string{}
+	for i, o := range c.Options {
+		opts[i] = huh.NewOption(o.Label, o.Value)
+		label[o.Value] = o.Label
+	}
+	s := huh.NewSelect[string]().Title(c.Title).Options(opts...).Value(&v)
+	if len(c.Note) > 0 {
+		s = s.Description(strings.Join(c.Note, "\n"))
+	}
+	if err := t.run(s); err != nil {
+		return "", err
+	}
+	t.answered(c.Title, label[v])
+	return v, nil
+}
+
 // Output is a writer for a command's output: each line in the gutter,
 // dimmed.
 func (t *Terminal) Output() io.Writer { return &gutterWriter{t: t} }

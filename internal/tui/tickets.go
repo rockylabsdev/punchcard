@@ -40,6 +40,11 @@ func (m Model) ticketsPane(w, h int) []string {
 			sDim.Render("  No tickets yet."),
 			sDim.Render("  Press ") + sBold.Render("a") + sDim.Render(" to add one by key."),
 		}
+		if m.noTracker {
+			// Said once, here, and gone with the first ticket: no
+			// tracker is a fine way to work, not a fault to nag about.
+			body = append(body, "", sFaint.Render("  no tracker · ")+sBold.Render("S")+sFaint.Render(" to set one up"))
+		}
 	}
 	// Scroll so the cursor stays in view, centred where it can be.
 	if visible := h - 2; visible > 0 && len(body) > visible {

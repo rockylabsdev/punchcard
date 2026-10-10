@@ -1,0 +1,24 @@
+╭─[1] Tickets · today 1h 22m────────────────────╮╭─[2] invoices────────────────╮
+│›▶ invoices                           0:42:34  ││                             │
+│ · payroll                                40m  ││                             │
+│                                               ││▶ RUNNING             0:42:34│
+│                                               ││  stop logs this as one      │
+│                                               ││  worklog — x                │
+│                                               ││                             │
+│                                               ││ 08:30–now   0:42:34 counted │
+│                                               ││                             │
+│                                               ││WORKLOGS TODAY               │
+│                                               ││  nothing yet                │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+│                                               ││                             │
+╰───────────────────────────────────────────────╯╰─────────────────────────────╯
+╭─[3] Today · logged 40m───────────────────────────────────────────────────────╮
+│ STATUS                        TICKET       TIME   STOPPED                    │
+│ ✓ logged                      payroll       40m   07:45                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                                                                                
+ space pause  x stop…  a add  d remove  S setup  ? help  q quit                 

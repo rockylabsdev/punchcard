@@ -15,15 +15,15 @@ import {
   DENIED_UNATTENDED,
   HOLD,
   KEEP,
-  SEND,
   SUBMIT,
   bandFrom,
-  branchKey,
   editPresenceDue,
   eventText,
+  gateLabel,
   gateNeedsDialog,
   gateQuestion,
   gateVerdict,
+  hereKey,
   manifestVersion,
   needsDuration,
   parseEnvelope,
@@ -31,9 +31,11 @@ import {
   previewArgv,
   replyText,
   stopArgv,
+  stopOptions,
   stopQuestion,
   submitTouch,
   tighten,
+  trackerOf,
   versionSkew,
 } from './logic.mjs'
 
@@ -54,6 +56,7 @@ let polling = false // a status poll is in flight
 let pluginVersion: string | null = null // this plugin's plugin.json version, read once
 let binaryVersion = '' // `punchcard version --json`, '' until known
 let binaryCheckedAt = 0
+let lastTracker = '' // the last status poll's tracker, '' until one answered
 
 // run calls punchcard with --json and an explicit --origin. It rejects
 // only when the binary could not be started or timed out.
@@ -68,14 +71,35 @@ function toastEvents($: EngineInterface, r: Ran) {
   for (const e of r.envelope?.events ?? []) $.ui.toast(eventText(e))
 }
 
-// hereKey is the ticket key in the session directory's git branch, or "".
-async function hereKey($: EngineInterface): Promise<string> {
+// status asks for the session directory: the timers and, as here, the
+// directory's key (its .punchcard, else its branch). The binary owns the
+// key rule; the mod never works one out itself.
+async function status($: EngineInterface): Promise<Ran> {
+  return run($, ['status', '--cwd', await $.session.cwd()], 'prompt')
+}
+
+// here is the session directory's key, asked fresh ("" for none, or when
+// punchcard did not answer), so a /punch start right after a cd or a
+// checkout uses the new answer rather than the last poll's.
+async function here($: EngineInterface): Promise<string> {
   try {
-    const cwd = await $.session.cwd()
-    const r = await $.process.run(['git', '-C', cwd, 'symbolic-ref', '--short', '-q', 'HEAD'], { timeoutMs: QUICK_MS })
-    return r.exitCode === 0 ? branchKey(r.stdout.trim()) : ''
+    return hereKey({ envelope: (await status($)).envelope })
   } catch {
     return ''
+  }
+}
+
+// tracker is the tracker in effect, asked fresh so a setup run during the
+// session counts; when punchcard does not answer, the last poll's, and ""
+// when there was none. It never throws: the gate's dialog words depend on
+// it, never whether the gate asks.
+async function tracker($: EngineInterface): Promise<string> {
+  try {
+    const t = trackerOf({ envelope: (await status($)).envelope })
+    if (t) lastTracker = t
+    return t || lastTracker
+  } catch {
+    return lastTracker
   }
 }
 
@@ -111,19 +135,19 @@ async function skew($: EngineInterface): Promise<Skew | null> {
   return versionSkew(await ownVersion($), binaryVersion)
 }
 
-// refresh polls status --json and redraws the band.
+// refresh polls status and redraws the band.
 async function refresh($: EngineInterface) {
   if (polling) return
   polling = true
   try {
-    const here = await hereKey($)
     let next: Band | null
     try {
-      const r = await run($, ['status'], 'prompt')
-      next = bandFrom({ envelope: r.envelope }, here, await skew($))
+      const r = await status($)
+      lastTracker = trackerOf({ envelope: r.envelope }) || lastTracker
+      next = bandFrom({ envelope: r.envelope }, await skew($))
     } catch (err) {
       const msg = String((err as Error)?.message ?? err)
-      next = /time ?out|timed out/i.test(msg) ? bandFrom({ failed: 'status timed out' }, here) : bandFrom({ missing: true }, here)
+      next = /time ?out|timed out/i.test(msg) ? bandFrom({ failed: 'status timed out' }) : bandFrom({ missing: true })
     }
     await update($, band, () => next)
   } finally {
@@ -150,8 +174,8 @@ async function presence($: EngineInterface) {
   }
 }
 
-// stop previews, asks Submit / Keep pending / Cancel, then sends exactly
-// the worklog shown.
+// stop previews, asks Submit / Keep pending / Cancel (no Keep pending
+// without a tracker), then logs exactly the worklog shown.
 async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; message: string }): Promise<string> {
   const p = await run($, previewArgv(a), 'hand')
   const preview = p.envelope?.ok ? p.envelope.data?.preview : undefined
@@ -161,7 +185,8 @@ async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; mes
   }
   let choice = CANCEL
   try {
-    choice = await $.ui.ask(stopQuestion(preview), { header: 'Punchcard', options: [SUBMIT, KEEP, CANCEL] })
+    const options = stopOptions(await tracker($))
+    choice = await $.ui.ask(stopQuestion(preview), { header: 'Punchcard', options })
   } catch {
     choice = CANCEL // dismissed, or no one to ask
   }
@@ -173,7 +198,7 @@ async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; mes
 
 // punch answers /punch <args> with origin hand, so a start holds.
 async function punch($: EngineInterface, args: string): Promise<string> {
-  const a = parsePunch(args, await hereKey($))
+  const a = parsePunch(args, await here($))
   if ('error' in a) return a.error
   try {
     if (a.verb === 'stop') return await stop($, a)
@@ -216,8 +241,8 @@ export const register: Register = on => {
 
   // The gate, in two layers (ADR 0005).
   //
-  // 1. tool.check: ask for any Bash command that would send an agent's
-  //    worklog, unless the user's own rules already deny it or ask by
+  // 1. tool.check: ask for any Bash command that would stop an agent's
+  //    timer and log its worklog, unless the user's own rules already deny it or ask by
   //    rule. Never allow (a mod's allow overrides the user's ask rule); a
   //    failure asks too, so the gate fails closed. At tool.check, next(e)
   //    only reads the verdict beneath.
@@ -229,21 +254,25 @@ export const register: Register = on => {
   // 2. tool.call: an `ask` verdict goes to the mode's decider, and in auto
   //    mode that is a classifier, not the person. So where the engine will
   //    not put the call to a person (auto mode, or a mode not yet seen),
-  //    the plugin raises its own dialog and sends only on "Send to Jira".
-  //    With nobody to ask (claude -p) the dialog rejects and the call is
-  //    refused with the timer running. Judged before next, so a failure
-  //    refuses rather than sends.
+  //    the plugin raises its own dialog and lets the call run only on its
+  //    affirmative answer: "Log it" without a tracker, "Send to Jira" with
+  //    Jira. The tracker sets the words, never whether it asks. With nobody
+  //    to ask (claude -p) the dialog rejects and the call is refused with
+  //    the timer running. Judged before next, so a failure refuses rather
+  //    than logs.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     if (!gateVerdict(e.tool, { command: e.command })) return next(e)
     const verdict = await $.tool.check({ tool: 'Bash', input: { command: e.command } })
     if (!gateNeedsDialog(permissionMode, verdict)) return next(e)
+    const t = await tracker($)
+    const yes = gateLabel(t)
     let answer: string
     try {
-      answer = await $.ui.ask(gateQuestion(e.command), { header: 'Punchcard', options: [SEND, HOLD] })
+      answer = await $.ui.ask(gateQuestion(e.command, t), { header: 'Punchcard', options: [yes, HOLD] })
     } catch {
       return { deny: DENIED_UNATTENDED }
     }
-    if (answer !== SEND) return { deny: DENIED_BY_USER }
+    if (answer !== yes) return { deny: DENIED_BY_USER }
     return next(e)
   }).catch(($, e, next) => (next.called ? next(e) : { deny: DENIED_GATE_FAILED }))
 

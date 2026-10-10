@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/j-dsmith/punchcard/internal/cli"
+	"github.com/j-dsmith/punchcard/internal/config"
 )
 
 var zone = time.FixedZone("UTC-5", -5*60*60)
 
 // machine is one user's data dir and clock; each call to run is a
-// separate punchcard invocation, as from another terminal.
+// separate punchcard invocation, as from another terminal. Jira is the
+// tracker, with no credentials (a blank machine has none: see
+// tracker_test.go).
 type machine struct {
 	t    *testing.T
 	env  map[string]string
@@ -41,6 +44,7 @@ func (m *machine) run(args ...string) result {
 		Getenv:  func(k string) string { return m.env[k] },
 		Now:     func() time.Time { return m.now },
 		Version: "1.2.3",
+		Tracker: config.TrackerJira,
 	})
 	return result{code, out.String(), errb.String()}
 }

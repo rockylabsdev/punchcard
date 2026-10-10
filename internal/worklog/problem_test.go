@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/j-dsmith/punchcard/internal/config"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -21,10 +21,10 @@ func TestWhyAWorklogWasNotSent(t *testing.T) {
 	}{
 		{fmt.Errorf("%w: no config.json", config.ErrNotConfigured), worklog.ProblemNotConfigured, "not_configured"},
 		{fmt.Errorf("%w: %w", config.ErrNotConfigured, &config.KeychainError{Err: errors.New("locked")}), worklog.ProblemNotConfigured, "not_configured"},
-		{jira.ErrUnauthorized, worklog.ProblemAuthFailed, "auth_failed"},
-		{&jira.APIError{Status: 401}, worklog.ProblemAuthFailed, "auth_failed"},
-		{fmt.Errorf("%w: dial tcp", jira.ErrUnreachable), worklog.ProblemUnreachable, "unreachable"},
-		{&jira.APIError{Status: 503}, worklog.ProblemRejected, "sync_failed"},
+		{tracker.ErrUnauthorized, worklog.ProblemAuthFailed, "auth_failed"},
+		{&tracker.Refusal{Status: 401}, worklog.ProblemAuthFailed, "auth_failed"},
+		{fmt.Errorf("%w: dial tcp", tracker.ErrUnreachable), worklog.ProblemUnreachable, "unreachable"},
+		{&tracker.Refusal{Status: 503}, worklog.ProblemRejected, "sync_failed"},
 		{store.ErrSyncBusy, worklog.ProblemBusy, "sync_busy"},
 		{errors.New("disk full"), worklog.ProblemPending, "sync_pending"},
 	}

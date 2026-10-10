@@ -12,8 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/cli"
 	"github.com/j-dsmith/punchcard/internal/config"
-	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"golang.org/x/sys/unix"
 )
 
@@ -26,9 +26,12 @@ type harness struct {
 	now time.Time
 	env map[string]string
 	ids int
+	// tracker is the tracker every run has: Jira unless a test says
+	// otherwise ("" resolves it from the config file, as the binary does).
+	tracker config.Tracker
 	// jira, when set, is the Jira every run talks to. Nil means the
 	// default lookup, which finds no config here: unconfigured.
-	jira *jira.Fake
+	jira *tracker.Fake
 	// kc is the Keychain seam every run gets (never the real one): no
 	// item unless a test says otherwise.
 	kc *fakeKeychain
@@ -52,15 +55,15 @@ func (k *fakeKeychain) read(string) (string, error) {
 	return k.token, k.err
 }
 
-func (h *harness) jiraFn() func() (jira.Client, error) {
+func (h *harness) jiraFn() func() (tracker.Client, error) {
 	if h.jira == nil {
 		return nil
 	}
-	return func() (jira.Client, error) { return h.jira, nil }
+	return func() (tracker.Client, error) { return h.jira, nil }
 }
 
 func newHarness(t *testing.T) *harness {
-	h := &harness{t: t, dir: t.TempDir(), now: at("09:00"), env: map[string]string{}, kc: &fakeKeychain{}}
+	h := &harness{t: t, dir: t.TempDir(), now: at("09:00"), env: map[string]string{}, kc: &fakeKeychain{}, tracker: config.TrackerJira}
 	h.st = store.New(h.dir, func() time.Time { return h.now })
 	h.st.LockWait = 50 * time.Millisecond
 	return h
@@ -79,15 +82,16 @@ func (h *harness) run(args ...string) result {
 	h.t.Helper()
 	var out, errb bytes.Buffer
 	code := cli.Run(args, cli.Env{
-		Stdin:    bytes.NewReader(nil),
-		Stdout:   &out,
-		Stderr:   &errb,
-		Getenv:   func(k string) string { return h.env[k] },
-		Now:      func() time.Time { return h.now },
-		Version:  "1.2.3",
-		Store:    h.st,
-		Jira:     h.jiraFn(),
-		Keychain: h.kc.read,
+		Stdin:       bytes.NewReader(nil),
+		Stdout:      &out,
+		Stderr:      &errb,
+		Getenv:      func(k string) string { return h.env[k] },
+		Now:         func() time.Time { return h.now },
+		Version:     "1.2.3",
+		Store:       h.st,
+		Tracker:     h.tracker,
+		OpenTracker: h.jiraFn(),
+		Keychain:    h.kc.read,
 		NewID: func() string {
 			h.ids++
 			return fmt.Sprintf("ID-%d", h.ids)
@@ -156,7 +160,7 @@ func status(run string, paused ...string) string {
 // the snapshot plus the Jira link, unconfigured (no HOME).
 func unlinked(data string) string {
 	data = strings.TrimSpace(data)
-	return strings.TrimSuffix(data, "}") + `, "configured": false, "notConfigured": "not connected to Jira: neither XDG_CONFIG_HOME nor HOME is set"}`
+	return strings.TrimSuffix(data, "}") + `, "tracker": "jira", "configured": false, "notConfigured": "not connected to Jira: neither XDG_CONFIG_HOME nor HOME is set"}`
 }
 
 func TestEnvelopes(t *testing.T) {
@@ -279,7 +283,7 @@ func TestEnvelopes(t *testing.T) {
 			h.do("09:45", "touch")
 		}, "13:00",
 			[]string{"stop", "--duration", "2h", "--no-sync"}, 0,
-			ok("stop", `{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 7200}}`,
+			ok("stop", `{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 7200, "recovered": true}}`,
 				`[{"kind": "recovered", "key": "AA-1", "at": "2026-08-09T09:45:00.000-0500"}]`)},
 
 		// status

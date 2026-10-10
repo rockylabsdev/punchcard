@@ -2,17 +2,29 @@
 // module (register.tsx) does the I/O and calls these; test/logic.test.mjs
 // runs them under `node --test`.
 
-/** A Jira ticket key anywhere in a branch name (feature/ABC-123-thing). */
-export const KEY_PATTERN = /[A-Z][A-Z0-9]+-\d+/
-
 /**
- * The ticket key a git branch names, or "" when it names none.
- * @param {string} branch
+ * This session's key as the last `status --json --cwd` reported it
+ * (`data.here`: the directory's .punchcard, else its branch), or "" for
+ * none. The binary owns the rule; the mod has none of its own.
+ * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
  * @returns {string}
  */
-export function branchKey(branch) {
-  const m = KEY_PATTERN.exec(String(branch ?? ''))
-  return m ? m[0] : ''
+export function hereKey(poll) {
+  const k = poll?.envelope?.data?.here?.key
+  return typeof k === 'string' ? k : ''
+}
+
+/**
+ * The tracker the last `status --json` reported (`data.tracker`: "none"
+ * or "jira"), or "" when it did not say: an older binary, a refusal, or
+ * no answer at all.
+ * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
+ * @returns {string}
+ */
+export function trackerOf(poll) {
+  const env = poll?.envelope
+  const t = env?.ok ? env.data?.tracker : undefined
+  return typeof t === 'string' ? t : ''
 }
 
 /** The prompt origins that are the person's own submit (spec: composer, bridge). */
@@ -21,7 +33,7 @@ const PERSON = new Set(['composer', 'bridge'])
 /**
  * The punchcard argv a submitted prompt runs, or null for none. The
  * person's own prompt is presence and focus from the session directory's
- * branch; a slash command is presence only, so `/punch pause` is never
+ * key; a slash command is presence only, so `/punch pause` is never
  * undone by a focus from the same Enter.
  * @param {{ kind: string }} origin
  * @param {string} text
@@ -88,12 +100,16 @@ export function parseEnvelope(stdout) {
 
 /**
  * A release version without its leading v, or "" for one that is not a
- * release (dev, unknown, empty): those never count as skew, as in setup.
+ * release: those never count as skew, as in setup (comparable in
+ * internal/setup/plugin.go). Not releases: dev, unknown, empty, a Go
+ * pseudo-version (what `go install ./cmd/punchcard` stamps, e.g.
+ * v0.0.0-20261009220046-aaacff0d8d07) and a build of a dirty tree (+dirty).
  * @param {unknown} v
  */
 function release(v) {
   const s = String(v ?? '').replace(/^v/, '')
-  return /^\d/.test(s) ? s : ''
+  if (!/^\d/.test(s) || /[-.]\d{14}-[0-9a-f]{12}(\+|$)/.test(s) || s.includes('+dirty')) return ''
+  return s
 }
 
 /**
@@ -130,15 +146,17 @@ export function versionSkew(plugin, binary) {
  * poll is what the last `status --json` came to: `{ missing: true }` when
  * punchcard could not be started, `{ envelope }` when it answered (the
  * envelope null when its stdout was not one), `{ failed: message }` when
- * it timed out or similar. hereKey is this session's branch key ("" for
- * none): idle, the band names it and the next action; with another
- * ticket shown, it says what this branch is for.
+ * it timed out or similar. Its `here` is this session's key (see
+ * hereKey): idle, the band names it and the next action; with another
+ * ticket shown, it says what this session is for. With `tracker: none`
+ * the band is the timer alone: nothing can be unsent, connected or
+ * authorised without a tracker, so none of it is shown. Any other
+ * tracker, or none named (an older binary), is Jira's band.
  * @param {{ missing?: boolean, failed?: string, envelope?: any }} poll
- * @param {string} hereKey
  * @param {Skew | null} [skew] plugin and binary versions when they differ
  * @returns {Band | null}
  */
-export function bandFrom(poll, hereKey, skew = null) {
+export function bandFrom(poll, skew = null) {
   if (poll.missing) return { tone: 'error', text: 'punchcard not found on PATH' }
   if (poll.failed !== undefined) return { tone: 'error', text: `punchcard: ${poll.failed}` }
   const env = poll.envelope
@@ -146,24 +164,26 @@ export function bandFrom(poll, hereKey, skew = null) {
   if (!env.ok) return { tone: 'error', text: `punchcard: ${env.error?.message ?? env.outcome}` }
 
   const d = env.data ?? {}
+  const here = hereKey(poll)
   const paused = Array.isArray(d.paused) ? d.paused : []
-  const unsent = d.unsent?.count ?? 0
+  const jira = d.tracker !== 'none'
+  const unsent = jira ? (d.unsent?.count ?? 0) : 0
   // One slot for Jira, the worse wins: token rejected, then a Keychain
   // error (it names why Jira is not connected), then not connected.
-  const authFailed = Boolean(d.authFailedAt)
-  const keychainBroken = !authFailed && Boolean(d.keychainError)
-  const notConnected = !authFailed && !keychainBroken && d.configured === false
+  const authFailed = jira && Boolean(d.authFailedAt)
+  const keychainBroken = jira && !authFailed && Boolean(d.keychainError)
+  const notConnected = jira && !authFailed && !keychainBroken && d.configured === false
   const shown = d.running ?? paused[0]
-  if (!shown && !hereKey && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
+  if (!shown && !here && unsent === 0 && !authFailed && !keychainBroken && !notConnected && !skew) return null
 
   /** @type {string[]} */
   const parts = []
   /** @type {Band['tone']} */
   let tone = 'subtle'
-  // A timer running on another ticket than this session's branch is
+  // A timer running on another ticket than this session's is
   // counting somewhere else: the band steps back to grey and says where,
   // so only the session being billed is green.
-  const elsewhere = Boolean(hereKey && shown && shown.key !== hereKey)
+  const elsewhere = Boolean(here && shown && shown.key !== here)
   if (shown) {
     const t = timerParts(shown, elsewhere)
     parts.push(...t.parts)
@@ -188,8 +208,8 @@ export function bandFrom(poll, hereKey, skew = null) {
   }
   // This session's ticket, when it is not the one shown: idle, the next
   // action; otherwise a reminder of what this directory is for.
-  if (hereKey && !shown) parts.push(`${hereKey} not running`, '/punch start')
-  else if (hereKey && shown.key !== hereKey) parts.push(`this branch is ${hereKey}`)
+  if (here && !shown) parts.push(`${here} not running`, '/punch start')
+  else if (here && shown.key !== here) parts.push(`here: ${here}`)
   if (skew) {
     parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
     if (tone === 'subtle') tone = 'warning'
@@ -201,7 +221,7 @@ export function bandFrom(poll, hereKey, skew = null) {
  * The band's words for one timer.
  * @param {any} t a Timer from `status --json`
  * @param {boolean} [elsewhere] it runs on another ticket than this
- *   session's branch: shown as "timer on KEY", in the subtle tone
+ *   session's key: shown as "timer on KEY", in the subtle tone
  * @returns {{ tone: Band['tone'], parts: string[] }}
  */
 function timerParts(t, elsewhere = false) {
@@ -248,10 +268,10 @@ export function eventText(e) {
 }
 
 /**
- * Whether a Bash command would send an agent's worklog: it names
+ * Whether a Bash command would stop an agent's timer and log its worklog: it names
  * punchcard, stop and --yes anywhere in its raw text. Deliberately loose
  * (any order, any segment of a compound command, any path to the binary,
- * any case): a false match costs one dialog, a miss sends time unread.
+ * any case): a false match costs one dialog, a miss logs time unread.
  * @param {unknown} command
  */
 export function isGatedStop(command) {
@@ -275,7 +295,9 @@ export function gateVerdict(tool, input) {
 
 export const ASK = Object.freeze({
   decision: /** @type {const} */ ('ask'),
-  reason: 'Punchcard: this stops the timer and sends the worklog to Jira. Approve only the worklog you were shown.',
+  // The verdict is given before any tracker is known, so its words hold
+  // for both: logged locally, or sent to the tracker when one is set up.
+  reason: 'Punchcard: this stops the timer and logs the worklog (sending it to the tracker, if one is set up). Approve only the worklog you were shown.',
 })
 
 /**
@@ -316,23 +338,37 @@ export function gateNeedsDialog(mode, verdict) {
   return mode === 'auto' || mode === ''
 }
 
-/** The gate dialog's two answers. */
+/** The gate dialog's affirmative answers, one per tracker, and its other one. */
+export const LOG = 'Log it'
 export const SEND = 'Send to Jira'
 export const HOLD = 'Keep the timer running'
 
 /**
- * The gate dialog's question for a Bash command about to send a worklog.
- * @param {string} command
+ * The gate dialog's affirmative answer: "Log it" with no tracker, "Send
+ * to Jira" otherwise. An unknown tracker (an older binary, or a status
+ * that did not answer) gets Jira's words: every older binary sent to
+ * Jira. The caller compares the answer with this same label.
+ * @param {string | undefined} tracker trackerOf's answer
  */
-export function gateQuestion(command) {
-  return `Punchcard: this command stops the timer and sends the worklog to Jira. Send it?\n\n${String(command ?? '').trim()}`
+export function gateLabel(tracker) {
+  return tracker === 'none' ? LOG : SEND
+}
+
+/**
+ * The gate dialog's question for a Bash command about to stop a timer.
+ * @param {string} command
+ * @param {string | undefined} tracker trackerOf's answer
+ */
+export function gateQuestion(command, tracker) {
+  const does = tracker === 'none' ? 'logs the worklog. Log it?' : 'sends the worklog to Jira. Send it?'
+  return `Punchcard: this command stops the timer and ${does}\n\n${String(command ?? '').trim()}`
 }
 
 /** Why a gated stop was refused, as the model reads it. */
-export const DENIED_BY_USER = 'Punchcard: the user did not approve sending this worklog. The timer is untouched; do not retry.'
+export const DENIED_BY_USER = 'Punchcard: the user did not approve logging this worklog. The timer is untouched; do not retry.'
 export const DENIED_UNATTENDED =
-  'Punchcard: nobody is here to approve sending this worklog, so it was not sent. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
-export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not sent. The timer is untouched.'
+  'Punchcard: nobody is here to approve logging this worklog, so it was not logged. The timer keeps running; tell the user to run /punch stop when they are back. Do not retry.'
+export const DENIED_GATE_FAILED = 'Punchcard: the stop gate failed, so the worklog was not logged. The timer is untouched.'
 
 /**
  * Splits /punch's arguments like a shell would, quotes kept together.
@@ -357,8 +393,8 @@ export const PUNCH_USAGE = 'Usage: /punch start [KEY] | pause | resume [KEY] | s
  */
 
 /**
- * What `/punch <args>` asks for. start with no key takes this branch's key
- * (hereKey); with neither it is refused, since an unkeyed session needs an
+ * What `/punch <args>` asks for. start with no key takes this session's
+ * key (hereKey); with neither it is refused, since an unkeyed session needs an
  * explicit key. stop takes an optional duration and `-m`, the comment
  * being the rest of the line (quotes optional).
  * @param {string} args
@@ -372,7 +408,7 @@ export function parsePunch(args, hereKey) {
     case 'start': {
       if (rest.length > 1) return { error: PUNCH_USAGE }
       const key = rest[0] ?? hereKey
-      if (!key) return { error: 'This branch names no ticket: use /punch start KEY.' }
+      if (!key) return { error: 'No ticket here (no .punchcard, and the branch names none): use /punch start KEY.' }
       return { verb: 'start', argv: ['start', key] }
     }
     case 'pause':
@@ -402,10 +438,21 @@ export function previewArgv(a) {
   return ['stop', '--dry-run', ...(a.duration ? ['--duration', a.duration] : []), ...(a.message ? ['-m', a.message] : [])]
 }
 
-/** The dialog's three answers. */
+/** The dialog's answers. */
 export const SUBMIT = 'Submit'
 export const KEEP = 'Keep pending'
 export const CANCEL = 'Cancel'
+
+/**
+ * The /punch stop dialog's answers. Keep pending (stop now, send later)
+ * means something only with a tracker; without one a worklog is logged
+ * the moment it stops.
+ * @param {string | undefined} tracker trackerOf's answer
+ * @returns {string[]}
+ */
+export function stopOptions(tracker) {
+  return tracker === 'none' ? [SUBMIT, CANCEL] : [SUBMIT, KEEP, CANCEL]
+}
 
 /**
  * The argv that performs the stop the person approved, pinned to the
@@ -459,7 +506,9 @@ export function replyText(verb, env, exitCode) {
     if (exitCode === 7) {
       return `Stopped ${d.key}: ${time} saved but not sent (${env.error?.message ?? 'sync pending'}). Run \`punchcard sync\` later; never stop again.`
     }
-    return d.worklog?.state === 'synced' ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
+    // A local worklog (no tracker) is logged as surely as a synced one.
+    const logged = d.worklog?.state === 'synced' || d.worklog?.state === 'local'
+    return logged ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
   }
   const band = bandFrom({ envelope: env }, '')
   return band ? band.text : 'Nothing running.'

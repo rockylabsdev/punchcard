@@ -9,10 +9,12 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/j-dsmith/punchcard/internal/worklog"
 )
 
@@ -80,6 +82,11 @@ func (f *fakeStore) commands() []core.Command {
 	return c
 }
 
+// anyGrammar compares commands without their key grammar (the fake
+// store's core.Apply checks keys with it; a test names the grammar only
+// when the grammar is its subject).
+var anyGrammar = cmpopts.IgnoreTypes(tracker.Grammar{})
+
 var zone = time.FixedZone("UTC-5", -5*3600)
 
 // at is a wall-clock time on the test day, in UTC-5.
@@ -98,7 +105,10 @@ type harness struct {
 	t      *testing.T
 	st     *fakeStore
 	sender *fakeSender
-	jira   *jira.Fake // nil: Jira not configured (set before open)
+	jira   *tracker.Fake // nil: Jira not configured (set before open)
+	// noTracker: none is configured (set before open); the key grammar
+	// is then the slug.
+	noTracker bool
 	// unconfigured: a scenario that wants no Jira (see configure)
 	unconfigured bool
 	// openErr: opening the Jira client fails so (a broken config file)
@@ -120,22 +130,26 @@ func newHarness(t *testing.T) *harness {
 type fakeSender struct {
 	st      *fakeStore
 	syncErr error
-	jira    *jira.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
-	mu      sync.Mutex
-	stops   []core.Stop
-	syncs   int
+	jira    *tracker.Fake // Sync's Jira; nil is not configured (open sets it from hs.jira)
+	// noTracker: none is configured, as worklog.Sender with no tracker: a
+	// stop is local and nothing is sent (open sets it from hs.noTracker).
+	noTracker bool
+	mu        sync.Mutex
+	stops     []core.Stop
+	syncs     int
 }
 
 func (f *fakeSender) Stop(_ context.Context, c core.Stop) (worklog.StopResult, error) {
 	f.mu.Lock()
 	f.stops = append(f.stops, c)
 	f.mu.Unlock()
+	c.Local = f.noTracker
 	res, err := f.st.Apply(c)
 	if err != nil {
 		return worklog.StopResult{}, err
 	}
 	r := worklog.StopResult{Key: c.Key, EntryID: c.EntryID, World: res.World, Now: res.Now, SyncErr: f.syncErr}
-	if f.syncErr == nil {
+	if f.syncErr == nil && !f.noTracker {
 		res, err = f.st.Apply(core.MarkSynced{Key: c.Key, EntryID: c.EntryID, WorklogID: "W1"})
 		if err != nil {
 			return r, err
@@ -166,18 +180,24 @@ func (f *fakeSender) Sync(ctx context.Context, key string) (worklog.Report, erro
 	if len(todo) == 0 {
 		return rep, nil
 	}
-	if f.jira == nil {
+	switch {
+	case f.noTracker:
+		rep.Remaining = todo
+		return rep, fmt.Errorf("%w: %w", config.ErrNotConfigured, tracker.ErrNoTracker)
+	case f.jira == nil:
 		rep.Remaining = todo
 		return rep, fmt.Errorf("%w: no config", config.ErrNotConfigured)
 	}
 	var last error
 	for _, u := range todo {
-		id, err := f.jira.PostWorklog(ctx, u.Key, jira.Worklog{TimeSpentSeconds: u.Worklog.TimeSpentSeconds})
+		id, err := f.jira.PostWorklog(ctx, u.Key, tracker.Worklog{TimeSpentSeconds: u.Worklog.TimeSpentSeconds})
 		var c core.Command = core.MarkSynced{Key: u.Key, EntryID: u.EntryID, WorklogID: id}
-		var api *jira.APIError
+		var api *tracker.Refusal
 		switch {
-		case errors.Is(err, jira.ErrUnauthorized):
+		case errors.Is(err, tracker.ErrUnauthorized):
 			c = core.RecordAuthFailure{}
+		case errors.As(err, &api):
+			c = core.MarkFailed{Key: u.Key, EntryID: u.EntryID, Message: err.Error(), Status: api.Status}
 		case err != nil:
 			c = core.MarkFailed{Key: u.Key, EntryID: u.EntryID, Message: err.Error()}
 		}
@@ -235,18 +255,23 @@ func (hs *harness) open(when string, w, h int) {
 	hs.t.Helper()
 	hs.now = at(when)
 	o := Options{
-		Store:  hs.st,
-		Now:    func() time.Time { return hs.now },
-		NewID:  func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
-		Sender: hs.sender,
+		Store:    hs.st,
+		Now:      func() time.Time { return hs.now },
+		NewID:    func() string { hs.ids++; return fmt.Sprintf("ID-%d", hs.ids) },
+		Tracking: Tracking{Sender: hs.sender, InEffect: tracker.InEffect{Grammar: jira.Grammar, None: hs.noTracker}},
+	}
+	if hs.noTracker {
+		// As the binary wires it: the seam answers ErrNoTracker.
+		o.Grammar = tracker.Slug
+		o.Open = func() (tracker.Client, error) { return nil, tracker.ErrNoTracker }
 	}
 	if hs.jira != nil {
-		o.Jira = func() (jira.Client, error) { return hs.jira, nil }
+		o.Open = func() (tracker.Client, error) { return hs.jira, nil }
 	}
 	if hs.openErr != nil {
-		o.Jira = func() (jira.Client, error) { return nil, hs.openErr }
+		o.Open = func() (tracker.Client, error) { return nil, hs.openErr }
 	}
-	hs.sender.jira = hs.jira
+	hs.sender.jira, hs.sender.noTracker = hs.jira, hs.noTracker
 	hs.m = New(o)
 	hs.m.ticker = func() tea.Cmd { return nil } // the test moves the clock
 	hs.send(tea.WindowSizeMsg{Width: w, Height: h})

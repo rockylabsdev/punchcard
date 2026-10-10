@@ -7,7 +7,7 @@ import (
 
 func (a *applier) add(c Add) error {
 	for _, n := range c.Tickets {
-		if !ValidKey(n.Key) {
+		if !c.Grammar.Valid(n.Key) {
 			return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, n.Key)
 		}
 	}
@@ -49,16 +49,16 @@ func (a *applier) remove(c Remove) error {
 		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
 	}
 	if !c.Force && owes(*t) {
-		return fmt.Errorf("%w: %s has a running or paused entry or an unsent worklog", ErrUnlogged, c.Key)
+		return fmt.Errorf("%w: %s has a running or paused entry or a worklog not yet sent", ErrUnlogged, c.Key)
 	}
 	a.w.State.TrackedTickets = slices.DeleteFunc(a.w.State.TrackedTickets, func(t TrackedTicket) bool { return t.Key == c.Key })
 	return nil
 }
 
-// owes reports whether removing t would throw away time not yet in Jira.
+// owes reports whether removing t would throw away time not yet logged.
 func owes(t TrackedTicket) bool {
 	for _, e := range t.Entries {
-		if e.Worklog == nil || e.Worklog.State != WorklogSynced {
+		if e.Worklog == nil || !e.Worklog.Logged() {
 			return true
 		}
 	}
@@ -75,7 +75,7 @@ func (a *applier) touch(c Touch) (bool, error) {
 	if c.Key == "" {
 		return true, nil
 	}
-	if !ValidKey(c.Key) {
+	if !c.Grammar.Valid(c.Key) {
 		return false, fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
 	rt, re := a.running()
@@ -113,6 +113,9 @@ func (a *applier) stoppedEntry(key, id string) (*TimeEntry, error) {
 		if e.Worklog.State == WorklogSynced {
 			return nil, fmt.Errorf("%w: %s worklog %s", ErrAlreadySynced, key, e.Worklog.WorklogID)
 		}
+		if e.Worklog.State == WorklogLocal {
+			return nil, fmt.Errorf("%w: entry %s on %s", ErrLocal, id, key)
+		}
 		return e, nil
 	}
 	return nil, fmt.Errorf("%w: no entry %s on %s", ErrNoTimer, id, key)
@@ -125,7 +128,7 @@ func (a *applier) markSynced(c MarkSynced) error {
 	}
 	wl := e.Worklog
 	wl.State, wl.WorklogID, wl.SyncedAt = WorklogSynced, c.WorklogID, a.now
-	wl.Message, wl.FailedAt = "", Timestamp{}
+	wl.clearFailure()
 	a.w.State.AuthFailedAt = Timestamp{}
 	a.emit(EventSynced, c.Key)
 	return nil
@@ -137,7 +140,23 @@ func (a *applier) markFailed(c MarkFailed) error {
 		return err
 	}
 	wl := e.Worklog
-	wl.State, wl.Message, wl.FailedAt = WorklogFailed, c.Message, a.now
+	wl.State, wl.Message, wl.RefusedStatus, wl.FailedAt = WorklogFailed, c.Message, c.Status, a.now
 	a.events = append(a.events, Event{Kind: EventSyncFailed, Key: c.Key, Message: c.Message})
 	return nil
+}
+
+func (a *applier) markLocal(c MarkLocal) error {
+	e, err := a.stoppedEntry(c.Key, c.EntryID)
+	if err != nil {
+		return err
+	}
+	wl := e.Worklog
+	wl.State = WorklogLocal
+	wl.clearFailure()
+	return nil
+}
+
+// clearFailure forgets a failed send: the worklog is logged now.
+func (wl *Worklog) clearFailure() {
+	wl.Message, wl.RefusedStatus, wl.FailedAt = "", 0, Timestamp{}
 }

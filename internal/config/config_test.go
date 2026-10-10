@@ -2,12 +2,14 @@ package config_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/j-dsmith/punchcard/internal/config"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 func env(m map[string]string) func(string) string {
@@ -91,5 +93,16 @@ func TestPath(t *testing.T) {
 	}
 	if err := config.Save(env(map[string]string{}), config.Config{SiteURL: "s", Email: "e"}); !errors.Is(err, config.ErrNoConfigDir) {
 		t.Errorf("Save with no HOME: err = %v", err)
+	}
+}
+
+// Unconfigured Jira is the tracker seam's unconfigured: callers of the
+// seam match tracker.ErrNotConfigured and never import config.
+func TestNotConfiguredIsTheTrackersNotConfigured(t *testing.T) {
+	if !errors.Is(fmt.Errorf("%w: no token", config.ErrNotConfigured), tracker.ErrNotConfigured) {
+		t.Error("config.ErrNotConfigured does not match tracker.ErrNotConfigured")
+	}
+	if config.ErrNotConfigured.Error() != "not connected to Jira" {
+		t.Errorf("text %q", config.ErrNotConfigured.Error())
 	}
 }

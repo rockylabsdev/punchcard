@@ -20,8 +20,12 @@ func (m Model) runSetup() (Model, tea.Cmd) {
 	return m, m.execProcess(m.setup(), func(err error) tea.Msg { return setupDoneMsg{err: err} })
 }
 
+// trackingMsg is the tracker in effect, read again after setup.
+type trackingMsg Tracking
+
 // setupDone re-reads what setup may have changed: the store (a fresh
-// setup clears authFailedAt) and whether Jira is configured (the probe).
+// setup clears authFailedAt), the tracker in effect (Retrack) and
+// whether Jira is configured (the probe, which follows the tracker).
 func (m Model) setupDone(msg setupDoneMsg) (Model, tea.Cmd) {
 	var exit *exec.ExitError
 	switch {
@@ -31,5 +35,9 @@ func (m Model) setupDone(msg setupDoneMsg) (Model, tea.Cmd) {
 		m = m.notify("setup: " + msg.err.Error())
 	}
 	m, reload := m.enqueue(intent{kind: intentReload})
-	return m, tea.Batch(reload, m.probe())
+	if m.retrack == nil {
+		return m, tea.Batch(reload, m.probe())
+	}
+	retrack := m.retrack
+	return m, tea.Batch(reload, func() tea.Msg { return trackingMsg(retrack()) })
 }

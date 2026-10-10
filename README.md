@@ -1,6 +1,24 @@
 # Punchcard
 
-Time tracking against Jira tickets from the terminal. One binary, `punchcard`, gives you a TUI (run it bare) and a CLI (`punchcard start ABC-123`, `punchcard stop`, `punchcard status`). A Claude Code plugin keeps the timer on your branch's ticket while you work with an agent.
+A time tracker for the terminal. Time a ticket, stop it, and the time is a worklog on your machine; `punchcard log` turns a week of them into a timesheet. One binary, `punchcard`, gives you a TUI (run it bare) and a CLI. A Claude Code plugin keeps the timer on the ticket your session is for while you work with an agent.
+
+```
+$ punchcard start payroll
++ payroll added
+▶ payroll running  0:00:00
+$ punchcard stop --yes --duration 30 -m "pay run"
+■ payroll stopped: 30m, logged
+$ punchcard log
+## 2026-10-09 Fri · 0h 30m
+
+| key | summary | time | comment |
+|---|---|---|---|
+| payroll |  | 0:30 | pay run |
+
+**Total: 0h 30m**
+```
+
+No account and no setup: a ticket is any key you choose. A tracker is optional. Jira is the one Punchcard knows today: choose it in `punchcard setup` and each stop also sends its worklog to Jira.
 
 macOS and Linux, on arm64 and amd64.
 
@@ -19,10 +37,10 @@ Or without a clone: `GOPRIVATE=github.com/j-dsmith go install github.com/j-dsmit
 
 ```sh
 brew install j-dsmith/tap/punchcard
-punchcard setup
+punchcard start payroll
 ```
 
-`punchcard setup` asks for your Jira site, email and API token, tests the connection, and saves them. On macOS the token goes in the Keychain. If Claude Code is installed, setup also installs the `punchcard@punchcard` plugin at the same version as the binary.
+That is all a trackerless install needs. Run `punchcard setup` when you want the Claude Code plugin or a tracker. Its first question is the tracker: none, or Jira. With Jira it asks for your site, email and API token, tests the connection, and saves them (on macOS the token goes in the Keychain). Either way, if Claude Code is installed, setup then offers the `punchcard@punchcard` plugin at the same version as the binary.
 
 ### Upgrade
 
@@ -60,12 +78,12 @@ brew uninstall punchcard
 claude plugin uninstall punchcard@punchcard
 ```
 
-Uninstalling leaves your config, your data and the Keychain item in place. Your data may hold worklogs that were never sent to Jira, so run `punchcard sync` first if `punchcard status` shows any unsent. To remove everything, run these three commands:
+Uninstalling leaves your config and your data in place, and with Jira the Keychain item too. Your data is your worklogs: export them first if you want them (`punchcard log --from 2026-01-01 --csv > worklogs.csv`). With Jira, your data may also hold worklogs never sent, so run `punchcard sync` first if `punchcard status` shows any unsent. To remove everything:
 
 ```sh
-rm -rf ~/.config/punchcard                        # config and token file
-rm -rf ~/.local/share/punchcard                   # timers and unsent worklogs
-security delete-generic-password -s punchcard     # macOS Keychain item
+rm -rf ~/.config/punchcard                        # config (and, with Jira, the token file)
+rm -rf ~/.local/share/punchcard                   # timers and worklogs
+security delete-generic-password -s punchcard     # with Jira on macOS: the Keychain item
 ```
 
 If you set `XDG_CONFIG_HOME` or `XDG_DATA_HOME`, the first two are `$XDG_CONFIG_HOME/punchcard` and `$XDG_DATA_HOME/punchcard`. If `punchcard setup` added the ask rule, it is the `Bash(punchcard stop *--yes*)` entry under `permissions.ask` in `~/.claude/settings.json`. See [Files and troubleshooting](docs/guide/files-and-troubleshooting.md).

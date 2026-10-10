@@ -1,86 +1,55 @@
-// Package jira is Punchcard's only door to Jira Cloud (/rest/api/3/,
-// Basic auth with email plus a classic API token). Callers depend on the
-// three-call Client interface; tests use Fake, and the real HTTP client
-// is New. Jira's word "issue" is confined to wire.go.
+// Package jira is the Jira Cloud tracker (/rest/api/3/, Basic auth with
+// email plus a classic API token): one implementation of
+// tracker.Client, and Jira's key grammar. Callers depend on the tracker
+// package; only the code that constructs a Jira client imports this one.
+// Jira's word "issue" is confined to wire.go.
 package jira
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
-// SummaryBudget is how long a summary fetch may take before the caller
-// gives up and leaves the ticket unverified.
-const SummaryBudget = 2 * time.Second
-
-// Client is the whole Jira surface Punchcard uses.
-type Client interface {
-	// Summary fetches a ticket's summary. A 404 is ErrNotFound: the
-	// ticket is missing or this account cannot see it.
-	Summary(ctx context.Context, key string) (string, error)
-	// PostWorklog sends one worklog to key and returns Jira's worklog id.
-	PostWorklog(ctx context.Context, key string, w Worklog) (string, error)
-	// TestConnection checks the site (serverInfo, must be Cloud), then
-	// the credentials (myself), and names the account.
-	TestConnection(ctx context.Context) (Account, error)
-}
-
-// Worklog is what PostWorklog tells Jira. Started is sent with a numeric
-// offset; an empty Comment is omitted.
-type Worklog struct {
-	Started          time.Time
-	TimeSpentSeconds int
-	Comment          string
-}
-
-// Account is who the credentials authenticate as.
-type Account struct {
-	AccountID   string
-	DisplayName string
-	Email       string
-}
-
-// Outcomes every caller distinguishes. Match with errors.Is.
-var (
-	// ErrNotFound: a 404, ambiguous between missing and invisible.
-	ErrNotFound = errors.New("not found or not visible to this account")
-	// ErrUnauthorized: a 401 (bad email or token, or a scoped token).
-	ErrUnauthorized = errors.New("credentials rejected by Jira")
-	// ErrUnreachable: no HTTP answer (network, DNS, timeout).
-	ErrUnreachable = errors.New("could not reach Jira")
-	// ErrBadSite: TestConnection's serverInfo step failed or the site is
-	// not Jira Cloud. It wraps the underlying cause too.
-	ErrBadSite = errors.New("not a reachable Jira Cloud site")
-)
+// Grammar is Jira's key: a project key (a letter, then letters or
+// digits) and a number, ABC-123, upper-cased on entry.
+var Grammar = tracker.NewGrammar(`^[A-Z][A-Z0-9]+-[0-9]+$`, true, "PUN-123")
 
 // APIError is any non-2xx answer, decoded from Jira's one error
-// envelope. A 404 matches ErrNotFound and a 401 ErrUnauthorized.
+// envelope. It is a *tracker.Refusal to every caller (errors.As), and a
+// 404 matches tracker.ErrNotFound and a 401 tracker.ErrUnauthorized.
 type APIError struct {
 	Status   int
 	Messages []string
 	Fields   map[string]string
 }
 
-func (e *APIError) Error() string {
+// refusal is e in the tracker's terms.
+func (e *APIError) refusal() *tracker.Refusal {
 	parts := append([]string{}, e.Messages...)
 	for k, v := range e.Fields {
 		parts = append(parts, k+": "+v)
 	}
-	if len(parts) == 0 {
-		return fmt.Sprintf("Jira answered %d", e.Status)
-	}
-	return fmt.Sprintf("Jira answered %d: %s", e.Status, strings.Join(parts, "; "))
+	return &tracker.Refusal{Status: e.Status, Message: strings.Join(parts, "; ")}
 }
 
-func (e *APIError) Is(target error) bool {
-	switch target {
-	case ErrNotFound:
-		return e.Status == 404
-	case ErrUnauthorized:
-		return e.Status == 401
+// Error is the refusal in Jira's words: "Jira answered 503: ...".
+func (e *APIError) Error() string {
+	r := e.refusal()
+	if r.Message == "" {
+		return fmt.Sprintf("Jira answered %d", r.Status)
+	}
+	return fmt.Sprintf("Jira answered %d: %s", r.Status, r.Message)
+}
+
+func (e *APIError) Is(target error) bool { return e.refusal().Is(target) }
+
+// As makes an *APIError a *tracker.Refusal for callers.
+func (e *APIError) As(target any) bool {
+	if r, ok := target.(**tracker.Refusal); ok {
+		*r = e.refusal()
+		return true
 	}
 	return false
 }

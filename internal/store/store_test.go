@@ -83,9 +83,6 @@ func TestOpenWithoutADataDirRefusesEveryCall(t *testing.T) {
 	if _, _, err := s.Read(); !errors.Is(err, store.ErrNoDataDir) {
 		t.Errorf("Read: %v", err)
 	}
-	if err := s.Introduce(); !errors.Is(err, store.ErrNoDataDir) {
-		t.Errorf("Introduce: %v", err)
-	}
 }
 
 func TestApplyRoundTripsThroughTheFiles(t *testing.T) {

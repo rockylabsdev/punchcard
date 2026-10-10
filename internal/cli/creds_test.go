@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/j-dsmith/punchcard/internal/jira"
+	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
 // configure writes a config file for user@example.com (and a token file
@@ -65,7 +65,7 @@ func TestStatusReportsTheTokenSource(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.jira = &jira.Fake{}
+			h.jira = &tracker.Fake{}
 			if c.setup != nil {
 				c.setup(h)
 			}
@@ -159,12 +159,12 @@ func TestAuthFailedAtSetAndClear(t *testing.T) {
 		return !strings.Contains(h.run("status", "--json").stdout, `"authFailedAt":null`)
 	}
 	h := newHarness(t)
-	h.jira = &jira.Fake{Err: jira.ErrUnauthorized}
+	h.jira = &tracker.Fake{Err: tracker.ErrUnauthorized}
 	h.do("09:00", "start", "AA-1")
 	if !failed(h) {
 		t.Fatal("a 401 did not set authFailedAt")
 	}
-	h.jira = &jira.Fake{Err: jira.ErrUnreachable}
+	h.jira = &tracker.Fake{Err: tracker.ErrUnreachable}
 	h.do("09:05", "start", "AA-2")
 	if !failed(h) {
 		t.Error("an unreachable Jira cleared authFailedAt")
@@ -175,12 +175,12 @@ func TestAuthFailedAtSetAndClear(t *testing.T) {
 		t.Error("a successful summary fetch left authFailedAt set")
 	}
 
-	h.jira = &jira.Fake{Err: jira.ErrUnauthorized}
+	h.jira = &tracker.Fake{Err: tracker.ErrUnauthorized}
 	h.do("09:15", "stop") // 401: pending, authFailedAt set
 	if !failed(h) {
 		t.Fatal("a 401 on stop did not set authFailedAt")
 	}
-	h.jira = &jira.Fake{}
+	h.jira = &tracker.Fake{}
 	if r := h.run("sync"); r.code != 0 {
 		t.Fatalf("sync: exit %d %s", r.code, r.stderr)
 	}

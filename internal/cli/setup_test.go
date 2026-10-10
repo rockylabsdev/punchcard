@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/j-dsmith/punchcard/internal/cli"
-	"github.com/j-dsmith/punchcard/internal/config"
 )
 
 func TestSetupNeedsATerminal(t *testing.T) {
@@ -29,52 +28,43 @@ func TestSetupOnATerminalRunsTheWizard(t *testing.T) {
 	}
 }
 
-// A true first run (no config, no state) runs the wizard, then the TUI
-// whatever the wizard did; anything already there skips it.
-func TestFirstRun(t *testing.T) {
-	cases := []struct {
-		name   string
-		before func(h *harness)
-		wizard bool
-	}{
-		{"no config, no state", nil, true},
-		{"state but no config", func(h *harness) { h.do("08:00", "add", "AA-1") }, false},
-		{"config but no state", func(h *harness) {
-			if err := config.Save(func(k string) string { return h.env[k] }, config.Config{SiteURL: "https://a.atlassian.net", Email: "e@a.test"}); err != nil {
-				t.Fatal(err)
-			}
-		}, false},
+// A blank machine (no config, no state) is never forced into setup: it
+// runs the command it was given, and bare punchcard opens the TUI.
+func TestABlankMachineIsNeverForcedIntoSetup(t *testing.T) {
+	blank := func(t *testing.T) (*harness, *[]string, func(*cli.Env)) {
+		h := newHarness(t)
+		h.env["XDG_CONFIG_HOME"] = filepath.Join(t.TempDir(), "config")
+		var order []string
+		return h, &order, func(e *cli.Env) {
+			e.Setup = func(cli.Env) int { order = append(order, "setup"); return 0 }
+			e.TUI = func(cli.Env) int { order = append(order, "tui"); return 0 }
+		}
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t)
-			h.env["XDG_CONFIG_HOME"] = filepath.Join(t.TempDir(), "config")
-			if c.before != nil {
-				c.before(h)
-			}
-			h.setupCode = 0
-			var order []string
-			r := h.runTTY("", func(e *cli.Env) {
-				e.Setup = func(cli.Env) int { order = append(order, "setup"); return 1 } // even a failed wizard lands in the TUI
-				e.TUI = func(cli.Env) int { order = append(order, "tui"); return 0 }
-			})
-			want := "tui"
-			if c.wizard {
-				want = "setup tui"
-			}
-			if got := strings.Join(order, " "); got != want || r.code != 0 {
-				t.Errorf("ran %q exit %d, want %q", got, r.code, want)
-			}
-			if _, err := os.Stat(filepath.Join(h.dir, "state.json")); c.wizard && err != nil {
-				t.Errorf("no state.json after the first run: the wizard would be offered again (%v)", err)
-			}
-		})
-	}
+	t.Run("bare punchcard on a terminal opens the TUI", func(t *testing.T) {
+		h, order, stub := blank(t)
+		r := h.runTTY("", stub)
+		if got := strings.Join(*order, " "); got != "tui" || r.code != 0 {
+			t.Errorf("ran %q exit %d, want the TUI alone", got, r.code)
+		}
+		if _, err := os.Stat(filepath.Join(h.dir, "state.json")); err == nil {
+			t.Errorf("state.json created")
+		}
+	})
+	t.Run("status prints the idle status", func(t *testing.T) {
+		h, order, stub := blank(t)
+		r := h.runTTY("", stub, "status")
+		if r.code != 0 || !strings.Contains(r.stdout, "Nothing running") {
+			t.Errorf("exit %d stdout %q", r.code, r.stdout)
+		}
+		if len(*order) > 0 {
+			t.Errorf("ran %v", *order)
+		}
+	})
 }
 
-// With no HOME and no XDG dirs there is nowhere to write a config: no
-// wizard, straight to the TUI.
-func TestNoConfigDirIsNoFirstRun(t *testing.T) {
+// With no HOME and no XDG dirs there is nowhere to write a config:
+// still no wizard, straight to the TUI.
+func TestNoConfigDirOpensTheTUI(t *testing.T) {
 	h := newHarness(t)
 	ran := false
 	h.runTTY("", func(e *cli.Env) {

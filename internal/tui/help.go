@@ -21,19 +21,19 @@ func (helpDialog) body(m Model, w int) []string {
 		sBold.Render(" Keys"),
 		key("space / enter", "start · pause · resume the selected ticket"),
 		key("p", "pause whatever is running, from any row"),
-		key("x", "stop the selected entry: review, then send to Jira"),
+		key("x", "stop the selected entry: review, then log it"),
 		key("a / d", "add a ticket / remove the selected one"),
 		"  " + fit(sSyncKey.Render("r"), 16) + "sync: send pending and failed worklogs",
-		key("S", "setup: Jira credentials, the Claude Code plugin"),
+		key("S", "setup: a tracker, the Claude Code plugin"),
 		key("j k ↑ ↓ g G", "move"),
 		key("q", "quit; timers keep running without the TUI"),
 		"",
 		sBold.Render(" Glyphs"),
 		"  " + m.pal.running.Render(gRunning) + " running   " + sPaused.Render(gPaused) + " paused   " +
 			sRecov.Render(gRecovered) + " recovered: check the duration at stop",
-		"  " + sDim.Render(gIdle) + " idle   " + sDim.Render(gUnverified) + " not confirmed by Jira yet",
+		"  " + sDim.Render(gIdle) + " idle   " + sDim.Render(gUnverified) + " not confirmed by the tracker yet",
 		"  " + sSync.Render(gPending) + " waiting to be sent   " + sFail.Render(gFailed) + " failed   " +
-			sDim.Render(gSynced) + " in Jira",
+			sDim.Render(gSynced) + " logged",
 	}
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {

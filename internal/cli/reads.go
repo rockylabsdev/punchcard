@@ -19,19 +19,21 @@ import (
 
 func (a *app) statusCmd() *cobra.Command {
 	var shortForm bool
+	var cwd string
 	c := &cobra.Command{
 		Use:   "status",
 		Short: "Show the running ticket, paused tickets and unsent worklogs",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.status(shortForm)
+			return a.status(shortForm, cwd)
 		},
 	}
 	c.Flags().BoolVar(&shortForm, "short", false, "one line for a shell prompt; nothing when idle; always exits 0")
+	c.Flags().StringVar(&cwd, "cwd", "", "also report this directory's key (its .punchcard, else its git branch) as here")
 	return c
 }
 
-func (a *app) status(shortForm bool) error {
+func (a *app) status(shortForm bool, cwd string) error {
 	w, now, err := a.read()
 	if err != nil {
 		if shortForm && !a.out.json {
@@ -50,19 +52,30 @@ func (a *app) status(shortForm bool) error {
 		return nil
 	}
 	rep := a.link(d)
+	if cwd != "" {
+		here, notices := resolveHere(cwd, a.env.Grammar())
+		a.out.notices(notices)
+		rep.Here = here
+	}
 	a.code = a.out.ok("status", rep, nil, a.out.statusText(rep, now))
 	return nil
 }
 
-// link is d plus the Jira link: the config file and the token lookup,
-// never a network call.
+// link is d plus the tracker and, with Jira, its link: the config file
+// and the token lookup, never a network call. With no tracker there is
+// no token to look up.
 func (a *app) link(d StatusData) StatusReport {
-	rep := StatusReport{StatusData: d}
+	rep := StatusReport{StatusData: d, Tracker: a.env.Tracker}
+	if !a.env.HasTracker() {
+		return rep
+	}
 	_, sec, err := config.Credentials(a.env.Getenv, a.env.Keychain)
 	var kc *config.KeychainError
+	configured := err == nil
+	rep.Configured = &configured
 	switch {
 	case err == nil:
-		rep.Configured, rep.TokenSource = true, sec.Source
+		rep.TokenSource = sec.Source
 		if sec.StrayFile {
 			rep.StrayTokenFile, _ = config.TokenPath(a.env.Getenv) // a stray file implies a config dir
 		}
@@ -94,9 +107,10 @@ func (o output) statusText(rep StatusReport, now time.Time) string {
 			o.paint(red, "!"), d.AuthFailedAt.In(now.Location()).Format("2006-01-02 15:04"))
 	}
 	switch {
+	case rep.Configured == nil: // no tracker: nothing to connect
 	case rep.KeychainError != "":
 		fmt.Fprintf(&b, "%s Not connected to Jira: %s\n", o.paint(red, "!"), rep.KeychainError)
-	case !rep.Configured:
+	case !*rep.Configured:
 		fmt.Fprintf(&b, "Not connected to Jira: %s\n", strings.TrimPrefix(rep.NotConfigured, config.ErrNotConfigured.Error()+": "))
 	default:
 		fmt.Fprintf(&b, "Jira token: %s\n", sourceText(rep.TokenSource))

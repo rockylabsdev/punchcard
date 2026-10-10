@@ -11,7 +11,7 @@ import (
 )
 
 // The `data` member of each command's envelope. Words follow CONTEXT.md:
-// running|paused|stale for a timer, pending|synced|failed for a worklog.
+// running|paused|stale for a timer, pending|synced|failed|local for a worklog.
 
 // Timer is one open (running or paused) entry.
 type Timer struct {
@@ -31,7 +31,7 @@ type Timer struct {
 	LastSeen        core.Timestamp `json:"lastSeen,omitzero"`
 }
 
-// Owed counts the worklogs still to reach Jira.
+// Owed counts the worklogs still to reach the tracker (never a local one).
 type Owed struct {
 	Count   int `json:"count"`
 	Seconds int `json:"seconds"`
@@ -46,12 +46,19 @@ type StatusData struct {
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }
 
-// StatusReport is `data` for status alone: the snapshot plus whether
-// Jira is configured, where the token comes from, and what broke. Only
-// status looks this up (it reads the token; touch never does).
+// StatusReport is `data` for status alone: the snapshot plus the
+// tracker in effect and, with Jira, whether it is configured, where the
+// token comes from, and what broke. Only status looks this up (it reads
+// the token; touch never does).
 type StatusReport struct {
 	StatusData
-	Configured  bool          `json:"configured"`
+	Tracker config.Tracker `json:"tracker"` // none|jira
+	// Here is --cwd's key: a *Here, which is null when the directory
+	// names none. Absent without --cwd (a nil interface), since there is
+	// no directory to answer for.
+	Here any `json:"here,omitempty"`
+	// Configured and the rest are present only with Jira.
+	Configured  *bool         `json:"configured,omitempty"`
 	TokenSource config.Source `json:"tokenSource,omitempty"` // env|keychain|file
 	// StrayTokenFile is the token file's path when the Keychain won.
 	StrayTokenFile string `json:"strayTokenFile,omitempty"`
@@ -106,7 +113,7 @@ type RemoveData struct {
 	Key string `json:"key"`
 }
 
-// UnsentWorklog is one worklog still owed to Jira.
+// UnsentWorklog is one worklog still owed to the tracker.
 type UnsentWorklog struct {
 	Key     string       `json:"key"`
 	EntryID string       `json:"entryId"`
@@ -178,7 +185,7 @@ func ticketRow(w core.World, t core.TrackedTicket, now time.Time) Ticket {
 	for _, e := range t.Entries {
 		switch {
 		case e.Stopped():
-			if e.Worklog.State != core.WorklogSynced {
+			if !e.Worklog.Logged() {
 				r.Unsynced++
 			}
 		default:

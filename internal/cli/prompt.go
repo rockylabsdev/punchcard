@@ -2,15 +2,9 @@ package cli
 
 import (
 	"bufio"
-	"context"
 	"fmt"
-	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/j-dsmith/punchcard/internal/core"
 )
 
 // linePick is the default picker: a numbered list on stderr, one line of
@@ -35,24 +29,4 @@ func (a *app) linePick(choices []Choice) (string, error) {
 		return choices[n-1].Key, nil
 	}
 	return line, nil // core refuses a bad key with usage
-}
-
-// branchPattern finds a ticket key anywhere in a branch name
-// (feature/ABC-123-thing).
-var branchPattern = regexp.MustCompile(`[A-Z][A-Z0-9]+-[0-9]+`)
-
-// branchKey is the ticket key in dir's current git branch, or "" when
-// dir is not a repository, HEAD is detached, or the branch names no key.
-func branchKey(dir string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "symbolic-ref", "--short", "-q", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-	key := branchPattern.FindString(strings.TrimSpace(string(out)))
-	if !core.ValidKey(key) {
-		return ""
-	}
-	return key
 }
