@@ -65,6 +65,35 @@ func world(lastSeen string, tickets ...core.TrackedTicket) core.World {
 	return w
 }
 
+// focused is s with its last focus set to key.
+func focused(s core.State, key string) core.State { s.LastFocus = key; return s }
+
+// lastFocus is w with its last focus set to key.
+func lastFocus(w core.World, key string) core.World { w.State = focused(w.State, key); return w }
+
+// steps applies cmds in turn from w, each a minute apart from 09:30, and
+// returns the final world. Every step must succeed.
+func steps(t *testing.T, w core.World, cmds ...core.Command) core.World {
+	t.Helper()
+	for i, cmd := range cmds {
+		next, _, err := core.Apply(w, cmd, at("09:30").Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatalf("step %d (%T): %v", i, cmd, err)
+		}
+		w = next
+	}
+	return w
+}
+
+// runningKey is the running ticket's key, or "" when nothing runs.
+func runningKey(w core.World) string {
+	tk, _, ok := core.Running(w.State)
+	if !ok {
+		return ""
+	}
+	return tk.Key
+}
+
 func diff(t *testing.T, label string, want, got any) {
 	t.Helper()
 	if d := cmp.Diff(want, got); d != "" {

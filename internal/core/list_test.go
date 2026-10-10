@@ -156,5 +156,3 @@ func TestApplyTouch(t *testing.T) {
 		})
 	}
 }
-
-func focused(s core.State, key string) core.State { s.LastFocus = key; return s }

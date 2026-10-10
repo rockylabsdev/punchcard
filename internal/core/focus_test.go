@@ -1,35 +1,11 @@
 package core_test
 
 import (
+	"errors"
 	"testing"
-	"time"
 
 	"github.com/j-dsmith/punchcard/internal/core"
 )
-
-// steps applies cmds in turn from w, each a minute apart from 09:30, and
-// returns the final world. Every step must succeed.
-func steps(t *testing.T, w core.World, cmds ...core.Command) core.World {
-	t.Helper()
-	for i, cmd := range cmds {
-		next, _, err := core.Apply(w, cmd, at("09:30").Add(time.Duration(i)*time.Minute))
-		if err != nil {
-			t.Fatalf("step %d (%T): %v", i, cmd, err)
-		}
-		w = next
-	}
-	return w
-}
-
-func runningKey(w core.World) string {
-	t, _, ok := core.Running(w.State)
-	if !ok {
-		return ""
-	}
-	return t.Key
-}
-
-func withLastFocus(w core.World, key string) core.World { w.State = focused(w.State, key); return w }
 
 // focus is a prompt's keyed touch; it may need an entry id if it moves.
 func focus(key string) core.Touch {
@@ -52,7 +28,7 @@ func TestFocusMovesATimerOnlyWhenItChanges(t *testing.T) {
 	})
 
 	t.Run("a change of focus moves it, and so does changing back", func(t *testing.T) {
-		w := withLastFocus(world("09:00", ticket("OPS-77", entry("EO", agent, seg("09:00", "")))), "PUN-1")
+		w := lastFocus(world("09:00", ticket("OPS-77", entry("EO", agent, seg("09:00", "")))), "PUN-1")
 		w = steps(t, w, focus("ABC-9"))
 		if got := runningKey(w); got != "ABC-9" {
 			t.Fatalf("after ABC-9: running = %q", got)
@@ -102,7 +78,7 @@ func TestFocusMovesATimerOnlyWhenItChanges(t *testing.T) {
 	})
 
 	t.Run("focus still never starts a timer from idle", func(t *testing.T) {
-		w := steps(t, withLastFocus(world("09:00", ticket("PUN-1")), "ABC-9"), focus("PUN-1"))
+		w := steps(t, lastFocus(world("09:00", ticket("PUN-1")), "ABC-9"), focus("PUN-1"))
 		if got := runningKey(w); got != "" {
 			t.Errorf("running = %q, want nothing", got)
 		}
@@ -111,7 +87,7 @@ func TestFocusMovesATimerOnlyWhenItChanges(t *testing.T) {
 
 func TestOnlyAKeyedPromptWritesTheLastFocus(t *testing.T) {
 	base := func() core.World {
-		return withLastFocus(world("09:00", ticket("AA-1", entry("EA", agent, seg("09:00", ""))), ticket("BB-2")), "PUN-1")
+		return lastFocus(world("09:00", ticket("AA-1", entry("EA", agent, seg("09:00", ""))), ticket("BB-2")), "PUN-1")
 	}
 	for _, c := range []struct {
 		name string
@@ -122,6 +98,8 @@ func TestOnlyAKeyedPromptWritesTheLastFocus(t *testing.T) {
 		{"stop", core.Stop{Origin: hand}},
 		{"an agent's touch", core.Touch{Key: "BB-2", Origin: agent, NewEntryID: "EB"}},
 		{"a keyless touch", core.Touch{Origin: prompt}},
+		{"resume", core.Resume{Origin: hand}},
+		{"remove", core.Remove{Key: "BB-2", Origin: hand}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := steps(t, base(), c.cmd).State.LastFocus; got != "PUN-1" {
@@ -129,6 +107,21 @@ func TestOnlyAKeyedPromptWritesTheLastFocus(t *testing.T) {
 			}
 		})
 	}
+	t.Run("recovery", func(t *testing.T) {
+		w := lastFocus(world("06:00", ticket("AA-1", entry("EA", agent, seg("06:00", "")))), "PUN-1")
+		got, events, err := core.Apply(w, core.Touch{Origin: agent}, at("09:30").Time)
+		if err != nil || len(events) != 1 || events[0].Kind != core.EventRecovered {
+			t.Fatalf("want a recovery: err %v events %v", err, events)
+		}
+		if got.State.LastFocus != "PUN-1" {
+			t.Errorf("last focus = %q, want PUN-1 unchanged", got.State.LastFocus)
+		}
+	})
+	t.Run("a prompt with an invalid key is refused and writes nothing", func(t *testing.T) {
+		if _, _, err := core.Apply(base(), core.Touch{Key: "pay roll", Origin: prompt}, at("09:30").Time); !errors.Is(err, core.ErrUsage) {
+			t.Errorf("err = %v, want ErrUsage", err)
+		}
+	})
 	t.Run("a keyed prompt on the running ticket", func(t *testing.T) {
 		if got := steps(t, base(), focus("AA-1")).State.LastFocus; got != "AA-1" {
 			t.Errorf("last focus = %q, want AA-1", got)

@@ -92,7 +92,7 @@ How to read it:
 - An **entry** is one start-to-stop. Its `id` is the key a tracker's worklog is matched to, so a retry can never post twice. `segments` are its counted stretches; a segment with no `endedAt` is open, and the entry is **running**. A closed last segment with no `worklog` is **paused**. `held` and `origin` describe the entry's last change. `recovered` is set by recovery and cleared only by stop.
 - A **worklog** appears when the entry is stopped. `state` is `pending`, `synced` (with `worklogId` and `syncedAt`), `failed` (with `message`, `failedAt`, and `refusedStatus` when the tracker answered with a refusal), or `local` when it was stopped with no tracker: final, and never sent. `timeSpentSeconds` is the time logged (and what the tracker is told), which may differ from the segments if you corrected it.
 - `authFailedAt` at the top appears, with Jira, after a 401 and disappears when a call succeeds or you run `setup`.
-- `lastFocus` at the top is the ticket of your last prompt in a Claude Code session that named one. A prompt moves the timer only when its ticket differs from this. Absent means none yet.
+- `lastFocus` at the top is the ticket of the last touch that named one: a prompt in a Claude Code session, or `punchcard touch KEY`. A prompt moves the timer only when its ticket differs from this. Absent means none yet.
 
 Timestamps are local time with a numeric offset and milliseconds: `2026-10-09T10:20:03.129-0500`. Absent fields are omitted, not written as `null`.
 
