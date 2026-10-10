@@ -85,7 +85,7 @@ func TestFocusMovesATimerOnlyWhenItChanges(t *testing.T) {
 	})
 }
 
-func TestOnlyAKeyedPromptWritesTheLastFocus(t *testing.T) {
+func TestOnlyAKeyedPresenceTouchWritesTheLastFocus(t *testing.T) {
 	base := func() core.World {
 		return lastFocus(world("09:00", ticket("AA-1", entry("EA", agent, seg("09:00", ""))), ticket("BB-2")), "PUN-1")
 	}
@@ -120,6 +120,15 @@ func TestOnlyAKeyedPromptWritesTheLastFocus(t *testing.T) {
 	t.Run("a prompt with an invalid key is refused and writes nothing", func(t *testing.T) {
 		if _, _, err := core.Apply(base(), core.Touch{Key: "pay roll", Origin: prompt}, at("09:30").Time); !errors.Is(err, core.ErrUsage) {
 			t.Errorf("err = %v, want ErrUsage", err)
+		}
+	})
+	t.Run("a keyed touch by hand", func(t *testing.T) {
+		w := steps(t, base(), core.Touch{Key: "BB-2", Origin: hand, NewEntryID: "EB"})
+		if got := w.State.LastFocus; got != "BB-2" {
+			t.Errorf("last focus = %q, want BB-2", got)
+		}
+		if _, e, _ := core.Running(w.State); e.Held {
+			t.Error("a touch by hand held the timer")
 		}
 	})
 	t.Run("a keyed prompt on the running ticket", func(t *testing.T) {
