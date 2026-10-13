@@ -127,11 +127,15 @@ func gitRoot(dir string) string {
 // (feature/ABC-123-thing). It stays this shape whatever the tracker.
 var branchPattern = regexp.MustCompile(`[A-Z][A-Z0-9]+-[0-9]+`)
 
-// branchToken is branchPattern in any case, its project prefix captured.
-var branchToken = regexp.MustCompile(`([A-Za-z][A-Za-z0-9]+)-[0-9]+`)
+// keyShape is branchPattern in any case, its project prefix captured.
+const keyShape = `([A-Za-z][A-Za-z0-9]+)-[0-9]+`
 
-// projectKey is a tracked key with a project prefix (PREFIX-digits).
-var projectKey = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]+)-[0-9]+$`)
+// branchToken finds keyShape anywhere in a branch name; trackedKeyShape
+// is a whole tracked key of that shape (a slug like payroll is not).
+var (
+	branchToken     = regexp.MustCompile(keyShape)
+	trackedKeyShape = regexp.MustCompile(`^` + keyShape + `$`)
+)
 
 // branchKey is the ticket key in dir's current git branch, or "" when
 // dir is not a repository, HEAD is detached, or the branch names no key.
@@ -154,8 +158,9 @@ func keyInBranch(branch string, tracked []string) string {
 		if caps != nil && caps[0] <= m[0] {
 			break
 		}
-		if p, ok := trackedPrefix(branch[m[2]:m[3]], tracked); ok {
-			return p + branch[m[3]:m[1]]
+		prefix, rest := branch[m[2]:m[3]], branch[m[3]:m[1]] // ka, -6629
+		if p, ok := trackedPrefix(prefix, tracked); ok {
+			return p + rest
 		}
 	}
 	if caps != nil {
@@ -165,10 +170,11 @@ func keyInBranch(branch string, tracked []string) string {
 }
 
 // trackedPrefix is the first tracked key's project prefix that equals
-// prefix ignoring case.
+// prefix ignoring case. Without a tracker a project can be on the list
+// in two spellings (ka-1, KA-2); the first in list order wins.
 func trackedPrefix(prefix string, tracked []string) (string, bool) {
 	for _, k := range tracked {
-		if m := projectKey.FindStringSubmatch(k); m != nil && strings.EqualFold(m[1], prefix) {
+		if m := trackedKeyShape.FindStringSubmatch(k); m != nil && strings.EqualFold(m[1], prefix) {
 			return m[1], true
 		}
 	}

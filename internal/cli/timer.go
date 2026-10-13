@@ -94,7 +94,9 @@ func (a *app) touchCmd() *cobra.Command {
 				key = a.key(args[0])
 			case cwd != "":
 				// A plain read for the list the branch rule asks about;
-				// it never waits on the lock, and the apply reports its notices.
+				// it never waits on the lock. Its notices and error are
+				// dropped: the apply below reads again and reports both,
+				// and a failed read leaves an empty list (capitals only).
 				w, _, _ := a.env.Store.Read()
 				here, notices := resolveHere(cwd, a.env.Grammar(), trackedKeys(w.State))
 				a.out.notices(notices)

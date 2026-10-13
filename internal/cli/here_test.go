@@ -206,6 +206,8 @@ func TestALowercaseBranchKeyCountsWhenItsProjectIsTracked(t *testing.T) {
 		{"no tracker, KA-1 tracked", config.TrackerNone, []string{"KA-1"}, "ka-6629-x", key("KA-6629", "branch")},
 		{"the first token that counts", config.TrackerJira, []string{"KA-1"}, "fix-2-ka-6629", key("KA-6629", "branch")},
 		{"capitals inside a word, as before", config.TrackerJira, []string{"OPS-1"}, "fixKA-12", key("KA-12", "branch")},
+		{"two spellings: the first on the list", config.TrackerNone, []string{"ka-1", "KA-2"}, "Ka-6629-x", key("ka-6629", "branch")},
+		{"two spellings, the other first", config.TrackerNone, []string{"KA-2", "ka-1"}, "ka-6629-x", key("KA-6629", "branch")},
 		{"a slug has no project", config.TrackerNone, []string{"payroll"}, "payroll-12", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
