@@ -158,7 +158,7 @@ func keyInBranch(branch string, tracked []string) string {
 		if caps != nil && caps[0] <= m[0] {
 			break
 		}
-		prefix, rest := branch[m[2]:m[3]], branch[m[3]:m[1]] // ka, -6629
+		prefix, rest := branch[m[2]:m[3]], branch[m[3]:m[1]] // web, -4821
 		if p, ok := trackedPrefix(prefix, tracked); ok {
 			return p + rest
 		}
@@ -171,7 +171,7 @@ func keyInBranch(branch string, tracked []string) string {
 
 // trackedPrefix is the first tracked key's project prefix that equals
 // prefix ignoring case. Without a tracker a project can be on the list
-// in two spellings (ka-1, KA-2); the first in list order wins.
+// in two spellings (web-1, WEB-2); the first in list order wins.
 func trackedPrefix(prefix string, tracked []string) (string, bool) {
 	for _, k := range tracked {
 		if m := trackedKeyShape.FindStringSubmatch(k); m != nil && strings.EqualFold(m[1], prefix) {

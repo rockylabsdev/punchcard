@@ -193,21 +193,21 @@ func TestALowercaseBranchKeyCountsWhenItsProjectIsTracked(t *testing.T) {
 		branch  string
 		want    any
 	}{
-		{"lowercase, KA tracked", config.TrackerJira, []string{"KA-1"}, "ka-6629-ship-it", key("KA-6629", "branch")},
-		{"after a slash", config.TrackerJira, []string{"KA-1"}, "feature/ka-123-x", key("KA-123", "branch")},
-		{"mixed case", config.TrackerJira, []string{"KA-1"}, "Ka-77-x", key("KA-77", "branch")},
-		{"lowercase, KA not tracked", config.TrackerJira, []string{"OPS-1"}, "ka-6629-ship-it", nil},
-		{"capitals, KA not tracked", config.TrackerJira, []string{"OPS-1"}, "KA-6629-ship-it", key("KA-6629", "branch")},
-		{"release-2026", config.TrackerJira, []string{"KA-1"}, "release-2026", nil},
-		{"fix-2", config.TrackerJira, []string{"KA-1"}, "fix-2", nil},
+		{"lowercase, WEB tracked", config.TrackerJira, []string{"WEB-1"}, "web-4821-ship-it", key("WEB-4821", "branch")},
+		{"after a slash", config.TrackerJira, []string{"WEB-1"}, "feature/web-123-x", key("WEB-123", "branch")},
+		{"mixed case", config.TrackerJira, []string{"WEB-1"}, "Web-77-x", key("WEB-77", "branch")},
+		{"lowercase, WEB not tracked", config.TrackerJira, []string{"OPS-1"}, "web-4821-ship-it", nil},
+		{"capitals, WEB not tracked", config.TrackerJira, []string{"OPS-1"}, "WEB-4821-ship-it", key("WEB-4821", "branch")},
+		{"release-2026", config.TrackerJira, []string{"WEB-1"}, "release-2026", nil},
+		{"fix-2", config.TrackerJira, []string{"WEB-1"}, "fix-2", nil},
 		{"release-2026, RELEASE tracked", config.TrackerJira, []string{"RELEASE-1"}, "release-2026", key("RELEASE-2026", "branch")},
 		{"fix-2, FIX tracked", config.TrackerJira, []string{"FIX-1"}, "fix-2", key("FIX-2", "branch")},
-		{"no tracker, ka-1 tracked", config.TrackerNone, []string{"ka-1"}, "ka-6629-x", key("ka-6629", "branch")},
-		{"no tracker, KA-1 tracked", config.TrackerNone, []string{"KA-1"}, "ka-6629-x", key("KA-6629", "branch")},
-		{"the first token that counts", config.TrackerJira, []string{"KA-1"}, "fix-2-ka-6629", key("KA-6629", "branch")},
-		{"capitals inside a word, as before", config.TrackerJira, []string{"OPS-1"}, "fixKA-12", key("KA-12", "branch")},
-		{"two spellings: the first on the list", config.TrackerNone, []string{"ka-1", "KA-2"}, "Ka-6629-x", key("ka-6629", "branch")},
-		{"two spellings, the other first", config.TrackerNone, []string{"KA-2", "ka-1"}, "ka-6629-x", key("KA-6629", "branch")},
+		{"no tracker, web-1 tracked", config.TrackerNone, []string{"web-1"}, "web-4821-x", key("web-4821", "branch")},
+		{"no tracker, WEB-1 tracked", config.TrackerNone, []string{"WEB-1"}, "web-4821-x", key("WEB-4821", "branch")},
+		{"the first token that counts", config.TrackerJira, []string{"WEB-1"}, "fix-2-web-4821", key("WEB-4821", "branch")},
+		{"capitals inside a word, as before", config.TrackerJira, []string{"OPS-1"}, "fixWEB-12", key("WEB-12", "branch")},
+		{"two spellings: the first on the list", config.TrackerNone, []string{"web-1", "WEB-2"}, "Web-4821-x", key("web-4821", "branch")},
+		{"two spellings, the other first", config.TrackerNone, []string{"WEB-2", "web-1"}, "web-4821-x", key("WEB-4821", "branch")},
 		{"a slug has no project", config.TrackerNone, []string{"payroll"}, "payroll-12", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -229,15 +229,15 @@ func TestALowercaseBranchKeyCountsWhenItsProjectIsTracked(t *testing.T) {
 }
 
 func TestTouchFocusesOnALowercaseBranchKeyOfATrackedProject(t *testing.T) {
-	repo := gitRepo(t, "ka-6629-x")
+	repo := gitRepo(t, "web-4821-x")
 	h := newHarness(t)
 	h.env["CLAUDECODE"] = "1"
-	h.do("09:00", "start", "KA-1")
+	h.do("09:00", "start", "WEB-1")
 	h.do("09:05", "start", "OPS-1")
 	h.now = at("09:10")
 	r := h.run("touch", "--origin", "prompt", "--cwd", repo)
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
-	wantLines(t, r.stdout, "▶ KA-6629 started")
+	wantLines(t, r.stdout, "▶ WEB-4821 started")
 }
