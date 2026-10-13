@@ -277,18 +277,23 @@ func (r *rig) getenv(k string) string { return r.env[k] }
 func (r *rig) run(answers ...string) int {
 	r.t.Helper()
 	r.ui = &scriptUI{t: r.t, answers: answers}
+	code := Run(r.deps(r.ui))
+	if len(r.ui.answers) > 0 {
+		r.t.Errorf("answers left over: %q\ntranscript:\n%s", r.ui.answers, r.ui.log.String())
+	}
+	return code
+}
+
+// deps is the wizard's world on ui.
+func (r *rig) deps(ui UI) Deps {
 	d := Deps{
-		UI: r.ui, Getenv: r.getenv, Connect: r.jira.connect, Claude: r.claude,
+		UI: ui, Getenv: r.getenv, Connect: r.jira.connect, Claude: r.claude,
 		Store: r.store, Version: "v0.1.0", Now: func() time.Time { return r.now },
 	}
 	if !r.linux {
 		d.Keychain = r.kc
 	}
-	code := Run(d)
-	if len(r.ui.answers) > 0 {
-		r.t.Errorf("answers left over: %q\ntranscript:\n%s", r.ui.answers, r.ui.log.String())
-	}
-	return code
+	return d
 }
 
 func (r *rig) transcript() string { return r.ui.log.String() }

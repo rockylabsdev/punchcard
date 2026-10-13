@@ -10,9 +10,11 @@ import (
 	"sync"
 
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 	"github.com/j-dsmith/punchcard/internal/tui"
 )
@@ -190,9 +192,11 @@ func paint(l string) string {
 	return l
 }
 
-// answered leaves the step on screen once its form has gone.
+// answered leaves the step on screen once its form has gone. The
+// answer is in the terminal's own foreground: ANSI 8 is near the
+// background on many dark themes.
 func (t *Terminal) answered(title, answer string) {
-	t.print(tGutter.Render("◇") + "  " + title + "\n" + tGutter.Render("│") + "  " + tDim.Render(answer) + "\n" + tGutter.Render("│") + "\n")
+	t.print(tGutter.Render("◇") + "  " + title + "\n" + tGutter.Render("│") + "  " + answer + "\n" + tGutter.Render("│") + "\n")
 }
 
 func (t *Terminal) keys() *huh.KeyMap {
@@ -202,30 +206,68 @@ func (t *Terminal) keys() *huh.KeyMap {
 }
 
 func (t *Terminal) run(field huh.Field) error {
-	err := huh.NewForm(huh.NewGroup(field)).
-		WithShowHelp(false).WithWidth(t.width).
+	// height is the last frame Huh drew. On submit Huh only clears from
+	// the cursor, on that frame's last line, down; the rest of the frame
+	// is erased here. Should a later Huh clear it all, this is a no-op.
+	// Huh calls the hook before it fills the view in, so the hook asks
+	// the form for the frame itself.
+	height := 0
+	f := huh.NewForm(huh.NewGroup(field))
+	err := f.WithShowHelp(false).WithWidth(t.width).
 		WithKeyMap(t.keys()).
 		WithTheme(huh.ThemeFunc(t.theme)).
 		WithInput(t.in).
 		WithOutput(t.tty).
+		WithViewHook(func(v tea.View) tea.View {
+			if frame := f.View(); frame != "" {
+				height = lipgloss.Height(frame)
+			}
+			return v
+		}).
 		Run()
 	if errors.Is(err, huh.ErrUserAborted) {
 		return ErrAborted
 	}
+	if err == nil && height > 1 {
+		t.mu.Lock()
+		fmt.Fprint(t.tty, ansi.CursorUp(height-1)+"\r"+ansi.EraseScreenBelow)
+		t.mu.Unlock()
+	}
 	return err
 }
 
+// typed is an input's value. Huh sets it on its update loop but runs
+// a DescriptionFunc on a goroutine of its own, so the two meet under
+// mu. The binding Huh hashes is &value alone (hashing reads the mutex
+// too, unguarded), on the update loop, where value is also set.
+type typed struct {
+	mu    sync.Mutex
+	value string
+}
+
+func (a *typed) Get() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.value
+}
+
+func (a *typed) Set(v string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.value = v
+}
+
 func (t *Terminal) Ask(f Field) (string, error) {
-	v := f.Value
-	in := huh.NewInput().Title(f.Title).Placeholder(f.Placeholder).Value(&v)
+	acc := &typed{value: f.Value}
+	in := huh.NewInput().Title(f.Title).Placeholder(f.Placeholder).Accessor(acc)
 	note := strings.Join(f.Note, "\n")
 	if f.Echo != nil {
 		in = in.DescriptionFunc(func() string {
-			if e := f.Echo(v); e != "" {
+			if e := f.Echo(acc.Get()); e != "" {
 				return strings.TrimLeft(note+"\n"+e, "\n")
 			}
 			return note
-		}, &v)
+		}, &acc.value)
 	} else if note != "" {
 		in = in.Description(note)
 	}
@@ -238,6 +280,7 @@ func (t *Terminal) Ask(f Field) (string, error) {
 	if err := t.run(in); err != nil {
 		return "", err
 	}
+	v := acc.Get()
 	shown := strings.TrimSpace(v)
 	switch {
 	case f.Secret && shown == "":
