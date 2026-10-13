@@ -6,7 +6,7 @@
     {
       "name": "punchcard",
       "description": "Band above the prompt, /punch, and a gate on agent stops",
-      "source": { "source": "git-subdir", "url": "j-dsmith/punchcard", "path": "plugin", "ref": "v0.1.0" }
+      "source": { "source": "git-subdir", "url": "j-dsmith/punchcard", "path": "plugin", "ref": "v0.1.1" }
     }
   ]
 }
