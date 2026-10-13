@@ -12,8 +12,8 @@ import (
 
 // awayDialog is -: cut time the user was away out of the selected open
 // entry. From is when they left (a pause at that time), To when they came
-// back (a resume at that time); To empty leaves the entry paused from
-// From. On a paused entry From starts at the pause, so editing it moves
+// back (a resume at that time, refused while another ticket runs); To
+// empty leaves the entry paused from From. Enter is one core.Away. On a paused entry From starts at the pause, so editing it moves
 // the pause. Both take core.ParseAt's forms. The last line previews the
 // cut, or says why core would refuse it: the preview is the same Apply.
 type awayDialog struct {
@@ -62,44 +62,47 @@ func (d awayDialog) bindings() []binding {
 	return []binding{{"enter", "cut"}, {"tab", "field"}, {"esc", "cancel"}}
 }
 
-// commands are the changes the fields ask for: a pause at From, then,
-// if To is set, a start at To. An error says what cannot be read.
-func (d awayDialog) commands(m Model) ([]core.Command, error) {
-	var cmds []core.Command
+// cut is the one change the fields ask for, a core.Away: a pause at
+// From (none when From is left at the pause), then, if To is set, a
+// resume at To. A zero Away asks for nothing. An error says what cannot
+// be read.
+func (d awayDialog) cut(m Model) (core.Away, error) {
+	c := core.Away{Key: d.ticket, Origin: core.OriginHand}
 	if d.prefill == "" || strings.TrimSpace(d.from.Value()) != d.prefill {
 		from, err := core.ParseAt(d.from.Value(), m.now)
 		if err != nil {
-			return nil, fmt.Errorf("from? try 10:00 or -45m")
+			return core.Away{}, fmt.Errorf("from? try 10:00 or -45m")
 		}
-		cmds = append(cmds, core.Pause{Key: d.ticket, At: from, Origin: core.OriginHand})
+		c.From = from
 	}
-	if strings.TrimSpace(d.to.Value()) == "" {
-		return cmds, nil
+	if strings.TrimSpace(d.to.Value()) != "" {
+		to, err := core.ParseAt(d.to.Value(), m.now)
+		if err != nil {
+			return core.Away{}, fmt.Errorf("to? try 10:45 or -5m, or leave it empty for now")
+		}
+		c.To = to
 	}
-	to, err := core.ParseAt(d.to.Value(), m.now)
-	if err != nil {
-		return nil, fmt.Errorf("to? try 10:45 or -5m, or leave it empty for now")
-	}
-	t, _ := m.tracked(d.ticket)
-	return append(cmds, core.Start{Key: d.ticket, Summary: t.Summary, Unverified: t.Unverified,
-		Origin: core.OriginHand, At: to, Grammar: m.grammar}), nil
+	return c, nil
 }
 
-// preview applies the commands to what is shown, as the store would, and
-// returns the entry's elapsed before and after.
-func (d awayDialog) preview(m Model) (before, after time.Duration, err error) {
-	cmds, err := d.commands(m)
-	if err != nil {
-		return 0, 0, err
+// asks says c changes anything.
+func asks(c core.Away) bool { return !c.From.IsZero() || !c.To.IsZero() }
+
+// preview applies the cut to what is shown, as the store would, and
+// returns it with the entry's elapsed before and after.
+func (d awayDialog) preview(m Model) (c core.Away, before, after time.Duration, err error) {
+	if c, err = d.cut(m); err != nil {
+		return c, 0, 0, err
 	}
 	w := m.shown()
 	before = entryElapsed(w, d.ticket, d.entryID, m.now)
-	for _, c := range cmds {
-		if w, _, err = core.Apply(w, c, m.now); err != nil {
-			return 0, 0, err
-		}
+	if !asks(c) {
+		return c, before, before, nil
 	}
-	return before, entryElapsed(w, d.ticket, d.entryID, m.now), nil
+	if w, _, err = core.Apply(w, c, m.now); err != nil {
+		return c, 0, 0, err
+	}
+	return c, before, entryElapsed(w, d.ticket, d.entryID, m.now), nil
 }
 
 func entryElapsed(w core.World, key, id string, now time.Time) time.Duration {
@@ -133,27 +136,16 @@ func (d awayDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.dlg = d
 		return m, nil
 	case "enter":
-		if _, _, err := d.preview(m); err != nil {
+		c, _, _, err := d.preview(m)
+		if err != nil {
 			m.dlg = d // the preview line already says why
 			return m, nil
 		}
-		cmds, _ := d.commands(m)
-		m.dlg = nil // nothing asked (a pause left where it was): just close
-		var batch []tea.Cmd
-		for i, c := range cmds {
-			if s, ok := c.(core.Start); ok {
-				s.NewEntryID = m.newID() // unused: the entry is open
-				c = s
-			}
-			say := ""
-			if i == len(cmds)-1 {
-				say = "cut time away from " + d.ticket
-			}
-			var cmd tea.Cmd
-			m, cmd = m.enqueue(intent{kind: intentCommand, cmd: c, say: say})
-			batch = append(batch, cmd)
+		m.dlg = nil
+		if !asks(c) {
+			return m, nil // a pause left where it was: just close
 		}
-		return m, tea.Batch(batch...)
+		return m.enqueue(intent{kind: intentCommand, cmd: c, say: "cut time away from " + d.ticket})
 	}
 	var cmd tea.Cmd
 	if d.onTo {
@@ -175,13 +167,12 @@ func (d awayDialog) body(m Model, w int) []string {
 	if strings.TrimSpace(d.from.Value()) == "" {
 		return append(lines, wrap(sDim.Render("when did you leave? 10:00 or -45m"), w)...)
 	}
-	before, after, err := d.preview(m)
+	c, before, after, err := d.preview(m)
 	if err != nil {
 		msg := strings.TrimPrefix(err.Error(), core.ErrUsage.Error()+": ")
 		return append(lines, wrap(sFail.Render(gFailed+" "+msg), w)...)
 	}
-	cmds, _ := d.commands(m)
-	if len(cmds) == 0 {
+	if !asks(c) {
 		return append(lines, wrap(sDim.Render("change From to move the pause, or set To to resume"), w)...)
 	}
 	verb, diff := "cuts", before-after

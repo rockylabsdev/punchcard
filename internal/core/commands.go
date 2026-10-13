@@ -69,6 +69,18 @@ type Resume struct {
 	Grammar tracker.Grammar
 }
 
+// Away cuts time the user was away out of Key's open entry, in one
+// transition: a Pause at From (Key's, as pause --at), then, when To is
+// set, a resume of Key's paused entry at To, as resume --at does, which
+// refuses while any timer runs. From zero leaves a paused entry's pause
+// where it is. Either half refused refuses the whole cut: nothing
+// changes. It is the TUI's Away dialog.
+type Away struct {
+	Key      string
+	From, To time.Time
+	Origin   Origin
+}
+
 // Stop ends an entry and produces its Worklog: pending, or local when
 // Local says no tracker is in effect. With no Key it
 // targets the running entry, else the single paused one (several paused:
@@ -191,6 +203,7 @@ type Verify struct {
 func (Start) command()             {}
 func (Pause) command()             {}
 func (Resume) command()            {}
+func (Away) command()              {}
 func (Stop) command()              {}
 func (Add) command()               {}
 func (Remove) command()            {}

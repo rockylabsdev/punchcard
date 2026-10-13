@@ -33,6 +33,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 	case Resume:
 		origin = c.Origin
 		err = a.resume(c)
+	case Away:
+		origin, err = c.Origin, a.away(c)
 	case Stop:
 		origin, err = c.Origin, a.stop(c)
 	case Add:
@@ -290,10 +292,9 @@ func (a *applier) resume(c Resume) error {
 	if c.Key != "" {
 		return a.start(Start{Key: c.Key, At: c.At, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
 	}
-	named := !c.At.IsZero()
 	if t, e := a.running(); e != nil {
-		if named {
-			return fmt.Errorf("%w: %s is running; resume at a time reopens a paused entry", ErrUsage, t.Key)
+		if !c.At.IsZero() {
+			return a.refuseResumeAt(t)
 		}
 		return nil
 	}
@@ -301,12 +302,21 @@ func (a *applier) resume(c Resume) error {
 	if i < 0 {
 		return fmt.Errorf("%w: nothing is paused", ErrNoTimer)
 	}
-	t, e := &a.w.State.TrackedTickets[i], &a.w.State.TrackedTickets[i].Entries[j]
-	if !named {
-		a.openAt(e, c.Origin, a.now)
+	t := &a.w.State.TrackedTickets[i]
+	if c.At.IsZero() {
+		a.openAt(&t.Entries[j], c.Origin, a.now)
 		return nil
 	}
-	when := At(c.At)
+	return a.resumeAt(t, &t.Entries[j], At(c.At), c.Origin)
+}
+
+// refuseResumeAt is resume --at's refusal while t runs.
+func (a *applier) refuseResumeAt(t *TrackedTicket) error {
+	return fmt.Errorf("%w: %s is running; resume at a time reopens a paused entry", ErrUsage, t.Key)
+}
+
+// resumeAt reopens t's paused entry e at when, a time the user named.
+func (a *applier) resumeAt(t *TrackedTicket, e *TimeEntry, when Timestamp, origin Origin) error {
 	if err := a.notFuture(when); err != nil {
 		return err
 	}
@@ -316,9 +326,30 @@ func (a *applier) resume(c Resume) error {
 	if err := a.overlaps(when, a.now, nil); err != nil {
 		return err
 	}
-	a.openAt(e, c.Origin, when)
+	a.openAt(e, origin, when)
 	a.events = append(a.events, Event{Kind: EventStarted, Key: t.Key, At: when})
 	return nil
+}
+
+// away is Away: pauseAt From, then resumeAt To, in this one transition.
+func (a *applier) away(c Away) error {
+	if !c.From.IsZero() {
+		if err := a.pauseAt(Pause{Key: c.Key, At: c.From, Origin: c.Origin}); err != nil {
+			return err
+		}
+	}
+	if c.To.IsZero() {
+		return nil
+	}
+	if t, e := a.running(); e != nil {
+		return a.refuseResumeAt(t)
+	}
+	t := a.listed(c.Key)
+	e := openEntry(t)
+	if e == nil || len(e.Segments) == 0 {
+		return fmt.Errorf("%w: %s has nothing paused", ErrNoTimer, c.Key)
+	}
+	return a.resumeAt(t, e, At(c.To), c.Origin)
 }
 
 func (a *applier) stop(c Stop) error {
