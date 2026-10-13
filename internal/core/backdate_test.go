@@ -50,6 +50,16 @@ func TestPauseAt(t *testing.T) {
 				Message: "the 30s from 09:59 was under a minute, so it was dropped"}},
 		},
 		{
+			name: "a cut at the segment's own start drops it like any stub",
+			w: world("10:50", ticket("AA-1", entry("EA", hand,
+				cut("08:58", "10:00"), seg("10:45", "")))),
+			cmd:  core.Pause{Origin: hand, At: at("10:45").Time},
+			now:  "10:50",
+			want: state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
+			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:45"),
+				Message: "the 0s from 10:45 was under a minute, so it was dropped"}},
+		},
+		{
 			name: "a stub that is the entry's only segment is closed at its own start",
 			w:    world("10:50", ticket("AA-1", entry("EA", hand, seg("09:59:30", "")))),
 			cmd:  core.Pause{Origin: hand, At: at("10:00").Time},

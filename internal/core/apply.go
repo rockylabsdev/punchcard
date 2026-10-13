@@ -213,14 +213,15 @@ func (a *applier) pauseAt(c Pause) error {
 }
 
 // closeAt closes e's last segment at when, a time the user named, marked
-// cut if cut. A segment that would be left under a minute is dropped,
-// or with no other segment closed at its own start; the returned note
-// says so ("" otherwise).
+// cut if cut. A segment that would be left under a minute, zero
+// included, is dropped, or with no other segment closed at its own
+// start; the returned note says so ("" otherwise). Callers have refused
+// a when before the segment started.
 func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
 	i := len(e.Segments) - 1
 	s := &e.Segments[i]
 	d := when.Sub(s.StartedAt.Time)
-	if d <= 0 || d >= time.Minute {
+	if d >= time.Minute {
 		s.EndedAt, s.Cut = when, cut
 		return ""
 	}
