@@ -70,21 +70,19 @@ Presence says nothing about *which* ticket the user is on. That is **focus**.
 
 Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs: a `.punchcard` file naming a key, found at the nearest ancestor of the session's directory within its repository, or failing that a ticket key in the git branch name (in lower case only for a project already on the list, spelled as that project is). Nothing else names a session's ticket. A session whose ticket cannot be told gives presence but never focus.
 
-Focus from a prompt moves a running timer only when it **changes**: when the prompt's session ticket differs from the **last focus**. A `punchcard touch KEY` typed by hand is the same call and follows the same rule; it never holds. Repeating the same focus prompt after prompt moves nothing, so a timer the user switched away from the session's ticket stays switched until focus changes.
+The timer runs on the ticket of the session the user last prompted in. If they move it elsewhere themselves, by hand or by asking an agent, it stays there until they prompt in a session on a different ticket. Nothing starts a timer except the user.
+
+That is: focus from a prompt moves a running timer only when it **changes**, when the prompt's session ticket differs from the **last focus**, and then it moves the timer whoever set it, by hand, by prompt or by agent. The user's newest signal outranks their older one. It never starts a timer when nothing runs, and a paused timer counts as nothing running. A `punchcard touch KEY` typed by hand is the same call and follows the same rule; it never sets the timer by hand. Repeating the same focus prompt after prompt moves nothing, so a timer the user moved away from the session's ticket stays moved until focus changes.
 
 ### Last focus
 
 The session ticket of the user's most recent prompt that had one, or the key of a more recent `punchcard touch KEY` typed by hand. Every such prompt or touch records it, whether or not it moved the timer. Nothing else writes it: not a start or switch by hand or by an agent, not an agent's touch, not a pause or stop, and not a prompt from a session whose ticket cannot be told. It never expires.
 
-### Held
-
-A running timer the user set by hand. Focus from a prompt never moves a held timer. Only another act by hand does. A timer started automatically, from a prompt's focus, is not held and follows the user's focus when it changes from session to session.
-
 ### Origin
 
 Who caused a change: **hand** (the user, at a terminal or in the TUI), **prompt** (the user's own prompt in a Claude Code session, relayed as focus), or **agent** (an agent acting on its own).
 
-Origin decides two things. Only **hand** makes a timer **held**. **hand** and **prompt** are presence; **agent** is not. Origin never decides recovery: any change that finds a stale timer recovers it first, whoever caused the change.
+Origin decides two things. Only **hand** sets a timer **by hand**: an agent cannot move a timer set by hand (its start, pause and resume refuse it), while the user's own focus can, when it changes. A timer set by focus or by an agent is not by hand, and an agent may move it. **hand** and **prompt** are presence; **agent** is not. Origin never decides recovery: any change that finds a stale timer recovers it first, whoever caused the change.
 
 A command the user types into an agent's shell counts as **agent**. Origin is about who issued the change, as far as Punchcard can tell. It is not about whose fingers were on the keys.
 

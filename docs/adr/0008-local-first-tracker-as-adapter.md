@@ -50,3 +50,7 @@ The reason is false positives. Lowercase branch names are full of dash-number wo
 - **Considered: case-insensitive anywhere.** Rejected for now: every dash-number word becomes a ticket. Revisit if the known-project gate proves cumbersome.
 - **Considered: lowercase only at the start of the branch or of a `/` segment.** Rejected: `release-2026` and `fix-2` start there too.
 - **Considered: a configured list of project keys.** Rejected: a setup question and a config field to answer what the ticket list already knows.
+
+## Amendment, 2026-10-12: focus moves a timer set by hand
+
+"Never moves a held one" above is no longer the rule. A change of focus moves the running timer whoever set it; focus still never starts one from idle. See ADR 0010.

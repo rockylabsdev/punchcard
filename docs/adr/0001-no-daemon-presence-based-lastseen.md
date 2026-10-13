@@ -16,3 +16,7 @@ We rejected a daemon because its heartbeat measures the wrong thing. It tells yo
 - **Reads (`status`, `ls`) are pure.** They report a timer as `stale` with its capped elapsed, but never write.
 - **Stretches longer than the threshold with no input anywhere get capped.** The duration edit at stop is where that gets corrected, and the recovered marker stays until stop (not until resume) so the user gets there.
 - `heartbeat.json` is no longer written on a 30-second tick. It is written on presence events, rate-limited.
+
+## Amendment, 2026-10-12: focus moves a timer set by hand
+
+A timer set by hand is no longer **held** against the user's own prompts. A change of focus moves the running timer whoever set it; "held" is renamed **by hand** and means only that an agent cannot move it. See ADR 0010.
