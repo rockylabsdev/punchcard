@@ -140,7 +140,7 @@ func TestApplyTouch(t *testing.T) {
 			lastSeen: at("09:30"),
 		},
 		{
-			name:     "an agent's touch on another ticket set by hand is not presence",
+			name:     "an agent's touch on another ticket, with the timer set by hand, is not presence",
 			w:        byHandA(),
 			cmd:      core.Touch{Key: "BB-2", Origin: agent, NewEntryID: "EB"},
 			want:     byHandA().State,

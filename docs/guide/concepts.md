@@ -38,7 +38,7 @@ In the TUI, `space` on the running row pauses it, `p` pauses from any row, and `
 
 ## By hand
 
-A timer you start **by hand** (the CLI in your own shell, the TUI, or `/punch` in Claude Code) is **set by hand**. That means one thing: an agent can't move it. An agent's `start`, `pause` and `resume` refuse it. Your own focus still can: the timer runs on the ticket of the session you last prompted in, and when you prompt in a session on a different ticket, it moves there, whoever set it. A timer started by an agent, or moved by one of your prompts, is not set by hand, and an agent may move it too.
+A timer you start **by hand** (the CLI in your own shell, the TUI, or `/punch` in Claude Code) is **set by hand**: an agent can't move it. An agent's `start`, `pause` and `resume` refuse it. Your own focus still can: the timer runs on the ticket of the session you last prompted in, and when you prompt in a session on a different ticket, it moves there, whoever set it. A timer started by an agent, or moved by one of your prompts, is not set by hand, and an agent may move it too.
 
 *Scenario:* You are in a Claude Code session on branch `feature/OPS-77-certs` (or in a directory whose `.punchcard` names `OPS-77`), and you run `punchcard start PUN-142` yourself. `punchcard status` shows the words `by hand` on the running line. Further prompts in the `OPS-77` session leave `PUN-142` running: your focus has not changed. Then you switch to a session on `PUN-150` and send a prompt: the timer moves to `PUN-150`, and is no longer set by hand.
 

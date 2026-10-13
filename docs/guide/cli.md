@@ -100,7 +100,7 @@ $ punchcard start ABC-123
 ▶ ABC-123 running  0:00:00  by hand
 ```
 
-Starting the ticket that already runs changes nothing, except that by hand it sets by hand a timer an agent or a prompt set, so an agent can no longer move it:
+Starting the ticket that already runs changes nothing, except that a start by hand marks an agent's or a prompt's timer as set by hand, so an agent can no longer move it:
 
 ```
 $ punchcard start DEMO-1
@@ -544,7 +544,7 @@ The reasons: [ADR 0004](../adr/0004-cli-contract-exit-codes-json-envelope-origin
 | 0 | `ok` | Done, or a harmless no-op. Reads (`status`, `ls`, `log`) always exit 0. | Carry on. |
 | 1 | `internal` | Unexpected error, failed write, no data directory. | Show `error.message`; nothing changed. |
 | 3 | `not_configured` | Jira is the tracker, a command needed it, and there are no credentials (or the Keychain failed). Also `sync` with no tracker, which reports that there is none. | With Jira: run `punchcard setup`. Without a tracker: nothing to do, every worklog is logged. Timers are fine either way. |
-| 4 | `no_timer` | Nothing running or paused to act on, an ambiguous target (`data.candidates` lists them), a ticket not on the list, a timer set by hand from an agent (`error.code: by_hand`), or `rm` on unlogged time. | Read `error.code`; name a key, or ask the user. |
+| 4 | `no_timer` | Nothing running or paused to act on, an ambiguous target (`data.candidates` lists them), a ticket not on the list, an agent acting on a timer set by hand (`error.code: by_hand`), or `rm` on unlogged time. | Read `error.code`; name a key, or ask the user. |
 | 5 | `ticket_not_found` | The tracker looked the key up and has no such ticket (Jira answered 404). Nothing changed. Never without a tracker. | Check the key. |
 | 6 | `needs_confirmation` | The stop is a proposal. `data.preview` is the exact worklog. | Show the preview. An agent reruns with `--yes`; a recovered entry needs `--duration`. |
 | 7 | `sync_pending` | **Partial success**, `ok: true`. The stop happened; its worklog is pending or failed. Also `sync` with worklogs remaining. Never without a tracker. | Run `sync` later. **Never `stop` again.** |
@@ -604,7 +604,7 @@ Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no 
 | `added` | A start or a focus put an untracked ticket on the list. |
 | `paused` | Starting this ticket's rival paused it. |
 | `started` | Focus moved the timer to this ticket. |
-| `byHand` | A start by hand set the running timer by hand. |
+| `byHand` | A start by hand made the running timer one an agent can't move. |
 | `recovered` | A stale timer was capped; `at` is where. |
 | `synced` | The tracker took the worklog. |
 | `syncFailed` | It did not; `message` says why. |
