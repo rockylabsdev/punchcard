@@ -182,3 +182,60 @@ func TestStatusWithoutCwdHasNoHere(t *testing.T) {
 		t.Errorf("here without --cwd: %s", r.stdout)
 	}
 }
+
+// #48: a branch token not in capitals counts only when its project is
+// already on the list, and is spelled as that project is.
+func TestALowercaseBranchKeyCountsWhenItsProjectIsTracked(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		tracker config.Tracker
+		tracked []string
+		branch  string
+		want    any
+	}{
+		{"lowercase, KA tracked", config.TrackerJira, []string{"KA-1"}, "ka-6629-ship-it", key("KA-6629", "branch")},
+		{"after a slash", config.TrackerJira, []string{"KA-1"}, "feature/ka-123-x", key("KA-123", "branch")},
+		{"mixed case", config.TrackerJira, []string{"KA-1"}, "Ka-77-x", key("KA-77", "branch")},
+		{"lowercase, KA not tracked", config.TrackerJira, []string{"OPS-1"}, "ka-6629-ship-it", nil},
+		{"capitals, KA not tracked", config.TrackerJira, []string{"OPS-1"}, "KA-6629-ship-it", key("KA-6629", "branch")},
+		{"release-2026", config.TrackerJira, []string{"KA-1"}, "release-2026", nil},
+		{"fix-2", config.TrackerJira, []string{"KA-1"}, "fix-2", nil},
+		{"release-2026, RELEASE tracked", config.TrackerJira, []string{"RELEASE-1"}, "release-2026", key("RELEASE-2026", "branch")},
+		{"fix-2, FIX tracked", config.TrackerJira, []string{"FIX-1"}, "fix-2", key("FIX-2", "branch")},
+		{"no tracker, ka-1 tracked", config.TrackerNone, []string{"ka-1"}, "ka-6629-x", key("ka-6629", "branch")},
+		{"no tracker, KA-1 tracked", config.TrackerNone, []string{"KA-1"}, "ka-6629-x", key("KA-6629", "branch")},
+		{"the first token that counts", config.TrackerJira, []string{"KA-1"}, "fix-2-ka-6629", key("KA-6629", "branch")},
+		{"capitals inside a word, as before", config.TrackerJira, []string{"OPS-1"}, "fixKA-12", key("KA-12", "branch")},
+		{"a slug has no project", config.TrackerNone, []string{"payroll"}, "payroll-12", nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := gitRepo(t, c.branch)
+			h := newHarness(t)
+			h.tracker = c.tracker
+			for _, k := range c.tracked {
+				h.do("09:00", "start", k)
+			}
+			got, notices := h.here(repo)
+			if !reflect.DeepEqual(got, c.want) {
+				t.Errorf("here = %v, want %v", got, c.want)
+			}
+			if notices != nil {
+				t.Errorf("notices = %v, want none", notices)
+			}
+		})
+	}
+}
+
+func TestTouchFocusesOnALowercaseBranchKeyOfATrackedProject(t *testing.T) {
+	repo := gitRepo(t, "ka-6629-x")
+	h := newHarness(t)
+	h.env["CLAUDECODE"] = "1"
+	h.do("09:00", "start", "KA-1")
+	h.do("09:05", "start", "OPS-1")
+	h.now = at("09:10")
+	r := h.run("touch", "--origin", "prompt", "--cwd", repo)
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	wantLines(t, r.stdout, "▶ KA-6629 started")
+}

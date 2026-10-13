@@ -317,7 +317,7 @@ A directory's key comes from, in order:
    payroll
    ```
 
-2. **The git branch**: the first `ABC-123`-shaped token in its name (`feature/DEMO-2-fix` names `DEMO-2`).
+2. **The git branch**: the first `ABC-123`-shaped token in its name (`feature/DEMO-2-fix` names `DEMO-2`). A lowercase or mixed-case token (`feature/demo-2-fix`) counts only once its project is on the list, spelled as the tracked ticket's project is (`DEMO-2` with `DEMO-1` tracked); until then it names nothing, so `release-2026` is never a ticket by accident.
 
 A `.punchcard` whose line is not a valid key under the current tracker (`pay roll` anywhere, or `payroll` with Jira) is skipped with a notice on stderr, repeated in the envelope's `notices`, and the branch decides:
 

@@ -53,7 +53,7 @@ func (a *app) status(shortForm bool, cwd string) error {
 	}
 	rep := a.link(d)
 	if cwd != "" {
-		here, notices := resolveHere(cwd, a.env.Grammar())
+		here, notices := resolveHere(cwd, a.env.Grammar(), trackedKeys(w.State))
 		a.out.notices(notices)
 		rep.Here = here
 	}

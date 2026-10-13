@@ -35,7 +35,7 @@ Remove it with `claude plugin uninstall punchcard@punchcard`.
 The mod has no rule of its own: it asks `punchcard status --json --cwd <session directory>` and reads `data.here`, the directory's key. The binary answers in this order:
 
 1. **A `.punchcard` file**, in the directory or the nearest ancestor that has one, up to and including the git repository's root (the filesystem root outside a repository). See [`.punchcard` files](#punchcard-files).
-2. **The git branch.** The first thing shaped like `ABC-123` (capital letters and digits, a dash, digits) in the branch name. `feature/ABC-123-login` names `ABC-123`.
+2. **The git branch.** The first thing shaped like `ABC-123` (letters and digits, a dash, digits) in the branch name. `feature/ABC-123-login` names `ABC-123`. In capitals it always counts. In lower or mixed case it counts only once its project is on the list, and is spelled as that project is: with `ABC-1` tracked, `feature/abc-123-login` names `ABC-123`. Until then it names nothing, so `release-2026` and `fix-2` are not tickets; start the project's first ticket by hand, or add a `.punchcard`.
 
 `here.source` says which one answered (`"file"` or `"branch"`); `here` is `null` when neither names a key. Nothing else names a session's ticket: not the directory name, not an Orca work item, not the conversation. A session on `main` with no `.punchcard` has no ticket.
 

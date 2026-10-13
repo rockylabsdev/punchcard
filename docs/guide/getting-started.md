@@ -86,7 +86,7 @@ $ cat .punchcard
 payroll
 ```
 
-The Claude Code plugin then keeps the timer on `payroll` while you work in that repository, whatever branch is checked out. Without a file, it uses an `ABC-123`-shaped key in the git branch name. See [`.punchcard` files](claude-code.md#punchcard-files).
+The Claude Code plugin then keeps the timer on `payroll` while you work in that repository, whatever branch is checked out. Without a file, it uses an `ABC-123`-shaped key in the git branch name; a lowercase one (`abc-123-login`) counts once a ticket of its project is on the list. See [`.punchcard` files](claude-code.md#punchcard-files).
 
 ## 6. The Claude Code plugin, and a tracker (optional)
 

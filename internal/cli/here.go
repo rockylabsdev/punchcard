@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/tracker"
 )
 
@@ -35,10 +36,10 @@ const (
 // .punchcard at dir or an ancestor wins, looking no higher than the git
 // repository root (or the filesystem root outside a repository). If its
 // first meaningful line is a key under g, that is the key; if not, a
-// notice names the file and why, and the branch rule decides: the first
-// ABC-123-shaped token in the current branch. Nil when neither names a
+// notice names the file and why, and the branch rule decides (see
+// branchKey; tracked is the keys on the list). Nil when neither names a
 // key. The plugin has no key rule of its own; it asks status for this.
-func resolveHere(dir string, g tracker.Grammar) (*Here, []string) {
+func resolveHere(dir string, g tracker.Grammar, tracked []string) (*Here, []string) {
 	if dir == "" {
 		return nil, nil
 	}
@@ -54,10 +55,19 @@ func resolveHere(dir string, g tracker.Grammar) (*Here, []string) {
 			return &Here{Key: k, Source: HereFile}, nil
 		}
 	}
-	if k := branchKey(dir); k != "" && g.Valid(g.Normalize(k)) {
+	if k := branchKey(dir, tracked); k != "" && g.Valid(g.Normalize(k)) {
 		return &Here{Key: g.Normalize(k), Source: HereBranch}, notices
 	}
 	return nil, notices
+}
+
+// trackedKeys is the keys on st's list, for the branch rule.
+func trackedKeys(st core.State) []string {
+	keys := make([]string, len(st.TrackedTickets))
+	for i, t := range st.TrackedTickets {
+		keys[i] = t.Key
+	}
+	return keys
 }
 
 // nearestPunchcard finds the .punchcard nearest dir and its first line
@@ -117,14 +127,52 @@ func gitRoot(dir string) string {
 // (feature/ABC-123-thing). It stays this shape whatever the tracker.
 var branchPattern = regexp.MustCompile(`[A-Z][A-Z0-9]+-[0-9]+`)
 
+// branchToken is branchPattern in any case, its project prefix captured.
+var branchToken = regexp.MustCompile(`([A-Za-z][A-Za-z0-9]+)-[0-9]+`)
+
+// projectKey is a tracked key with a project prefix (PREFIX-digits).
+var projectKey = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]+)-[0-9]+$`)
+
 // branchKey is the ticket key in dir's current git branch, or "" when
 // dir is not a repository, HEAD is detached, or the branch names no key.
-func branchKey(dir string) string {
+func branchKey(dir string, tracked []string) string {
 	out, err := git(dir, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil {
 		return ""
 	}
-	return branchPattern.FindString(strings.TrimSpace(out))
+	return keyInBranch(strings.TrimSpace(out), tracked)
+}
+
+// keyInBranch is the first token in branch, left to right, that counts.
+// An all-capitals token always counts. Any other counts only when its
+// project prefix matches, ignoring case, the prefix of a tracked key,
+// and is then spelled with that prefix (ADR 0008, amended for #48), so
+// release-2026 and fix-2 name nothing unless their project is tracked.
+func keyInBranch(branch string, tracked []string) string {
+	caps := branchPattern.FindStringIndex(branch)
+	for _, m := range branchToken.FindAllStringSubmatchIndex(branch, -1) {
+		if caps != nil && caps[0] <= m[0] {
+			break
+		}
+		if p, ok := trackedPrefix(branch[m[2]:m[3]], tracked); ok {
+			return p + branch[m[3]:m[1]]
+		}
+	}
+	if caps != nil {
+		return branch[caps[0]:caps[1]]
+	}
+	return ""
+}
+
+// trackedPrefix is the first tracked key's project prefix that equals
+// prefix ignoring case.
+func trackedPrefix(prefix string, tracked []string) (string, bool) {
+	for _, k := range tracked {
+		if m := projectKey.FindStringSubmatch(k); m != nil && strings.EqualFold(m[1], prefix) {
+			return m[1], true
+		}
+	}
+	return "", false
 }
 
 // git runs one git query in dir. touch runs on every prompt, so a git
