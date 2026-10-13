@@ -1,10 +1,6 @@
 package tui
 
-import (
-	"time"
-
-	"github.com/j-dsmith/punchcard/internal/core"
-)
+import "github.com/j-dsmith/punchcard/internal/core"
 
 // stateOf is t's timer state as shown: the core's, over the shown World,
 // where a stale timer already appears recovered (so never stale).
@@ -23,13 +19,11 @@ func recoveredPause(t core.TrackedTicket) bool {
 // The title carries the day's total.
 func (m Model) ticketsPane(w, h int) []string {
 	rows := m.rows()
-	var total time.Duration
 	keyW := 9
 	for _, t := range rows {
-		total += core.TimeToday(t, m.now)
 		keyW = max(keyW, len(t.Key)+1)
 	}
-	title := "[1] Tickets " + sDim.Render("· today "+hm(total))
+	title := "[1] Tickets " + sDim.Render("· today "+hm(core.TodayTotal(m.world, m.now)))
 
 	var body []string
 	for i, t := range rows {
