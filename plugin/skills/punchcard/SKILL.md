@@ -23,7 +23,9 @@ Run the bare `punchcard` through Bash and always pass `--json`; read the envelop
 | `punchcard log --json [--week \| --month \| --from DATE --to DATE]` | Worklogs over a range. Never changes anything. |
 | `punchcard sync --json` | With a tracker only: send worklogs that are still owed. |
 
-`--duration` takes `1h30m`, `1h`, `90m` or bare minutes (1 m to 24 h).
+`--duration` takes `1h30m`, `1h 30m`, `1h`, `90m`, `1:30` or bare minutes (1 m to 24 h).
+
+`data.todaySeconds` in `punchcard status --json` answers "how long have I worked today": the day's total over every ticket.
 
 ## Rules
 

@@ -149,7 +149,7 @@ Nothing paused is exit 4: `no timer: nothing is paused`.
 
 | Flag | Does |
 | --- | --- |
-| `--duration D` | Log D instead of the measured time: `1h30m`, `1h`, `90m` or bare minutes, 1m to 24h. `1:30` and `30s` are refused with exit 64. |
+| `--duration D` | Log D instead of the measured time: `1h30m`, `1h 30m`, `1h`, `90m`, bare minutes or `1:30` (hours and minutes), 1m to 24h. Case and spaces are ignored. Seconds and fractions (`30s`, `1.5h`) are refused with exit 64. |
 | `-m`, `--message TEXT` | The worklog comment. |
 | `--no-sync` | With a tracker: record the worklog as pending without sending it. Without one it changes nothing; the worklog is logged. |
 | `--yes` | Log without prompting. An agent's stop needs it. |
@@ -161,8 +161,8 @@ With no KEY, stop targets the running entry, else the single paused one. Several
 
 ```
 $ punchcard stop
-DEMO-7 Duration [5m]: 1:30
-  "1:30": use 1h30m, 1h, 90m or minutes
+DEMO-7 Duration [5m]: 30s
+  "30s": use 1h30m, 1h 30m, 1:30, 90m or minutes
 DEMO-7 Duration [5m]: 25m
 Comment (optional): 
 ■ DEMO-7 stopped: 25m, worklog pending
@@ -283,7 +283,7 @@ Nothing running.
 Not connected to Jira: no API token (run punchcard setup, or set PUNCHCARD_TOKEN)
 ```
 
-The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line.
+The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line. Last, when anything is counted today, the day's total over every ticket on the list, as the TUI's Tickets title reads it: `Today: 3h 10m` (a stale timer counts capped). `status --short` never shows it.
 
 A stale timer (running, no presence for over 2 hours) is shown capped, as the next change will record it:
 
@@ -303,7 +303,7 @@ Also reports DIR's key, the one the Claude Code plugin uses for the session. The
 
 ```
 $ punchcard status --cwd ~/src/app --json
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
 ```
 
 ### `.punchcard`: a directory's key
@@ -324,7 +324,7 @@ A `.punchcard` whose line is not a valid key under the current tracker (`pay rol
 ```
 $ punchcard status --cwd ~/src/app --json
 punchcard: /…/app/.punchcard: "pay roll" is not a key (like payroll); using the branch
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"DEMO-2","source":"branch"}},"events":[],"error":null,"notices":["/…/app/.punchcard: \"pay roll\" is not a key (like payroll); using the branch"]}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"DEMO-2","source":"branch"}},"events":[],"error":null,"notices":["/…/app/.punchcard: \"pay roll\" is not a key (like payroll); using the branch"]}
 ```
 
 `status --cwd`, `touch --cwd` and the plugin's `/punch start` all use this rule. Commit the file to share it with everyone on the repository, or list it in `.gitignore` to keep it yours. It holds one key; a repository whose branches name tickets needs no file at all.
@@ -531,7 +531,7 @@ $ punchcard touch --cwd ~/src/app --origin prompt
 ▶ payroll started
 
 $ punchcard touch --cwd /path/to/checkout --origin prompt --json
-{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"todaySeconds":1800,"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
 ```
 
 A prompt never starts a timer from idle, or resumes a paused one; it only moves one that is already running, whoever set it.
@@ -598,9 +598,9 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 
 | Command | `data` |
 | --- | --- |
-| `status` | `{running, paused, unsent, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
+| `status` | `{running, paused, unsent, todaySeconds, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `todaySeconds` is the day's total over every ticket on the list, open entries counted up to now and a stale timer counted capped; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
 | `status --short` | The same without the Jira fields. |
-| `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, authFailedAt}` after the change. |
+| `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, todaySeconds, authFailedAt}` after the change. |
 | `ls` | `{tickets: [{key, summary?, unverified, addedAt, removedAt?, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. `removedAt` appears only on a removed ticket, which only `ls --all` lists. |
 | `add` | As `ls`, for the keys given. |
 | `rm` | `{key, keptWorklogs}`: `keptWorklogs` counts the logged worklogs that stay in the log. |
