@@ -171,7 +171,7 @@ func (a *app) doctor(redact bool) DoctorData {
 func (a *app) doctorState(r redactor, d *DoctorData) DoctorState {
 	st := a.env.Store
 	if err := st.Err(); err != nil {
-		return DoctorState{State: "error", Problem: err.Error()}
+		return DoctorState{State: "error", Problem: r.text(err.Error())}
 	}
 	now := a.env.Now()
 	s := DoctorState{Dir: r.path(st.Dir()), Locked: st.Locked(), today: now.Format(time.DateOnly)}
@@ -253,7 +253,9 @@ func doctorClaude(c setup.Claude, binary string, r redactor) (DoctorClaude, Doct
 	if f := strings.Fields(string(out)); err == nil && len(f) > 0 {
 		dc.Version = f[0]
 	}
-	p := setup.InspectPlugin(c)
+	ctx, cancel = context.WithTimeout(context.Background(), doctorBudget)
+	p := setup.InspectPlugin(ctx, c)
+	cancel()
 	dp.Installed, dp.Version = p.Installed, p.Version
 	if p.Err != nil {
 		dp.Problem = r.text(p.Err.Error())
