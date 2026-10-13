@@ -43,8 +43,8 @@ type StatusData struct {
 	Running *Timer  `json:"running"`
 	Paused  []Timer `json:"paused"`
 	Unsent  Owed    `json:"unsent"`
-	// TodaySeconds is the day's total over every ticket on the list,
-	// with a stale timer capped (core.TodayTotal).
+	// TodaySeconds is the day's total over every ticket, removed ones
+	// included, with a stale timer capped (core.TodayTotal).
 	TodaySeconds int            `json:"todaySeconds"`
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }
