@@ -9,8 +9,8 @@ All output below was produced by running the binary in throwaway directories, mo
 | Command | Does | With Jira as the tracker |
 | --- | --- | --- |
 | `start [KEY]` | Start the timer on KEY, pausing whatever ran. No KEY: pick from recents on a terminal. | Fetches the summary for a ticket new to the list, or still unverified |
-| `pause` | Pause the running timer. The entry stays open. | no call |
-| `resume [KEY]` | Resume the most recently paused entry. `resume KEY` is `start KEY`. | as `start` |
+| `pause` | Pause the running timer. The entry stays open. `--at TIME`: pause then. | no call |
+| `resume [KEY]` | Resume the most recently paused entry. `resume KEY` is `start KEY`. `--at TIME`: resume then. | as `start` |
 | `stop [KEY]` | Stop an entry and log its worklog. No KEY: the running entry, else the single paused one. | Also sends the worklog, one POST |
 | `status` | The running ticket, paused tickets, the tracker; with Jira, unsent worklogs and the connection. | no call (reads the token) |
 | `status --short` | One line for a shell prompt. | no call |
@@ -144,6 +144,44 @@ $ punchcard resume DEMO-1
 ```
 
 Nothing paused is exit 4: `no timer: nothing is paused`.
+
+### `--at TIME`: pause, resume or start at an earlier time
+
+A timer left running through a meeting, or started late, is corrected with `--at` on `pause`, `resume` or `start`: the change happens at TIME instead of now. Two commands cut a meeting out of a running entry:
+
+```
+$ punchcard pause --at 10:00
+⏸ DEMO-2 paused at 10:00  1:02:00
+$ punchcard resume --at 10:45
+▶ DEMO-2 running since 10:45  1:07:00  by hand
+```
+
+The entry keeps both stretches, and the gap between them is time away, left out of the worklog (the TUI's Ticket pane shows it as `10:00–10:45 ‖ away 45m`). `start KEY --at 09:00` starts KEY at 09:00, and a ticket it pauses is paused at 09:00 too. With nothing running, `pause --at` moves the last pause.
+
+TIME is one of:
+
+- `HH:MM`: the most recent such local time at or before now, so `23:50` typed at 00:10 is last night.
+- `-D`: that long ago, D in the [duration](#stop-key) forms: `-45m`, `-1h30m`, `-1:30`.
+
+Nothing else, and no dates: a correction is within the day, and `stop --duration` covers the rest.
+
+Refused with exit 64, nothing changed:
+
+- a TIME that is not one of those forms;
+- a time in the future;
+- `pause --at` before the open segment started;
+- `resume --at` before the pause (the gap cannot be negative), or with a timer running;
+- `start --at` before the running ticket's open segment started, or on the running ticket itself;
+- any time that would overlap time already measured, such as the ticket's last stopped entry.
+
+A cut that would leave a stretch under a minute drops it instead, and says so: `the 30s from 09:59 was under a minute, so it was dropped`.
+
+`--at` changes measured time and never logs anything, so it needs no approval: an agent may use it under the same rules as the plain commands, so a timer set by hand refuses it (`by_hand`). It is presence like any command by hand. It never touches a stopped entry or `lastSeen`. In `--json`, `data` is the timer after the change as usual, and the `paused` and `started` events carry `at`:
+
+```
+$ punchcard pause --at 10:00 --json
+{"v":1,"ok":true,"outcome":"ok","command":"pause","data":{…},"events":[{"kind":"paused","key":"DEMO-2","at":"2026-10-13T10:00:00.000-0500"}],"error":null}
+```
 
 ### `stop [KEY]`
 
@@ -623,8 +661,8 @@ Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no 
 | --- | --- |
 | `added` | A start or a focus put an untracked ticket on the list. |
 | `restored` | A start, resume, add or focus put a removed ticket back on the list, its history intact. |
-| `paused` | Starting this ticket's rival paused it. |
-| `started` | Focus moved the timer to this ticket. |
+| `paused` | Starting this ticket's rival paused it, or a `pause --at` closed it. `at` is the time, when it was not now; `message` says when a stub under a minute was dropped. |
+| `started` | Focus moved the timer to this ticket, or a `start --at` or `resume --at` opened it; `at` is the time. |
 | `byHand` | A start by hand made the running timer one an agent can't move. |
 | `recovered` | A stale timer was capped; `at` is where. |
 | `synced` | The tracker took the worklog. |

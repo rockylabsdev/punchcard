@@ -32,7 +32,7 @@ With no tracker, after a morning's work: one worklog logged, one timer running.
 │ ✓ logged                      payroll       40m   07:45                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
                                                                                 
- space pause  x stop…  a add  d remove  S setup  ? help  q quit                 
+ space pause  x stop…  - away…  a add  d remove  S setup  ? help  q quit        
 ```
 
 With Jira as the tracker, the same frame also tracks what is owed to Jira and what failed to reach it:
@@ -61,7 +61,7 @@ With Jira as the tracker, the same frame also tracks what is owed to Jira and wh
 │ ○ not sent yet · r            OPS-77        15m   08:01                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
  ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                
- space pause  x stop…  a add  d remove  r sync 2  S setup  ? help  q quit       
+ space pause  x stop…  - away…  a add  d remove  r sync 2  ? help  q quit       
 ```
 
 Top to bottom: the Tickets pane and the Ticket pane side by side, the day's log, the status line, the key bar.
@@ -130,7 +130,15 @@ Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as 
  06:00–06:15     15m
 ```
 
-`! away` is time cut off by recovery. A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
+`! away` is time cut off by recovery. `‖ away` is time you cut out yourself, with the [Away dialog](#away--) or `pause --at` on the CLI; it is dimmed like a pause and counts as time away in the line above:
+
+```
+ 10:45–now   0:15:00
+ 10:00–10:45 ‖ away 45m
+ 08:58–10:00      1h 02m
+```
+
+A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
 
 Last, `WORKLOGS TODAY` for this ticket: owed worklogs from any day, logged ones from today, in the same words as the day's log, or `nothing yet`.
 
@@ -163,7 +171,7 @@ One slot, filled in this order:
 
 ### The key bar
 
-Only the keys that apply now. `space` reads `start`, `pause` or `resume` to match the selected row. `x stop…` appears when the row has an open entry. `p pause` appears when something runs and the cursor is on another row. `r sync 2` appears when 2 worklogs are owed. Inside a dialog the bar shows the dialog's keys.
+Only the keys that apply now. `space` reads `start`, `pause` or `resume` to match the selected row. `x stop…` and `- away…` appear when the row has an open entry. `p pause` appears when something runs and the cursor is on another row. `r sync 2` appears when 2 worklogs are owed. When the bar does not fit the width, `S setup` is left out first (help lists it). Inside a dialog the bar shows the dialog's keys.
 
 ## Keys
 
@@ -172,6 +180,7 @@ Only the keys that apply now. `space` reads `start`, `pause` or `resume` to matc
 | `space`, `enter` | Start, pause or resume the selected ticket. Starting one pauses whatever ran. With Jira, on an unverified ticket it also asks Jira for the summary. |
 | `p` | Pause whatever is running, from any row. |
 | `x` | Open the stop dialog for the selected ticket's open entry. On a row with none: `nothing to stop on OPS-77 — space starts it`. |
+| `-` | Open the Away dialog for the selected ticket's open entry: cut time you were away out of it. On a row with none: `nothing to cut on OPS-77 — space starts it`. |
 | `a` | Open the add dialog. |
 | `d` | Open the remove dialog for the selected ticket. |
 | `r` | With Jira: send every pending and failed worklog. With nothing owed: `nothing to send: Jira has everything`. While a sync is already out, nothing. With no tracker: `no tracker · nothing is sent · S to set one up`. |
@@ -273,6 +282,30 @@ A recovered entry is never prefilled:
 │worked                       │
 ```
 
+### Away (`-`)
+
+A timer left running through a meeting is corrected here: `-` on a row with an open entry cuts the time you were away out of it.
+
+```
+╭─Away from PUN-142───────────╮
+│PUN-142 Wire flock on the si…│
+│running since 08:58          │
+│                             │
+│From                         │
+│  10:00                      │
+│To                           │
+│  10:45                      │
+│                             │
+│→ cuts 45m · entry becomes   │
+│1:12                         │
+```
+
+Key bar: `enter cut  tab field  esc cancel`.
+
+`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`. The last line previews the cut and what the entry becomes, or says why it cannot be made, as the CLI would refuse it (`✗ 10:00 is before 10:45`, `✗ 08:30 is before the entry started at 08:58`); enter does nothing then.
+
+On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause: change it to move the pause, or set `To` to resume. The cut shows in the Ticket pane as `10:00–10:45 ‖ away 45m`.
+
 ### Add (`a`)
 
 ```
@@ -315,6 +348,7 @@ Key bar: `y remove  any key keep it`. Under the key, a line says what is kept wh
 │  space / enter   start · pause · resume the selected ticket                  │
 │  p               pause whatever is running, from any row                     │
 │  x               stop the selected entry: review, then log it                │
+│  -               away: cut time you were away out of the selected entry      │
 │  a / d           add a ticket / remove the selected one                      │
 │  r               sync: send pending and failed worklogs                      │
 │  S               setup: a tracker, the Claude Code plugin                    │
