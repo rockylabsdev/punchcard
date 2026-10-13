@@ -15,8 +15,8 @@ type Command interface{ command() }
 // and Unverified (EventAdded). If Key has an open (unstopped) entry that
 // entry gets a new segment; otherwise a new entry with NewEntryID is
 // created. Start on the running ticket is a no-op, except that by hand
-// it holds an un-held timer (EventHeld). Only OriginHand may move a held
-// timer (ErrHeld).
+// it sets the timer by hand (EventByHand). Another origin may not move
+// or pause a timer set by hand (ErrByHand); only focus skips this (Touch).
 type Start struct {
 	Key        string
 	Summary    string
@@ -91,12 +91,12 @@ type Remove struct {
 }
 
 // Touch is the mod's presence call. With no Key it is presence only.
-// With a Key it is also focus: an un-held timer on another ticket moves
-// to Key (EventPaused, EventStarted), but only when Key differs from
-// State.LastFocus, which it then records (ADR 0009); a held timer is
-// never moved. A prompt or hand Touch is always presence, whatever it
-// moves. Focus never starts a timer when nothing runs. An agent's Touch
-// does nothing.
+// With a Key it is also focus: a timer on another ticket moves to Key
+// (EventPaused, EventStarted), but only when Key differs from
+// State.LastFocus, which it then records (ADR 0009). It moves a timer
+// set by hand too (ADR 0010). A prompt or hand Touch is always presence,
+// whatever it moves. Focus never starts a timer when nothing runs. An
+// agent's Touch does nothing.
 type Touch struct {
 	Key        string
 	Summary    string // used only if Key is not tracked yet
@@ -179,7 +179,7 @@ type EventKind string
 const (
 	EventAdded   EventKind = "added"   // start or focus added an untracked ticket
 	EventPaused  EventKind = "paused"  // another ticket's start paused this one
-	EventHeld    EventKind = "held"    // a start by hand held the running timer
+	EventByHand  EventKind = "byHand"  // a start by hand made the running timer one an agent can't move
 	EventStarted EventKind = "started" // focus moved the timer to this ticket
 	// EventRecovered: a stale timer was capped; At is where it was capped.
 	EventRecovered  EventKind = "recovered"

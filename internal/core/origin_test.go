@@ -18,7 +18,7 @@ func TestApplyRecordsWhoChangedTheEntry(t *testing.T) {
 			want: state(ticket("AA-1", entry("EA", agent, seg("09:00", "09:30")))),
 		},
 		{
-			name: "a hand pause of a prompt timer does not make it held",
+			name: "a hand pause of a prompt timer does not set it by hand",
 			w:    world("09:30", ticket("AA-1", entry("EA", prompt, seg("09:00", "")))),
 			cmd:  core.Pause{Origin: hand},
 			now:  "09:30",

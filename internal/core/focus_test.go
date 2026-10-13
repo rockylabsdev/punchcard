@@ -39,23 +39,42 @@ func TestFocusMovesATimerOnlyWhenItChanges(t *testing.T) {
 		}
 	})
 
-	t.Run("a touch while held records the last focus", func(t *testing.T) {
+	t.Run("a change of focus moves a timer set by hand, once", func(t *testing.T) {
 		w := steps(t, world("09:00", ticket("PUN-1")),
 			core.Start{Key: "OPS-77", Origin: hand, NewEntryID: "E1"},
 			focus("PUN-1"))
-		if got := runningKey(w); got != "OPS-77" {
-			t.Fatalf("held timer moved to %q", got)
+		if got := runningKey(w); got != "PUN-1" {
+			t.Fatalf("running = %q, want PUN-1", got)
 		}
-		if got := w.State.LastFocus; got != "PUN-1" {
-			t.Fatalf("last focus = %q, want PUN-1", got)
+		if _, e, _ := core.Running(w.State); e.ByHand {
+			t.Error("focus set the moved timer by hand")
 		}
-		// Later un-held on the same ticket: the same focus does not move it.
+		// Set by hand again in this session: the same focus leaves it.
 		w = steps(t, w,
-			core.Pause{Origin: hand},
-			core.Start{Key: "OPS-77", Origin: agent},
+			core.Start{Key: "OPS-77", Origin: hand, NewEntryID: "E2"},
 			focus("PUN-1"))
 		if got := runningKey(w); got != "OPS-77" {
-			t.Errorf("un-held timer moved to %q by an unchanged focus", got)
+			t.Errorf("an unchanged focus moved the timer to %q", got)
+		}
+	})
+
+	t.Run("a start by hand in this session survives its next prompt", func(t *testing.T) {
+		w := steps(t, world("09:00", ticket("PUN-1")),
+			focus("PUN-1"),
+			core.Start{Key: "OPS-77", Origin: hand, NewEntryID: "E1"},
+			focus("PUN-1"))
+		if got := runningKey(w); got != "OPS-77" {
+			t.Errorf("running = %q, want OPS-77", got)
+		}
+	})
+
+	t.Run("focus never resumes a paused timer set by hand", func(t *testing.T) {
+		w := steps(t, world("09:00", ticket("PUN-1")),
+			core.Start{Key: "OPS-77", Origin: hand, NewEntryID: "E1"},
+			core.Pause{Origin: hand},
+			focus("PUN-1"))
+		if got := runningKey(w); got != "" {
+			t.Errorf("running = %q, want nothing", got)
 		}
 	})
 
@@ -127,8 +146,8 @@ func TestOnlyAKeyedPresenceTouchWritesTheLastFocus(t *testing.T) {
 		if got := w.State.LastFocus; got != "BB-2" {
 			t.Errorf("last focus = %q, want BB-2", got)
 		}
-		if _, e, _ := core.Running(w.State); e.Held {
-			t.Error("a touch by hand held the timer")
+		if _, e, _ := core.Running(w.State); e.ByHand {
+			t.Error("a touch by hand set the timer by hand")
 		}
 	})
 	t.Run("a keyed prompt on the running ticket", func(t *testing.T) {

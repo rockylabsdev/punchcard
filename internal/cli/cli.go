@@ -252,8 +252,8 @@ func (a *app) root() *cobra.Command {
 }
 
 // failure maps a core or store error to its exit code (ADR 0004) and
-// reports it. A held timer is the no_timer family (exit 4) with its own
-// error code, "held".
+// reports it. A timer set by hand is the no_timer family (exit 4) with
+// its own error code, "by_hand".
 func (a *app) failure(cmd string, err error) int {
 	var amb *core.AmbiguousError
 	var nf ticketNotFound
@@ -278,9 +278,9 @@ func (a *app) failure(cmd string, err error) int {
 			hint = "stop it first, or pass --force to drop its time"
 		}
 		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error(), hint: hint})
-	case errors.Is(err, core.ErrHeld):
-		return a.out.fail(cmd, ExitNoTimer, failure{code: "held", msg: err.Error(),
-			hint: "the user started it by hand; only they can move or pause it"})
+	case errors.Is(err, core.ErrByHand):
+		return a.out.fail(cmd, ExitNoTimer, failure{code: "by_hand", msg: err.Error(),
+			hint: "the user set it by hand; only they can move or pause it"})
 	case errors.Is(err, core.ErrNoTimer), errors.Is(err, core.ErrNotTracked):
 		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error()})
 	case errors.Is(err, store.ErrNewerSchema):

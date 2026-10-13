@@ -31,7 +31,7 @@ const specState = `{
               "startedAt": "2026-08-09T10:15:00.000-0500"
             }
           ],
-          "held": true,
+          "byHand": true,
           "origin": "hand",
           "recovered": false
         }
@@ -49,7 +49,7 @@ func specValue() core.State {
 			Entries: []core.TimeEntry{{
 				ID:       "1E4C9A02-7F3B-4D18-9C51-A0B7E6D24F88",
 				Segments: []core.Segment{{StartedAt: ts("09:02:41"), EndedAt: ts("09:48:10")}, {StartedAt: ts("10:15")}},
-				Held:     true, Origin: core.OriginHand,
+				ByHand:   true, Origin: core.OriginHand,
 			}},
 		}},
 	}
@@ -68,7 +68,7 @@ func TestStateDecodesTheSpecExampleIncludingNulls(t *testing.T) {
 	withNulls := `{"schemaVersion":1,"authFailedAt":null,"trackedTickets":[{"key":"PUNCH-12","summary":"Wire up the worklog POST","unverified":false,
 	  "addedAt":"2026-08-09T09:02:41.000-0500","entries":[{"id":"1E4C9A02-7F3B-4D18-9C51-A0B7E6D24F88",
 	  "segments":[{"startedAt":"2026-08-09T09:02:41.000-0500","endedAt":"2026-08-09T09:48:10.000-0500"},{"startedAt":"2026-08-09T10:15:00.000-0500"}],
-	  "held":true,"origin":"hand","recovered":false,"worklog":null}]}]}`
+	  "byHand":true,"origin":"hand","recovered":false,"worklog":null}]}]}`
 	var got core.State
 	if err := json.Unmarshal([]byte(withNulls), &got); err != nil {
 		t.Fatal(err)

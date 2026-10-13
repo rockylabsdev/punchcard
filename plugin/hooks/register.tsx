@@ -196,7 +196,7 @@ async function stop($: EngineInterface, a: { verb: 'stop'; duration: string; mes
   return replyText('stop', r.envelope, r.exitCode)
 }
 
-// punch answers /punch <args> with origin hand, so a start holds.
+// punch answers /punch <args> with origin hand, so a start sets the timer by hand.
 async function punch($: EngineInterface, args: string): Promise<string> {
   const a = parsePunch(args, await here($))
   if ('error' in a) return a.error

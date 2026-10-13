@@ -59,7 +59,7 @@ Colour is used only on a terminal with `NO_COLOR` unset: green `▶`, yellow `�
 ```
 $ punchcard start payroll
 + payroll added
-▶ payroll running  0:00:00  held
+▶ payroll running  0:00:00  by hand
 ```
 
 Without a tracker a key is any slug: a letter or digit, then letters, digits, `.`, `_` or `-`. It is case-sensitive and kept as typed. Anything else is exit 64:
@@ -75,7 +75,7 @@ With Jira as the tracker a key must look like `ABC-123` (letters and digits, a d
 ```
 $ punchcard start DEMO-1
 + DEMO-1 added
-▶ DEMO-1 running  0:00:00  held  Add the worklog POST
+▶ DEMO-1 running  0:00:00  by hand  Add the worklog POST
 
 $ punchcard start TYPO-999
 punchcard: Jira has no ticket TYPO-999 that this account can see
@@ -88,7 +88,7 @@ When Jira cannot be reached, or has no token, the ticket is added anyway and mar
 ```
 $ punchcard start DEMO-1
 + DEMO-1 added (not verified with Jira yet)
-▶ DEMO-1 running  0:00:00  held
+▶ DEMO-1 running  0:00:00  by hand
 ```
 
 Starting a second ticket pauses the first and reports it as an event:
@@ -97,15 +97,15 @@ Starting a second ticket pauses the first and reports it as an event:
 $ punchcard start ABC-123
 ⏸ payroll paused
 + ABC-123 added
-▶ ABC-123 running  0:00:00  held
+▶ ABC-123 running  0:00:00  by hand
 ```
 
-Starting the ticket that already runs changes nothing, except that by hand it holds an un-held timer:
+Starting the ticket that already runs changes nothing, except that a start by hand marks an agent's or a prompt's timer as set by hand, so an agent can no longer move it:
 
 ```
 $ punchcard start DEMO-1
-DEMO-1 is now held: only you can move it
-▶ DEMO-1 running  0:00:00  held
+DEMO-1 set by hand: agents can't move it
+▶ DEMO-1 running  0:00:00  by hand
 ```
 
 With no key, on a terminal, a numbered picker of up to 9 recents. A number or a key typed in full starts it; an empty line cancels with exit 0:
@@ -116,7 +116,7 @@ $ punchcard start
   2) DEMO-2  
   3) DEMO-7  
 Start which? (number or KEY, empty cancels) 2
-▶ DEMO-2 running  0:00:00  held
+▶ DEMO-2 running  0:00:00  by hand
 ```
 
 Not on a terminal, or with `--json`, a missing key is a usage error (exit 64).
@@ -136,11 +136,11 @@ Resumes the most recently paused entry. With a timer already running, it is a no
 
 ```
 $ punchcard resume
-▶ DEMO-2 running  0:00:00  held
+▶ DEMO-2 running  0:00:00  by hand
 
 $ punchcard resume DEMO-1
 ⏸ DEMO-2 paused
-▶ DEMO-1 running  0:00:00  held
+▶ DEMO-1 running  0:00:00  by hand
 ```
 
 Nothing paused is exit 4: `no timer: nothing is paused`.
@@ -264,7 +264,7 @@ Without a tracker:
 
 ```
 $ punchcard status
-▶ ABC-123 running  0:00:00  held
+▶ ABC-123 running  0:00:00  by hand
 ⏸ payroll paused  0:00:00
 ```
 
@@ -272,7 +272,7 @@ With Jira as the tracker (the second run had no token):
 
 ```
 $ punchcard status
-▶ DEMO-7 running  0:00:00  held  Rotate staging certs
+▶ DEMO-7 running  0:00:00  by hand  Rotate staging certs
 ⏸ DEMO-3 paused  0:00:00
 Jira token: PUNCHCARD_TOKEN
 
@@ -502,7 +502,7 @@ $ punchcard version --json
 
 ### `touch [KEY] [--cwd DIR]` (hidden)
 
-The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: an un-held running timer on another ticket moves to that key, but only if the key differs from the last focus, the key of the previous touch from a prompt or by hand that had one. Every such touch records it, even when it moves nothing. It never starts a timer when nothing runs, never moves a held timer, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
+The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: a running timer on another ticket moves to that key, whoever set it, but only if the key differs from the last focus, the key of the previous touch from a prompt or by hand that had one. Every such touch records it, even when it moves nothing. It never starts a timer when nothing runs (a paused timer counts as nothing running), never sets the moved timer by hand, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
 
 ```
 $ punchcard touch --cwd ~/src/app --origin prompt
@@ -511,16 +511,16 @@ $ punchcard touch --cwd ~/src/app --origin prompt
 ▶ payroll started
 
 $ punchcard touch --cwd /path/to/checkout --origin prompt --json
-{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","held":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","held":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
 ```
 
-A prompt never starts a timer from idle; it only moves one that is already running.
+A prompt never starts a timer from idle, or resumes a paused one; it only moves one that is already running, whoever set it.
 
 ## Origin
 
 Every change records who caused it. The CLI infers `agent` when `CLAUDECODE` or `AI_AGENT` is set and `hand` otherwise. The hidden `--origin` flag overrides it; the plugin always passes one.
 
-| Origin | Holds the timer | Counts as presence | Stop |
+| Origin | Sets the timer by hand | Counts as presence | Stop |
 | --- | --- | --- | --- |
 | `hand` | yes | yes | prompts on a terminal, else logs |
 | `prompt` | no | yes | as `hand` |
@@ -530,8 +530,8 @@ Inside Claude Code:
 
 ```
 $ CLAUDECODE=1 punchcard start DEMO-2
-punchcard: timer is held: DEMO-1 was set by hand
-  the user started it by hand; only they can move or pause it
+punchcard: DEMO-1 was set by hand
+  the user set it by hand; only they can move or pause it
 [exit 4]
 ```
 
@@ -544,7 +544,7 @@ The reasons: [ADR 0004](../adr/0004-cli-contract-exit-codes-json-envelope-origin
 | 0 | `ok` | Done, or a harmless no-op. Reads (`status`, `ls`, `log`) always exit 0. | Carry on. |
 | 1 | `internal` | Unexpected error, failed write, no data directory. | Show `error.message`; nothing changed. |
 | 3 | `not_configured` | Jira is the tracker, a command needed it, and there are no credentials (or the Keychain failed). Also `sync` with no tracker, which reports that there is none. | With Jira: run `punchcard setup`. Without a tracker: nothing to do, every worklog is logged. Timers are fine either way. |
-| 4 | `no_timer` | Nothing running or paused to act on, an ambiguous target (`data.candidates` lists them), a ticket not on the list, a held timer (`error.code: held`), or `rm` on unlogged time. | Read `error.code`; name a key, or ask the user. |
+| 4 | `no_timer` | Nothing running or paused to act on, an ambiguous target (`data.candidates` lists them), a ticket not on the list, an agent acting on a timer set by hand (`error.code: by_hand`), or `rm` on unlogged time. | Read `error.code`; name a key, or ask the user. |
 | 5 | `ticket_not_found` | The tracker looked the key up and has no such ticket (Jira answered 404). Nothing changed. Never without a tracker. | Check the key. |
 | 6 | `needs_confirmation` | The stop is a proposal. `data.preview` is the exact worklog. | Show the preview. An agent reruns with `--yes`; a recovered entry needs `--duration`. |
 | 7 | `sync_pending` | **Partial success**, `ok: true`. The stop happened; its worklog is pending or failed. Also `sync` with worklogs remaining. Never without a tracker. | Run `sync` later. **Never `stop` again.** |
@@ -591,7 +591,7 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 | `version` | `{version, contract, schemaVersion, go, platform}`. |
 | exit 4, ambiguous | `{candidates: ["KEY", ...]}`. |
 
-A timer: `{key, summary?, unverified, entryId, state, held, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
+A timer: `{key, summary?, unverified, entryId, state, byHand, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
 
 A worklog: `{state, startedAt, timeSpentSeconds, comment?, worklogId?, syncedAt?, message?, refusedStatus?, failedAt?, recovered?}`. `recovered` is `true` when the entry was recovered when it stopped. `state` is `pending`, `synced` or `failed`, or `local` when there is no tracker (final, never owed or sent); `refusedStatus` is the HTTP status when the tracker answered with a refusal.
 
@@ -604,14 +604,14 @@ Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no 
 | `added` | A start or a focus put an untracked ticket on the list. |
 | `paused` | Starting this ticket's rival paused it. |
 | `started` | Focus moved the timer to this ticket. |
-| `held` | A start by hand held the running timer. |
+| `byHand` | A start by hand made the running timer one an agent can't move. |
 | `recovered` | A stale timer was capped; `at` is where. |
 | `synced` | The tracker took the worklog. |
 | `syncFailed` | It did not; `message` says why. |
 
 ### Error codes
 
-`error.code` is more specific than `outcome`: `usage`, `internal`, `not_configured`, `no_timer`, `held`, `ticket_not_found`, `needs_confirmation`, `busy`, `state_unreadable`, `auth_failed`, and on exit 7 the reason the worklog is owed: `not_configured`, `auth_failed`, `unreachable`, `sync_failed` (the tracker answered with an error), `sync_busy` (another Punchcard is sending), `sync_pending` (anything else).
+`error.code` is more specific than `outcome`: `usage`, `internal`, `not_configured`, `no_timer`, `by_hand`, `ticket_not_found`, `needs_confirmation`, `busy`, `state_unreadable`, `auth_failed`, and on exit 7 the reason the worklog is owed: `not_configured`, `auth_failed`, `unreachable`, `sync_failed` (the tracker answered with an error), `sync_busy` (another Punchcard is sending), `sync_pending` (anything else).
 
 ### Examples
 

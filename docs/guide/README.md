@@ -7,7 +7,7 @@ Every example in these pages was run against the code on this branch, in throwaw
 | Page | Read it when |
 | --- | --- |
 | [Getting started](getting-started.md) | You want to install it, time a ticket, read back your week, and optionally connect Jira. |
-| [Concepts](concepts.md) | You want to know what "held", "recovered", "local" or "unverified" means, in one scenario each. |
+| [Concepts](concepts.md) | You want to know what "by hand", "recovered", "local" or "unverified" means, in one scenario each. |
 | [The TUI](tui.md) | You want every key, symbol and colour of the full-screen app. |
 | [The CLI](cli.md) | You want every command, flag, exit code and the `--json` envelope, including [`log`](cli.md#log). |
 | [Claude Code](claude-code.md) | You want the plugin: [`.punchcard` files](claude-code.md#punchcard-files), the band above the prompt, `/punch`, and why an agent's stop always asks you. |

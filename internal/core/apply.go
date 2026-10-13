@@ -85,12 +85,15 @@ func (a *applier) start(c Start) error {
 	if t, e := a.running(); e != nil {
 		if t.Key == c.Key {
 			a.track(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}) // confirms only
-			if c.Origin == OriginHand && !e.Held {
-				e.Held, e.Origin = true, OriginHand
-				a.emit(EventHeld, t.Key)
+			if c.Origin == OriginHand && !e.ByHand {
+				e.ByHand, e.Origin = true, OriginHand
+				a.emit(EventByHand, t.Key)
 			}
 			return nil
 		}
+	}
+	if err := a.guardByHand(c.Origin); err != nil {
+		return err
 	}
 	_, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
 	return err
@@ -102,9 +105,7 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*Time
 	if openEntry(a.ticket(n.Key)) == nil && newEntryID == "" {
 		return nil, fmt.Errorf("%w: a new entry needs an id", ErrUsage)
 	}
-	if err := a.pauseRunning(origin, true); err != nil {
-		return nil, err
-	}
+	a.pauseRunning(origin, true)
 	if a.track(n) {
 		a.emit(EventAdded, n.Key)
 	}
@@ -122,7 +123,11 @@ func (a *applier) pause(c Pause) error {
 	if _, e := a.running(); e == nil {
 		return fmt.Errorf("%w: nothing is running", ErrNoTimer)
 	}
-	return a.pauseRunning(c.Origin, false)
+	if err := a.guardByHand(c.Origin); err != nil {
+		return err
+	}
+	a.pauseRunning(c.Origin, false)
+	return nil
 }
 
 func (a *applier) resume(c Resume) error {
@@ -219,28 +224,32 @@ func worklogFor(e TimeEntry, c Stop, now Timestamp) (Worklog, error) {
 	}, nil
 }
 
-// open starts a new segment on e; held and origin describe this stretch.
+// open starts a new segment on e; ByHand and origin describe this stretch.
 func (a *applier) open(e *TimeEntry, origin Origin) {
 	e.Segments = append(e.Segments, Segment{StartedAt: a.now})
-	e.Held, e.Origin = origin == OriginHand, origin
+	e.ByHand, e.Origin = origin == OriginHand, origin
 }
 
-// pauseRunning closes the open segment, if any, at now. Only an act by
-// hand may close a held timer.
-func (a *applier) pauseRunning(origin Origin, announce bool) error {
+// guardByHand refuses a start or pause of a timer set by hand unless it
+// is by hand too. Focus is the user's and skips it (ADR 0010).
+func (a *applier) guardByHand(origin Origin) error {
+	if t, e := a.running(); e != nil && e.ByHand && origin != OriginHand {
+		return fmt.Errorf("%s %w", t.Key, ErrByHand)
+	}
+	return nil
+}
+
+// pauseRunning closes the open segment, if any, at now.
+func (a *applier) pauseRunning(origin Origin, announce bool) {
 	t, e := a.running()
 	if e == nil {
-		return nil
-	}
-	if e.Held && origin != OriginHand {
-		return fmt.Errorf("%w: %s was set by hand", ErrHeld, t.Key)
+		return
 	}
 	e.Segments[len(e.Segments)-1].EndedAt = a.now
 	e.Origin = origin
 	if announce {
 		a.emit(EventPaused, t.Key)
 	}
-	return nil
 }
 
 func lastEnd(e TimeEntry) Timestamp { return e.Segments[len(e.Segments)-1].EndedAt }

@@ -301,7 +301,7 @@ func TestAStateFileWithoutALastFocusReadsAsEmpty(t *testing.T) {
 	at := c.t.Format(core.TimeLayout)
 	write(t, filepath.Join(dir, store.StateFile), `{"schemaVersion": 1, "trackedTickets": [
 		{"key": "OPS-77", "unverified": false, "addedAt": "`+at+`", "entries": [
-			{"id": "E1", "segments": [{"startedAt": "`+at+`"}], "held": false, "origin": "agent", "recovered": false}]}]}`)
+			{"id": "E1", "segments": [{"startedAt": "`+at+`"}], "byHand": false, "origin": "agent", "recovered": false}]}]}`)
 	write(t, filepath.Join(dir, store.HeartbeatFile), `{"schemaVersion": 1, "lastSeen": "`+at+`"}`)
 
 	w, notices, err := s.Read()

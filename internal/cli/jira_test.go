@@ -19,7 +19,7 @@ func knows(kv ...string) *tracker.Fake {
 	return f
 }
 
-const verifiedAA1 = `{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "held": true, "origin": "hand", "recovered": false, "elapsedSeconds": 0}`
+const verifiedAA1 = `{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "byHand": true, "origin": "hand", "recovered": false, "elapsedSeconds": 0}`
 
 func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 	cases := []struct {
@@ -46,7 +46,7 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 		{"a ticket already on the list does not fetch", knows("AA-1", "Fix the thing"),
 			func(h *harness) { h.do("08:00", "start", "AA-1"); h.do("08:30", "pause") },
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(`{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "held": true, "origin": "hand", "recovered": false, "elapsedSeconds": 1800}`), noEvents),
+			ok("start", status(`{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "byHand": true, "origin": "hand", "recovered": false, "elapsedSeconds": 1800}`), noEvents),
 			[]string{"summary AA-1"}}, // the setup's start only
 		{"an unverified ticket is confirmed by a later start", &tracker.Fake{Err: tracker.ErrUnreachable},
 			func(h *harness) {

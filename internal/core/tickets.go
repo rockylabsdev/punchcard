@@ -67,9 +67,9 @@ func owes(t TrackedTicket) bool {
 
 // touch applies focus and reports whether the call vouches for presence:
 // a presence origin always does, whether or not it moves the timer.
-// Focus moves only an un-held timer, never starts one from idle, and
-// moves nothing unless it differs from the last focus, which every keyed
-// presence touch records (ADR 0009).
+// Focus moves the running timer whoever set it (ADR 0010), never starts
+// one from idle, and moves nothing unless it differs from the last focus,
+// which every keyed presence touch records (ADR 0009).
 func (a *applier) touch(c Touch) (bool, error) {
 	if !c.Origin.IsPresence() {
 		return false, nil
@@ -90,14 +90,12 @@ func (a *applier) touch(c Touch) (bool, error) {
 		return true, nil // focus never starts a timer from idle
 	case rt.Key == c.Key:
 		return true, nil
-	case re.Held:
-		return true, nil // the prompt is presence; only hand moves a held timer
 	}
 	e, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
 	if err != nil {
 		return false, err
 	}
-	e.Held = false // focus never holds
+	e.ByHand = false // focus never sets a timer by hand
 	a.emit(EventStarted, c.Key)
 	return true, nil
 }

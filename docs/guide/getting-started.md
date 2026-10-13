@@ -32,7 +32,7 @@ $ punchcard start payroll-q4
 ▶ payroll-q4 running  0:00:00
 ```
 
-A timer you start by hand is **held**: nothing automatic, such as the Claude Code plugin, will move it. See [Concepts](concepts.md#held).
+A timer you start by hand is **set by hand**: an agent can't move it, though your prompts in a Claude Code session on another ticket can. See [Concepts](concepts.md#by-hand).
 
 Or run bare `punchcard` for the TUI, press `a` to add a ticket by key, and `space` on its row to start it. See [The TUI](tui.md).
 
@@ -251,5 +251,5 @@ Nothing ever syncs in the background. Only `stop` (its own worklog) and `sync` t
 
 ## Next
 
-- [Concepts](concepts.md): pause versus stop, held timers, what the `!` marker means.
+- [Concepts](concepts.md): pause versus stop, timers set by hand, what the `!` marker means.
 - [Claude Code](claude-code.md): the plugin that moves the timer with your prompts.

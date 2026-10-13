@@ -69,11 +69,13 @@ When you submit a prompt that you typed yourself, the mod runs:
 punchcard touch --cwd <session directory> --origin prompt --json
 ```
 
-That is **presence** (the timer is yours, you are here) and, if the directory names a ticket (`here`), **focus**: an un-held timer running on another ticket moves to this one, but only when focus *changes*, meaning this prompt's ticket differs from your last prompt's that named one. A held timer stays where it is. So if, in a session on PUN-1, you ask the agent to start OPS-77 (or run `! punchcard start OPS-77`), your next prompt in that session leaves OPS-77 running. A prompt in a session on another ticket moves it, and so does a later prompt back on PUN-1 after that. To go back to PUN-1 directly, say so or use `/punch start`. Nothing starts a timer when nothing is running: today a prompt only moves a timer that already runs, so start one first (by hand, with `/punch start`, or by asking the agent).
+That is **presence** (the timer is yours, you are here) and, if the directory names a ticket (`here`), **focus**. The whole rule is one sentence: **the timer runs on the ticket of the session you last prompted in; if you move it elsewhere yourself, by hand or by asking the agent, it stays there until you prompt in a session on a different ticket; nothing starts a timer except you.**
+
+So a timer running on another ticket moves to this one, whoever set it, but only when focus *changes*, meaning this prompt's ticket differs from your last prompt's that named one. If, in a session on PUN-1, you ask the agent to start OPS-77 (or run `! punchcard start OPS-77`), your next prompt in that session leaves OPS-77 running. A prompt in a session on another ticket moves it, and so does a later prompt back on PUN-1 after that. To go back to PUN-1 directly, say so or use `/punch start`. A prompt never starts a timer when nothing is running, and a paused timer counts as nothing running: start one first (by hand, with `/punch start`, or by asking the agent).
 
 A prompt that is a slash command (`/punch pause`) is presence only, so the pause is not undone by the same keypress. Typing in the prompt box is presence, at most once every 30 seconds, and never moves anything. Scheduled prompts, subagents and messages from other sessions are none of these.
 
-Side effects of the mod's own calls show as one-shot toasts: `⏸ ABC-123 paused`, `▶ DEF-9 started`, `+ DEF-9 added`, `! ABC-123 recovered: fix the duration at stop`, and with Jira `ABC-123 worklog sent`.
+Side effects of the mod's own calls show as one-shot toasts: `⏸ ABC-123 paused`, `▶ DEF-9 started`, `+ DEF-9 added`, `ABC-123 set by hand: agents can't move it`, `! ABC-123 recovered: fix the duration at stop`, and with Jira `ABC-123 worklog sent`.
 
 ## The band above the prompt
 
@@ -83,8 +85,8 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 
 | Band | Meaning |
 | --- | --- |
-| `▶ ABC-123 1:12 · held · Fix the login form` | Running, for 1 h 12 min, started by hand, with its summary. |
-| `▶ ABC-123 1:12 · Fix the login form` | Running and not held: your prompts can move it. |
+| `▶ ABC-123 1:12 · by hand · Fix the login form` | Running, for 1 h 12 min, set by hand, with its summary. An agent can't move it; your prompts in another session can. |
+| `▶ ABC-123 1:12 · Fix the login form` | Running and not set by hand: your prompts can move it, and so can an agent. |
 | `⏸ ABC-123 0:40 · Fix the login form` | Paused. `+1 paused` follows when more are paused. |
 | `! ABC-123 recovered · fix at stop` | Recovery capped it. Stop it with a duration you choose. |
 | `! ABC-123 stale 1:12` | Running with no presence for over 2 hours; the next change will cap it. |
@@ -104,7 +106,7 @@ The colour follows the worst thing on the line: green while running on this sess
 
 ## `/punch`
 
-Act by hand without leaving the session. Everything `/punch` does has origin `hand`, so a start holds the timer.
+Act by hand without leaving the session. Everything `/punch` does has origin `hand`, so a start sets the timer by hand.
 
 | Command | Does |
 | --- | --- |
@@ -123,7 +125,7 @@ The stop that follows is pinned to the ticket and duration you were shown, in wh
 
 ## What an agent may do
 
-An agent runs the same CLI through its shell, where the origin is `agent`. It may start, pause and resume without asking you, and those moves only ever touch a timer you did not set by hand. A held timer refuses it (exit 4, `held`), and the skill tells the agent to say so rather than force it.
+An agent runs the same CLI through its shell, where the origin is `agent`. It may start, pause and resume without asking you, and those moves only ever touch a timer you did not set by hand. A timer set by hand refuses it (exit 4, `by_hand`), and the skill tells the agent to say so rather than force it. The skill also says an agent starts a timer only when you ask.
 
 **An agent's stop is a proposal.** `punchcard stop --json` from an agent always exits 6 with the exact worklog in `data.preview` and changes nothing. The skill tells the agent to show you the ticket, duration and comment, and only then run the same command with `--yes`. That call is **gated**: Claude Code puts a yes/no to you before it runs, with the reason `Punchcard: this stops the timer and logs the worklog (sending it to the tracker, if one is set up). Approve only the worklog you were shown.` Decline, and the timer keeps running.
 
@@ -148,7 +150,7 @@ Why an agent proposes and you dispose: [ADR 0005](../adr/0005-agent-stop-gated-b
 
 ## What the skill teaches the agent
 
-The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start, pause and resume need no approval but a held timer is the user's; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
+The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start a timer only when the user asks; start, pause and resume need no approval but a timer set by hand is the user's; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
 
 ## Checking it is working
 

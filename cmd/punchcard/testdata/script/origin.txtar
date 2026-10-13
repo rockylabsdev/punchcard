@@ -1,27 +1,39 @@
-# Inside Claude Code the origin is agent: it does not hold.
+# Inside Claude Code the origin is agent: it is not set by hand.
 env CLAUDECODE=1
 exec punchcard start AA-1 --json
 stdout '"origin":"agent"'
-stdout '"held":false'
+stdout '"byHand":false'
 
 env CLAUDECODE=
 env AI_AGENT=1
 exec punchcard start AA-1 --json
-stdout '"held":false'
+stdout '"byHand":false'
 stdout '"events":\[\]'
 
-# By hand, the same start is a no-op that holds.
+# By hand, the same start is a no-op that sets it by hand.
 env AI_AGENT=
 exec punchcard start AA-1 --json
-stdout '"events":\[\{"kind":"held","key":"AA-1"\}\]'
+stdout '"events":\[\{"kind":"byHand","key":"AA-1"\}\]'
 stdout '"origin":"hand"'
+stdout '"byHand":true'
+! stdout '"held"'
 
-# Now an agent cannot move it: exit 4, error code held.
+# Now an agent cannot move it: exit 4, error code by_hand.
 env CLAUDECODE=1
 exitcode 4 punchcard start AA-2 --json
 stdout '"outcome":"no_timer"'
-stdout '"code":"held"'
+stdout '"code":"by_hand"'
 
 # --origin overrides the environment.
 exec punchcard start AA-2 --origin hand
 stdout 'AA-1 paused'
+! stderr .
+
+# In plain text the refusal names the ticket, and a start by hand on a
+# timer an agent set says what it means.
+exitcode 4 punchcard start AA-1
+stderr '^punchcard: AA-2 was set by hand$'
+exec punchcard pause --origin hand
+exec punchcard resume AA-1 --origin agent
+exec punchcard start AA-1 --origin hand
+stdout '^AA-1 set by hand: agents can''t move it$'

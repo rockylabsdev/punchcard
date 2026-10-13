@@ -15,3 +15,7 @@ Every keyed prompt records the last focus, including when the timer is idle or h
 - Focus no longer pulls the timer back to the session's ticket. To return, the user says so, or uses `/punch start`. The status line already shows "`KEY` not running · /punch start".
 - One more stored value, `lastFocus` in `state.json`, written on presence. It is additive: a file without it reads as empty, which differs from every key, so the first prompt after the upgrade behaves as before.
 - A prompt that finds the state lock busy is skipped, as presence always was, so its last focus is not recorded. A quick prompt from another session's ticket can then go unseen as a change. This is rare and self-correcting at the next change of focus, so the touch does not wait for the lock.
+
+## Amendment, 2026-10-12: edge-triggering now applies to a timer set by hand too
+
+Because every keyed prompt records the last focus but a start by hand does not, a timer started by hand stays put through further prompts in the current session and moves at the user's first prompt in a session on another ticket. ADR 0010 lifts the "un-held" qualifier: a change of focus moves the running timer whoever set it. "Held" is renamed **by hand** and keeps only its guard against agents.

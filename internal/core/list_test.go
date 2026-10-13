@@ -75,10 +75,10 @@ func TestApplyAddRemove(t *testing.T) {
 }
 
 func TestApplyTouch(t *testing.T) {
-	unheldA := func() core.World {
+	notByHandA := func() core.World {
 		return world("09:00", ticket("AA-1", entry("EA", agent, seg("09:00", ""))), ticket("BB-2"))
 	}
-	heldA := func() core.World {
+	byHandA := func() core.World {
 		return world("09:00", ticket("AA-1", entry("EA", hand, seg("09:00", ""))), ticket("BB-2"))
 	}
 	cases := []struct {
@@ -91,21 +91,21 @@ func TestApplyTouch(t *testing.T) {
 	}{
 		{
 			name:     "touch with no key is presence only",
-			w:        heldA(),
+			w:        byHandA(),
 			cmd:      core.Touch{Origin: prompt},
-			want:     heldA().State,
+			want:     byHandA().State,
 			lastSeen: at("09:30"),
 		},
 		{
 			name:     "touch of the running ticket vouches for it",
-			w:        unheldA(),
+			w:        notByHandA(),
 			cmd:      core.Touch{Key: "AA-1", Origin: prompt},
-			want:     focused(unheldA().State, "AA-1"),
+			want:     focused(notByHandA().State, "AA-1"),
 			lastSeen: at("09:30"),
 		},
 		{
-			name: "focus moves an un-held timer",
-			w:    unheldA(),
+			name: "focus moves a timer not set by hand",
+			w:    notByHandA(),
 			cmd:  core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
 			want: focused(state(
 				ticket("AA-1", entry("EA", prompt, seg("09:00", "09:30"))),
@@ -114,19 +114,36 @@ func TestApplyTouch(t *testing.T) {
 			lastSeen: at("09:30"),
 		},
 		{
-			// The user's own prompt is presence in any session (CONTEXT.md),
-			// even one on another ticket; only the move is refused.
-			name:     "focus never moves a held timer, but the prompt is still presence",
-			w:        heldA(),
-			cmd:      core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
-			want:     focused(heldA().State, "BB-2"),
+			// ADR 0010: the user's focus moves a timer they set by hand; the
+			// new stretch is not by hand, and the paused one keeps its mark.
+			name: "focus moves a timer set by hand",
+			w:    byHandA(),
+			cmd:  core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
+			want: focused(state(
+				ticket("AA-1", withOrigin(entry("EA", hand, seg("09:00", "09:30")), prompt)),
+				ticket("BB-2", entry("EB", prompt, seg("09:30", "")))), "BB-2"),
+			events:   []core.Event{{Kind: core.EventPaused, Key: "AA-1"}, {Kind: core.EventStarted, Key: "BB-2"}},
 			lastSeen: at("09:30"),
 		},
 		{
-			name:     "an agent's touch on another ticket while held is not presence",
-			w:        heldA(),
+			name:     "an unchanged focus leaves a timer set by hand",
+			w:        lastFocus(byHandA(), "BB-2"),
+			cmd:      core.Touch{Key: "BB-2", Origin: prompt, NewEntryID: "EB"},
+			want:     focused(byHandA().State, "BB-2"),
+			lastSeen: at("09:30"),
+		},
+		{
+			name:     "focus on the running ticket set by hand moves nothing",
+			w:        byHandA(),
+			cmd:      core.Touch{Key: "AA-1", Origin: prompt, NewEntryID: "X"},
+			want:     focused(byHandA().State, "AA-1"),
+			lastSeen: at("09:30"),
+		},
+		{
+			name:     "an agent's touch on another ticket, with the timer set by hand, is not presence",
+			w:        byHandA(),
 			cmd:      core.Touch{Key: "BB-2", Origin: agent, NewEntryID: "EB"},
-			want:     heldA().State,
+			want:     byHandA().State,
 			lastSeen: at("09:00"),
 		},
 		{
@@ -138,9 +155,9 @@ func TestApplyTouch(t *testing.T) {
 		},
 		{
 			name:     "an agent's touch is not presence",
-			w:        unheldA(),
+			w:        notByHandA(),
 			cmd:      core.Touch{Key: "BB-2", Origin: agent, NewEntryID: "EB"},
-			want:     unheldA().State,
+			want:     notByHandA().State,
 			lastSeen: at("09:00"),
 		},
 	}
