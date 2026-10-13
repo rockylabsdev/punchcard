@@ -41,7 +41,7 @@ func (a *app) startCmd() *cobra.Command {
 				a.code = a.failure("start", err)
 				return nil
 			}
-			a.change("start", core.Start{Key: key, At: when, Summary: n.Summary, Unverified: n.Unverified,
+			a.change("start", core.EventStarted, core.Start{Key: key, At: when, Summary: n.Summary, Unverified: n.Unverified,
 				Origin: a.origin, NewEntryID: a.env.NewID(), Grammar: a.env.Grammar()})
 			return nil
 		},
@@ -61,7 +61,7 @@ func (a *app) pauseCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			a.change("pause", core.Pause{At: when, Origin: a.origin})
+			a.change("pause", core.EventPaused, core.Pause{At: when, Origin: a.origin})
 			return nil
 		},
 	}
@@ -88,11 +88,11 @@ func (a *app) resumeCmd() *cobra.Command {
 					a.code = a.failure("resume", err)
 					return nil
 				}
-				a.change("resume", core.Start{Key: key, At: when, Summary: n.Summary, Unverified: n.Unverified,
+				a.change("resume", core.EventStarted, core.Start{Key: key, At: when, Summary: n.Summary, Unverified: n.Unverified,
 					Origin: a.origin, NewEntryID: c.NewEntryID, Grammar: a.env.Grammar()})
 				return nil
 			}
-			a.change("resume", c)
+			a.change("resume", core.EventStarted, c)
 			return nil
 		},
 	}
@@ -163,8 +163,9 @@ func (a *app) touchCmd() *cobra.Command {
 	return c
 }
 
-// change applies a timer command and reports the world after it.
-func (a *app) change(name string, c core.Command) {
+// change applies a timer command and reports the world after it. own is
+// the event the command makes of its own ticket (started or paused).
+func (a *app) change(name string, own core.EventKind, c core.Command) {
 	res, err := a.apply(c)
 	if err != nil {
 		a.code = a.failure(name, err)
@@ -173,10 +174,6 @@ func (a *app) change(name string, c core.Command) {
 	d := snapshot(res.World, res.Now)
 	// A change at a named time reports itself as an event with At; its
 	// line is the timer line, which then says when.
-	own := core.EventStarted
-	if name == "pause" {
-		own = core.EventPaused
-	}
 	var self *core.Event
 	var others []core.Event
 	for i, e := range res.Events {
@@ -188,26 +185,29 @@ func (a *app) change(name string, c core.Command) {
 	}
 	human := a.describeAll(others, res)
 	loc := res.Now.Location()
+	// lineOf is tm's line, saying when when it is self's ticket.
+	lineOf := func(tm Timer) string {
+		var at core.Timestamp
+		if self != nil && self.Key == tm.Key {
+			at = self.At
+		}
+		return a.out.timerLineAt(tm, loc, res.Now, at)
+	}
 	var line string
 	switch {
 	case d.Running != nil:
-		line = a.out.timerLine(*d.Running, loc, res.Now)
-	case name == "pause":
+		line = lineOf(*d.Running)
+	case own == core.EventPaused:
 		if self != nil {
 			if tm, ok := timerFor(res, self.Key); ok {
-				line = a.out.timerLine(tm, loc, res.Now)
+				line = lineOf(tm)
 			}
 		} else if tm, ok := lastPaused(res); ok {
-			line = a.out.timerLine(tm, loc, res.Now)
+			line = lineOf(tm)
 		}
 	}
-	if self != nil {
-		hhmm := core.Clock(self.At.Time, loc)
-		line = strings.Replace(line, " running  ", " running since "+hhmm+"  ", 1)
-		line = strings.Replace(line, " paused  ", " paused at "+hhmm+"  ", 1)
-		if self.Message != "" {
-			line += "  " + self.Message + "\n"
-		}
+	if self != nil && self.Message != "" {
+		line += "  " + self.Message + "\n"
 	}
 	a.done(name, res, d, human+line)
 }

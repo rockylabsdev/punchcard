@@ -226,15 +226,27 @@ func seconds(d time.Duration) int { return int(d / time.Second) }
 
 // timerLine is the status line for one timer.
 func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
+	return o.timerLineAt(tm, loc, now, core.Timestamp{})
+}
+
+// timerLineAt is timerLine for a change made at a named time at: the
+// line says when (running since 10:45, paused at 10:00).
+func (o output) timerLineAt(tm Timer, loc *time.Location, now time.Time, at core.Timestamp) string {
+	when := func(prep string) string {
+		if at.IsZero() {
+			return ""
+		}
+		return " " + prep + " " + core.Clock(at.Time, loc)
+	}
 	var b strings.Builder
 	switch tm.State {
 	case core.TimerRunning:
-		fmt.Fprintf(&b, "%s %s running  %s", o.paint(green, "▶"), tm.Key, clock(secs(tm.ElapsedSeconds)))
+		fmt.Fprintf(&b, "%s %s running%s  %s", o.paint(green, "▶"), tm.Key, when("since"), clock(secs(tm.ElapsedSeconds)))
 		if tm.ByHand {
 			b.WriteString("  by hand")
 		}
 	case core.TimerPaused:
-		fmt.Fprintf(&b, "%s %s paused  %s", o.paint(yellow, "⏸"), tm.Key, clock(secs(tm.ElapsedSeconds)))
+		fmt.Fprintf(&b, "%s %s paused%s  %s", o.paint(yellow, "⏸"), tm.Key, when("at"), clock(secs(tm.ElapsedSeconds)))
 	case core.TimerStale:
 		fmt.Fprintf(&b, "%s %s stale  %s (capped; %s uncapped)\n", o.paint(red, "!"), tm.Key,
 			clock(secs(tm.ElapsedSeconds)), clock(secs(tm.UncappedSeconds)))
