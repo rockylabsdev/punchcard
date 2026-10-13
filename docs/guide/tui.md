@@ -16,7 +16,7 @@ With no tracker, after a morning's work: one worklog logged, one timer running.
 │                                               ││  stop logs this as one      │
 │                                               ││  worklog — x                │
 │                                               ││                             │
-│                                               ││ 08:30–now   0:42:34 counted │
+│                                               ││ 08:30–now   0:42:34         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
@@ -45,11 +45,11 @@ With Jira as the tracker, the same frame also tracks what is owed to Jira and wh
 │ · PUN-120       Spike: Bubble Tea v…     40m ✗││▶ RUNNING             0:15:34│
 │ · DATA-9        ? unverified — Jira…       —  ││  stop sends this as one     │
 │ · PLATFORM-4410 Investigate intermi…       —  ││  worklog — x                │
+│                                               ││  pauses are left out        │
 │                                               ││                             │
-│                                               ││ 08:58–now   0:14:34 counted │
+│                                               ││ 08:58–now   0:14:34         │
 │                                               ││ 08:15–08:58 ‖ paused 43m    │
-│                                               ││             not counted     │
-│                                               ││ 08:14–08:15      1m counted │
+│                                               ││ 08:14–08:15      1m         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
@@ -121,15 +121,13 @@ What happened on the selected ticket. The full summary, then a headline that is 
 | `! RECOVERED 45m` | Recovery capped and paused it. |
 | `· NOT RUNNING` with `space starts it` | No open entry. |
 
-Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then the entry's stretches newest first. A counted stretch puts its length in the number column. A gap carries its length in its label, so the column cannot be summed by eye:
+Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then, when the entry has a gap, what is left out of the worklog: `pauses are left out`, `time away is left out`, or `pauses and time away are left out`. Then the entry's stretches newest first. A segment is bare: its range, and its length in the number column (`<1m` under a minute). Only a gap is marked, by its reason, and it carries its length in its label, so the number column sums by eye to the headline:
 
 ```
  06:50–now   ! away 2h 22m
-             not counted
- 06:20–06:50     30m counted
+ 06:20–06:50     30m
  06:15–06:20 ‖ paused 5m
-             not counted
- 06:00–06:15     15m counted
+ 06:00–06:15     15m
 ```
 
 `! away` is time cut off by recovery. A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.

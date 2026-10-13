@@ -40,9 +40,12 @@ type Owed struct {
 // StatusData is `data` for status, and for start, pause, resume and
 // touch (the world after the change).
 type StatusData struct {
-	Running      *Timer         `json:"running"`
-	Paused       []Timer        `json:"paused"`
-	Unsent       Owed           `json:"unsent"`
+	Running *Timer  `json:"running"`
+	Paused  []Timer `json:"paused"`
+	Unsent  Owed    `json:"unsent"`
+	// TodaySeconds is the day's total over every ticket on the list,
+	// with a stale timer capped (core.TodayTotal).
+	TodaySeconds int            `json:"todaySeconds"`
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }
 
@@ -179,6 +182,7 @@ func snapshot(w core.World, now time.Time) StatusData {
 	}
 	n, total := core.Owed(w.State)
 	d.Unsent = Owed{Count: n, Seconds: seconds(total)}
+	d.TodaySeconds = seconds(core.TodayTotal(w, now))
 	return d
 }
 
@@ -280,6 +284,19 @@ func secs(n int) time.Duration { return time.Duration(n) * time.Second }
 func clock(d time.Duration) string {
 	d = d.Truncate(time.Second)
 	return fmt.Sprintf("%d:%02d:%02d", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
+}
+
+// hm formats a duration as 3h 10m, 3h or 40m, as the TUI's Tickets
+// pane title reads the day's total.
+func hm(d time.Duration) string {
+	h, m := int(d.Hours()), int(d.Minutes())%60
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%dm", m)
+	case m == 0:
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dh %02dm", h, m)
 }
 
 // short formats a duration as h:mm, for status --short.

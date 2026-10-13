@@ -51,6 +51,20 @@ func TimeToday(t TrackedTicket, now time.Time) time.Duration {
 	return total
 }
 
+// TodayTotal is TimeToday summed over every ticket on the list: the
+// day's total. A stale timer counts capped at lastSeen, the figure the
+// next change records.
+func TodayTotal(w World, now time.Time) time.Duration {
+	w, _ = Recover(w, now)
+	var total time.Duration
+	for _, t := range w.State.TrackedTickets {
+		if t.Listed() {
+			total += TimeToday(t, now)
+		}
+	}
+	return total
+}
+
 // LastActivity is the latest moment anything happened on t: added, a
 // segment started or ended, or now while it runs.
 func LastActivity(t TrackedTicket, now time.Time) time.Time {

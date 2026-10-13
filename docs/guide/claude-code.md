@@ -53,7 +53,7 @@ $ cat .punchcard
 # this repository is billed to
 payroll
 $ punchcard status --json --cwd src
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
 ```
 
 That run was from `src/`, a subdirectory: the file at the repository's root answered. The key must be valid under the tracker in effect: any slug (letters, digits, `.`, `_`, `-`, starting with a letter or digit) with no tracker, the `ABC-123` shape with Jira. A line that is not a key is skipped with a notice, on stderr and in the envelope's `notices`, and the branch answers instead:
@@ -93,6 +93,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `▶ ABC-123 1:12 · by hand · Fix the login form` | Running, for 1 h 12 min, set by hand, with its summary. An agent can't move it; your prompts in another session can. |
 | `▶ ABC-123 1:12 · Fix the login form` | Running and not set by hand: your prompts can move it, and so can an agent. |
 | `⏸ ABC-123 0:40 · Fix the login form` | Paused. `+1 paused` follows when more are paused. |
+| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket on the list, as the TUI's Tickets title reads it. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
 | `! ABC-123 recovered · fix at stop` | Recovery capped it. Stop it with a duration you choose. |
 | `! ABC-123 stale 1:12` | Running with no presence for over 2 hours; the next change will cap it. |
 | `… · 2 unsent` | *Jira only.* Two worklogs are owed to Jira. |
@@ -101,7 +102,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `… · Jira not connected` | *Jira only.* Jira is the tracker but has no credentials. Timers still work; worklogs wait. |
 | `timer on ABC-123 1:12 · … · here: DEF-9` | Grey. The timer is running, but on another ticket than this session's (DEF-9). Only the session whose ticket is running gets the green `▶` band. |
 | `⏸ ABC-123 0:40 · … · here: DEF-9` | Paused on another ticket than this session's. |
-| `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's directory names DEF-9. |
+| `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's directory names DEF-9. With time counted today, the total comes before the action: `DEF-9 not running · today 3h 10m · /punch start`. |
 | `… · plugin 0.1.0 ≠ punchcard 0.2.0 · run punchcard setup` | The plugin and the binary come from different releases. |
 | `punchcard not found on PATH` | Claude Code cannot run `punchcard`. Presence does nothing until it can. |
 | `punchcard: status timed out` | A status call took over 5 seconds. |

@@ -47,7 +47,7 @@ $ punchcard stop --yes --duration 30 -m "pay run"
 ■ payroll stopped: 30m, logged
 ```
 
-The duration takes `1h30m`, `1h`, `90m` or a bare number of minutes, from 1 minute to 24 hours. `1:30` is refused with a hint and the prompt asks again. Press ctrl-d at the duration prompt to cancel: `punchcard: not stopped; the timer is untouched`. `punchcard stop --dry-run` previews and changes nothing.
+The duration takes `1h30m`, `1h 30m`, `1h`, `90m`, `1:30` or a bare number of minutes, from 1 minute to 24 hours. Seconds such as `30s` are refused with a hint and the prompt asks again. Press ctrl-d at the duration prompt to cancel: `punchcard: not stopped; the timer is untouched`. `punchcard stop --dry-run` previews and changes nothing.
 
 `logged` means the worklog is final: one record of the ticket, the time truncated to the minute, the moment the entry began, and your comment. With no tracker it stays on your machine and nothing is ever owed.
 
