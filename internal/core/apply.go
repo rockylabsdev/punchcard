@@ -86,11 +86,10 @@ func (a *applier) start(c Start) error {
 	if !c.Grammar.Valid(c.Key) {
 		return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
-	named := !c.At.IsZero()
-	when := a.now
+	named, when := !c.At.IsZero(), a.now
 	if named {
-		when = At(c.At)
-		if err := a.notFuture(when); err != nil {
+		var err error
+		if when, err = a.namedAt(c.At); err != nil {
 			return err
 		}
 	}
@@ -166,8 +165,8 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string, when T
 // pauseAt is a Pause at a named time: it closes the running segment
 // then, or moves a paused entry's pause there (see Pause).
 func (a *applier) pauseAt(c Pause) error {
-	when := At(c.At)
-	if err := a.notFuture(when); err != nil {
+	when, err := a.namedAt(c.At)
+	if err != nil {
 		return err
 	}
 	t, e := a.running()
@@ -175,10 +174,7 @@ func (a *applier) pauseAt(c Pause) error {
 		t, e = nil, nil
 	}
 	switch {
-	case e != nil:
-		if err := a.guardByHand(c.Origin); err != nil {
-			return err
-		}
+	case e != nil: // the running entry
 	case c.Key != "":
 		t = a.listed(c.Key)
 		e = openEntry(t)
@@ -241,12 +237,13 @@ func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
 	return note
 }
 
-// notFuture refuses a named time after now.
-func (a *applier) notFuture(when Timestamp) error {
+// namedAt is a time the user named, refused when after now.
+func (a *applier) namedAt(t time.Time) (Timestamp, error) {
+	when := At(t)
 	if when.After(a.now.Time) {
-		return fmt.Errorf("%w: %s is in the future", ErrUsage, a.hhmm(when))
+		return when, fmt.Errorf("%w: %s is in the future", ErrUsage, a.hhmm(when))
 	}
-	return nil
+	return when, nil
 }
 
 // overlaps refuses measuring [from, to) when any segment but skip
@@ -307,7 +304,7 @@ func (a *applier) resume(c Resume) error {
 		a.openAt(&t.Entries[j], c.Origin, a.now)
 		return nil
 	}
-	return a.resumeAt(t, &t.Entries[j], At(c.At), c.Origin)
+	return a.resumeAt(t, &t.Entries[j], c.At, c.Origin)
 }
 
 // refuseResumeAt is resume --at's refusal while t runs.
@@ -316,8 +313,9 @@ func (a *applier) refuseResumeAt(t *TrackedTicket) error {
 }
 
 // resumeAt reopens t's paused entry e at when, a time the user named.
-func (a *applier) resumeAt(t *TrackedTicket, e *TimeEntry, when Timestamp, origin Origin) error {
-	if err := a.notFuture(when); err != nil {
+func (a *applier) resumeAt(t *TrackedTicket, e *TimeEntry, at time.Time, origin Origin) error {
+	when, err := a.namedAt(at)
+	if err != nil {
 		return err
 	}
 	if end := lastEnd(*e); when.Before(end.Time) {
@@ -349,7 +347,7 @@ func (a *applier) away(c Away) error {
 	if e == nil || len(e.Segments) == 0 {
 		return fmt.Errorf("%w: %s has nothing paused", ErrNoTimer, c.Key)
 	}
-	return a.resumeAt(t, e, At(c.To), c.Origin)
+	return a.resumeAt(t, e, c.To, c.Origin)
 }
 
 func (a *applier) stop(c Stop) error {
