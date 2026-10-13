@@ -181,13 +181,19 @@ func (w wizard) runClaude(args []string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), pluginBudget)
 	defer cancel()
 	out := w.UI.Output()
-	err := w.Claude.Run(ctx, out, args...)
+	var said bytes.Buffer
+	err := w.Claude.Run(ctx, io.MultiWriter(out, &said), args...)
 	if f, ok := out.(interface{ Flush() }); ok {
 		f.Flush() // a last line with no newline
 	}
 	if err != nil {
-		w.UI.Say("✗ "+command(args)+" failed: "+err.Error(),
-			"  Your Jira credentials are unaffected; run it again by hand when you are ready.")
+		lines := []string{"✗ " + command(args) + " failed: " + err.Error()}
+		if why := pluginFailure(said.String()); why != "" {
+			lines = append(lines, "  "+why, "  Your Jira credentials are unaffected.")
+		} else {
+			lines = append(lines, "  Your Jira credentials are unaffected; run it again by hand when you are ready.")
+		}
+		w.UI.Say(lines...)
 		return false
 	}
 	return true
@@ -231,4 +237,21 @@ func (w wizard) askRule() error {
 		w.UI.Say("✓ Created " + path + " with the ask rule")
 	}
 	return nil
+}
+
+// missingTag is git's answer when the marketplace pins a ref that was
+// never pushed: a build whose release is not out yet.
+var missingTag = regexp.MustCompile(`Remote branch (\S+) not found`)
+
+// pluginFailure is why a `claude plugin` command failed, from its
+// output, for the two failures a tester can fix; "" for anything else.
+func pluginFailure(said string) string {
+	switch {
+	case strings.Contains(said, "Permission denied (publickey)"), strings.Contains(said, "could not read Username"):
+		return "Claude Code could not clone the repository. It is private: run `gh auth login` and `gh auth setup-git`, then `punchcard setup` again."
+	}
+	if m := missingTag.FindStringSubmatch(said); m != nil {
+		return "This build is `" + m[1] + "` and no release with that tag exists yet. The plugin can be loaded from a clone for one session: `claude --plugin-dir /path/to/punchcard/plugin`."
+	}
+	return ""
 }
