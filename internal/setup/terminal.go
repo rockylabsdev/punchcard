@@ -19,8 +19,8 @@ import (
 
 // Wordmark is PUNCHCARD as holes in a punched card: a 4×7 dot matrix
 // per letter, one column between letters. A punched position is '#',
-// an unpunched one '.'; wordmark renders them as a bright and a faint
-// dot, so the unpunched grid reads as the card itself.
+// an unpunched one '.'; wordmark renders them as a square hole and a
+// faint dot, so the unpunched grid reads as the card itself.
 const Wordmark = "" +
 	"###..#..#.#..#..##..#..#..##...##..###..###.\n" +
 	"#..#.#..#.##.#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
@@ -30,37 +30,66 @@ const Wordmark = "" +
 	"#....#..#.#..#.#..#.#..#.#..#.#..#.#..#.#..#\n" +
 	"#.....##..#..#..##..#..#..##..#..#.#..#.###."
 
-// wordmark is Wordmark styled: punched holes in the brand colour,
-// unpunched ones in a faint grey.
+// wordmark is Wordmark punched into a card: square holes shaded down
+// the rows from the brand colour, unpunched ones faint, inside a
+// hairline edge whose top-left corner is cut, as an IBM card's is.
+// Square holes and the edge are from the IBM PC character set, which
+// every terminal font has.
 func (t *Terminal) wordmark() string {
-	mark := t.mark
+	rows := strings.Split(Wordmark, "\n")
+	inner := len(rows[0]) + 2
 	var b strings.Builder
-	for _, r := range Wordmark {
-		switch r {
-		case '#':
-			b.WriteString(mark.Render("●"))
-		case '.':
-			b.WriteString(tGrid.Render("·"))
-		default:
-			b.WriteRune(r)
+	b.WriteString(" " + tGutter.Render("╱"+strings.Repeat("─", inner-1)+"┐") + "\n")
+	for i, row := range rows {
+		left := "│"
+		if i == 0 {
+			left = "╱"
 		}
+		b.WriteString(tGutter.Render(left) + " ")
+		for _, r := range row {
+			if r == '#' {
+				b.WriteString(t.holes[i].Render("■"))
+			} else {
+				b.WriteString(t.grid.Render("·"))
+			}
+		}
+		b.WriteString(" " + tGutter.Render("│") + "\n")
 	}
+	b.WriteString(tGutter.Render("└" + strings.Repeat("─", inner) + "┘"))
 	return b.String()
+}
+
+// holeShades step the wordmark's seven rows down from the brand colour,
+// lit from above: chartreuse to olive on a dark background, and from
+// the light-background shade darker still on a light one.
+var holeShades = map[bool][]string{
+	true:  {"#C8FF00", "#B3E600", "#9ECC00", "#89B200", "#749800", "#5F7E00", "#4A6400"},
+	false: {"#5F8700", "#577C00", "#4F7000", "#476500", "#3F5900", "#374E00", "#2E4200"},
+}
+
+// holes is the wordmark's hole style per row, for a dark or a light
+// background.
+func holes(dark bool) []lipgloss.Style {
+	var out []lipgloss.Style
+	for _, c := range holeShades[dark] {
+		out = append(out, lipgloss.NewStyle().Foreground(lipgloss.Color(c)))
+	}
+	return out
+}
+
+// grid is the wordmark's unpunched holes: barely there, so the punched
+// ones carry the letters.
+func grid(dark bool) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.LightDark(dark)(lipgloss.Color("250"), lipgloss.Color("238")))
 }
 
 var (
 	tGutter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	// tGrid is the wordmark's unpunched holes: barely there, so the
-	// punched ones carry the letters.
-	tGrid = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	// tMark is the wordmark's holes: the brand colour, in its dark-background
-	// shade until NewTerminal asks the terminal (see brand).
-	tMark  = lipgloss.NewStyle().Foreground(tui.BrandDark).Bold(true)
-	tTitle = lipgloss.NewStyle().Bold(true)
-	tDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	tGood  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	tBad   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	tWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	tTitle  = lipgloss.NewStyle().Bold(true)
+	tDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	tGood   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	tBad    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	tWarn   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
 // Terminal is the UI on a real terminal: clack-style lines in a gutter,
@@ -73,9 +102,10 @@ type Terminal struct {
 	// width is the forms' width: the terminal's, capped. Huh panics on
 	// a terminal that reports no size, so unknown is 72.
 	width int
-	// mark is the wordmark's hole style: tMark until the terminal says
-	// its background is light.
-	mark lipgloss.Style
+	// holes and grid are the wordmark's styles, for a dark background
+	// until the terminal says its background is light.
+	holes []lipgloss.Style
+	grid  lipgloss.Style
 	// dark is whether the terminal's background is dark, as asked once in
 	// NewTerminal; the forms take the brand shade from it. Unknown is dark.
 	dark bool
@@ -86,14 +116,14 @@ type Terminal struct {
 // colour profile (NO_COLOR, TERM=dumb).
 func NewTerminal(in io.Reader, out io.Writer, environ []string) *Terminal {
 	width := 72
-	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true, mark: tMark}
+	t := &Terminal{in: in, tty: out, out: colorprofile.NewWriter(out, environ), width: width, dark: true, holes: holes(true), grid: grid(true)}
 	if f, ok := out.(*os.File); ok {
 		if w, _, err := term.GetSize(f.Fd()); err == nil && w >= 20 {
 			t.width = min(w, 80)
 		}
 		if fin, ok := in.(*os.File); ok {
 			t.dark = lipgloss.HasDarkBackground(fin, f)
-			t.mark = brand(t.dark)
+			t.holes, t.grid = holes(t.dark), grid(t.dark)
 		}
 	}
 	return t
@@ -121,12 +151,6 @@ func (term *Terminal) theme(bool) *huh.Styles {
 	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(c)
 	t.Group.Title = t.Focused.Title
 	return t
-}
-
-// brand is the wordmark style for a dark or a light background.
-func brand(dark bool) lipgloss.Style {
-	c := lipgloss.LightDark(dark)(tui.BrandLight, tui.BrandDark)
-	return lipgloss.NewStyle().Foreground(c).Bold(true)
 }
 
 // Begin prints the wordmark and opens the gutter.
