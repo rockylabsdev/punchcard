@@ -152,6 +152,9 @@ func (d addDialog) answered(m Model, f fetchMsg) (Model, tea.Cmd) {
 	m.dlg = nil
 	m.pendingSel = f.key
 	say := "added " + f.key
+	if t, ok := m.shown().State.Ticket(f.key); ok && !t.Listed() {
+		say = "restored " + f.key
+	}
 	switch {
 	case f.tracked:
 		say = f.key + " is already on your list"

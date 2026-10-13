@@ -71,10 +71,20 @@ func LastActivity(t TrackedTicket, now time.Time) time.Time {
 	return last
 }
 
-// ListOrder returns the tracked tickets most recently active first (ties
-// by key). This is also the recents order; it returns a new slice.
+// ListOrder returns the tickets on the list (not removed) most recently
+// active first (ties by key). This is also the recents order; it returns
+// a new slice.
 func ListOrder(s State, now time.Time) []TrackedTicket {
-	out := slices.Clone(s.TrackedTickets)
+	return order(slices.DeleteFunc(slices.Clone(s.TrackedTickets), func(t TrackedTicket) bool { return !t.Listed() }), now)
+}
+
+// AllOrder is ListOrder with removed tickets too, for ls --all.
+func AllOrder(s State, now time.Time) []TrackedTicket {
+	return order(slices.Clone(s.TrackedTickets), now)
+}
+
+// order sorts out in place, most recently active first, and returns it.
+func order(out []TrackedTicket, now time.Time) []TrackedTicket {
 	slices.SortStableFunc(out, func(a, b TrackedTicket) int {
 		if c := LastActivity(b, now).Compare(LastActivity(a, now)); c != 0 {
 			return c

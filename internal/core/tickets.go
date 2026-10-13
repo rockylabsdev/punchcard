@@ -12,29 +12,37 @@ func (a *applier) add(c Add) error {
 		}
 	}
 	for _, n := range c.Tickets {
-		a.track(n)
+		if a.track(n) == EventRestored {
+			a.emit(EventRestored, n.Key) // added is add's own effect; restored is news
+		}
 	}
 	return nil
 }
 
-// track adds n to the list if it is not there; it reports whether it did.
-// If the tracked ticket is unverified and n is confirmed, it confirms
-// it; a confirmed ticket is left alone.
-func (a *applier) track(n NewTicket) bool {
+// track puts n on the list if it is not there: it adds it (EventAdded)
+// or restores a removed ticket (EventRestored), keeping its addedAt and
+// its entries; it returns "" if n was already on the list. If the
+// ticket is unverified and n is confirmed, it confirms it; a confirmed
+// ticket is left alone.
+func (a *applier) track(n NewTicket) EventKind {
 	if t := a.ticket(n.Key); t != nil {
 		if t.Unverified && !n.Unverified {
 			t.Summary, t.Unverified = n.Summary, false
 		}
-		return false
+		if t.Listed() {
+			return ""
+		}
+		t.RemovedAt = Timestamp{}
+		return EventRestored
 	}
 	a.w.State.TrackedTickets = append(a.w.State.TrackedTickets, TrackedTicket{
 		Key: n.Key, Summary: n.Summary, Unverified: n.Unverified, AddedAt: a.now, Entries: []TimeEntry{},
 	})
-	return true
+	return EventAdded
 }
 
 func (a *applier) verify(c Verify) error {
-	t := a.ticket(c.Key)
+	t := a.listed(c.Key)
 	if t == nil {
 		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
 	}
@@ -43,16 +51,31 @@ func (a *applier) verify(c Verify) error {
 	return nil
 }
 
+// remove hides the ticket from the list. Its logged worklogs are kept;
+// Force discards only the time that was never logged.
 func (a *applier) remove(c Remove) error {
-	t := a.ticket(c.Key)
+	t := a.listed(c.Key)
 	if t == nil {
 		return fmt.Errorf("%w: %s", ErrNotTracked, c.Key)
 	}
 	if !c.Force && owes(*t) {
 		return fmt.Errorf("%w: %s has a running or paused entry or a worklog not yet sent", ErrUnlogged, c.Key)
 	}
-	a.w.State.TrackedTickets = slices.DeleteFunc(a.w.State.TrackedTickets, func(t TrackedTicket) bool { return t.Key == c.Key })
+	t.Entries = slices.DeleteFunc(t.Entries, func(e TimeEntry) bool { return e.Worklog == nil || !e.Worklog.Logged() })
+	t.RemovedAt = a.now
 	return nil
+}
+
+// KeptWorklogs is how many of t's worklogs are logged: what stays in the
+// log when it is removed.
+func KeptWorklogs(t TrackedTicket) int {
+	n := 0
+	for _, e := range t.Entries {
+		if e.Worklog != nil && e.Worklog.Logged() {
+			n++
+		}
+	}
+	return n
 }
 
 // owes reports whether removing t would throw away time not yet logged.

@@ -162,8 +162,9 @@ func (o output) shortLine(d StatusData) string {
 }
 
 func (a *app) lsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "ls",
+	var all bool
+	c := &cobra.Command{
+		Use:   "ls [--all]",
 		Short: "List tracked tickets, most recently active first",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -172,11 +173,13 @@ func (a *app) lsCmd() *cobra.Command {
 				a.code = a.failure("ls", err)
 				return nil
 			}
-			d := listData(w, now, nil)
+			d := listData(w, now, nil, all)
 			a.code = a.out.ok("ls", d, nil, a.out.listText(d))
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&all, "all", false, "also list removed tickets, to find one to restore with add or start")
+	return c
 }
 
 func (o output) listText(d ListData) string {
@@ -195,8 +198,11 @@ func (o output) listText(d ListData) string {
 		case core.TimerStale:
 			marker = o.paint(red, "!")
 		}
-		if t.State != core.TimerIdle {
+		switch {
+		case t.State != core.TimerIdle:
 			state, elapsed = string(t.State), clock(secs(t.ElapsedSeconds))
+		case !t.RemovedAt.IsZero():
+			state = "removed"
 		}
 		unsent := ""
 		if t.Unsynced > 0 {

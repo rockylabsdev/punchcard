@@ -377,7 +377,7 @@ func (m Model) command(i intent) core.Command {
 	}
 	shown := m.shown()
 	for _, t := range shown.State.TrackedTickets {
-		if t.Key != i.key {
+		if t.Key != i.key || !t.Listed() {
 			continue
 		}
 		if i.kind == intentVerify {
@@ -474,7 +474,7 @@ func (m Model) rows() []core.TrackedTicket {
 // tracked is the ticket key as shown, if it is on the list.
 func (m Model) tracked(key string) (core.TrackedTicket, bool) {
 	for _, t := range m.shown().State.TrackedTickets {
-		if t.Key == key {
+		if t.Key == key && t.Listed() {
 			return t, true
 		}
 	}

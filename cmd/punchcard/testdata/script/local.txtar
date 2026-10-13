@@ -1,6 +1,7 @@
 # A blank machine, no config at all: no tracker. A stop is final (the
 # worklog is local), nothing is owed, sync says there is no tracker, and
-# rm takes the ticket without a warning.
+# rm takes the ticket off the list without a warning, keeping its
+# worklog in the log until start restores it (#56).
 exec punchcard start payroll
 stdout '^▶ payroll running'
 
@@ -20,5 +21,20 @@ stderr 'no tracker'
 ! stderr 'Jira'
 
 exec punchcard rm payroll
-stdout '^- payroll removed$'
+stdout '^- payroll removed \(its 1 worklog stays in the log\)$'
 ! stderr .
+
+exec punchcard log
+stdout 'payroll'
+
+exec punchcard ls
+! stdout 'payroll'
+
+exec punchcard ls --all
+stdout 'payroll +removed'
+
+exec punchcard start payroll
+stdout '^\+ payroll restored$'
+
+exec punchcard ls
+stdout 'payroll +running'

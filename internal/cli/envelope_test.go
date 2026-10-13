@@ -337,12 +337,12 @@ func TestEnvelopes(t *testing.T) {
 		{"add a bad key", nil, "09:00", []string{"add", "AA-1", "x"}, 64, refused("add", "usage", "usage", "", "null")},
 		{"add needs a key", nil, "09:00", []string{"add"}, 64, refused("add", "usage", "usage", "see punchcard --help", "null")},
 		{"rm", func(h *harness) { h.do("08:00", "add", "AA-1") }, "09:00",
-			[]string{"rm", "AA-1"}, 0, ok("rm", `{"key": "AA-1"}`, noEvents)},
+			[]string{"rm", "AA-1"}, 0, ok("rm", `{"key": "AA-1", "keptWorklogs": 0}`, noEvents)},
 		{"rm refuses unlogged time with a hint", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:30",
 			[]string{"rm", "AA-1"}, 4,
 			refused("rm", "no_timer", "no_timer", "stop and sync it first, or pass --force to drop the unsent time", "null")},
 		{"rm --force", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:30",
-			[]string{"rm", "--force", "AA-1"}, 0, ok("rm", `{"key": "AA-1"}`, noEvents)},
+			[]string{"rm", "--force", "AA-1"}, 0, ok("rm", `{"key": "AA-1", "keptWorklogs": 0}`, noEvents)},
 		{"rm an untracked ticket", nil, "09:00", []string{"rm", "AA-1"}, 4, refused("rm", "no_timer", "no_timer", "", "null")},
 
 		// sync, setup, touch

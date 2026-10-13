@@ -63,9 +63,11 @@ func resolveHere(dir string, g tracker.Grammar, tracked []string) (*Here, []stri
 
 // trackedKeys is the keys on st's list, for the branch rule.
 func trackedKeys(st core.State) []string {
-	keys := make([]string, len(st.TrackedTickets))
-	for i, t := range st.TrackedTickets {
-		keys[i] = t.Key
+	var keys []string
+	for _, t := range st.TrackedTickets {
+		if t.Listed() {
+			keys = append(keys, t.Key)
+		}
 	}
 	return keys
 }

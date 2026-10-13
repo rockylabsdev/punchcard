@@ -151,3 +151,27 @@ func TestApplyStoresMillisecondTimes(t *testing.T) {
 	}
 	diff(t, "lossless round trip", got.State, back)
 }
+
+// #56: removedAt is additive. A file without it reads as on the list,
+// and a removed ticket round-trips with its timestamp.
+func TestRemovedAtIsAdditive(t *testing.T) {
+	var s core.State
+	if err := json.Unmarshal([]byte(specState), &s); err != nil {
+		t.Fatal(err)
+	}
+	if !s.TrackedTickets[0].Listed() {
+		t.Error("a ticket written before removedAt existed reads as removed")
+	}
+	s.TrackedTickets[0].RemovedAt = at("11:00")
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back core.State
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.TrackedTickets[0].Listed() || !back.TrackedTickets[0].RemovedAt.Equal(at("11:00").Time) {
+		t.Errorf("removedAt did not round-trip: %s", b)
+	}
+}

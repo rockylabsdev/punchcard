@@ -307,7 +307,7 @@ Type a key, or pick one of up to 8 recents with `↓` and `↑` (the list filter
 │any other key keeps it       │
 ```
 
-Key bar: `y remove  any key keep it`. The warning line appears only when the ticket has an open entry or, with Jira, an unsent worklog; with no tracker it reads `its unlogged 15m would be lost: it is never logged`. `y` then removes it anyway. Remove takes the ticket, its history and any unlogged or unsent time off your list. Nothing in a tracker changes.
+Key bar: `y remove  any key keep it`. Under the key, a line says what is kept when the ticket has logged worklogs: `its 3 logged worklogs stay in the log`. The warning line appears only when the ticket has an open entry or, with Jira, an unsent worklog; with no tracker it reads `its unlogged 15m would be lost: it is never logged`. `y` then removes it anyway. Remove takes the ticket off your list and discards any unlogged or unsent time; its logged worklogs stay in the day's log and in `punchcard log`, and adding its key again restores it with its history (`restored PUN-142`). Nothing in a tracker changes.
 
 ### Help (`?`)
 

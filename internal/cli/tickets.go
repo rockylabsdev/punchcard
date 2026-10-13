@@ -43,12 +43,19 @@ func (a *app) addCmd() *cobra.Command {
 				a.code = a.failure("add", err)
 				return nil
 			}
-			d := listData(res.World, res.Now, keys)
+			d := listData(res.World, res.Now, keys, false)
+			restored := map[string]bool{}
+			for _, e := range res.Events {
+				restored[e.Key] = restored[e.Key] || e.Kind == core.EventRestored
+			}
 			var b strings.Builder
 			for _, t := range d.Tickets {
-				if t.AddedAt.Equal(core.At(res.Now).Time) {
+				switch {
+				case restored[t.Key]:
+					fmt.Fprintf(&b, "+ %s restored\n", t.Key)
+				case t.AddedAt.Equal(core.At(res.Now).Time):
 					fmt.Fprintf(&b, "+ %s added\n", t.Key)
-				} else {
+				default:
 					fmt.Fprintf(&b, "%s is already on the list\n", t.Key)
 				}
 			}
@@ -64,7 +71,7 @@ func (a *app) rmCmd() *cobra.Command {
 	var force bool
 	c := &cobra.Command{
 		Use:   "rm KEY",
-		Short: "Take a ticket off the list (refused while it has unlogged time)",
+		Short: "Take a ticket off the list; its logged worklogs stay in the log (refused while it has unlogged time)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := a.key(args[0])
@@ -73,7 +80,17 @@ func (a *app) rmCmd() *cobra.Command {
 				a.code = a.failure("rm", err)
 				return nil
 			}
-			a.done("rm", res, RemoveData{Key: key}, fmt.Sprintf("- %s removed\n", key))
+			t, _ := res.World.State.Ticket(key)
+			d := RemoveData{Key: key, KeptWorklogs: core.KeptWorklogs(t)}
+			human := fmt.Sprintf("- %s removed\n", key)
+			switch d.KeptWorklogs {
+			case 0:
+			case 1:
+				human = fmt.Sprintf("- %s removed (its 1 worklog stays in the log)\n", key)
+			default:
+				human = fmt.Sprintf("- %s removed (its %d worklogs stay in the log)\n", key, d.KeptWorklogs)
+			}
+			a.done("rm", res, d, human)
 			return nil
 		},
 	}

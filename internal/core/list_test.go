@@ -31,18 +31,25 @@ func TestApplyAddRemove(t *testing.T) {
 			err:  core.ErrUsage,
 		},
 		{
-			name: "remove drops a ticket with nothing owed",
+			name: "remove hides a ticket and keeps its synced worklog",
 			w:    world("10:00", ticket("AA-1", stopped(core.WorklogSynced)), ticket("BB-2")),
 			cmd:  core.Remove{Key: "AA-1"},
 			now:  "10:00",
-			want: state(ticket("BB-2")),
+			want: state(removed(ticket("AA-1", stopped(core.WorklogSynced)), "10:00"), ticket("BB-2")),
 		},
 		{
-			name: "remove drops a ticket whose time is logged locally",
+			name: "remove hides a ticket and keeps its local worklog",
 			w:    world("10:00", ticket("AA-1", stopped(core.WorklogLocal)), ticket("BB-2")),
 			cmd:  core.Remove{Key: "AA-1"},
 			now:  "10:00",
-			want: state(ticket("BB-2")),
+			want: state(removed(ticket("AA-1", stopped(core.WorklogLocal)), "10:00"), ticket("BB-2")),
+		},
+		{
+			name: "remove hides a ticket with no time against it",
+			w:    world("10:00", ticket("AA-1")),
+			cmd:  core.Remove{Key: "AA-1"},
+			now:  "10:00",
+			want: state(removed(ticket("AA-1"), "10:00")),
 		},
 		{
 			name: "remove refuses a running entry",
@@ -60,16 +67,82 @@ func TestApplyAddRemove(t *testing.T) {
 			cmd:  core.Remove{Key: "AA-1"}, now: "10:00", err: core.ErrUnlogged,
 		},
 		{
-			name: "remove --force overrides",
+			name: "remove --force discards the unsent worklog",
 			w:    world("10:00", ticket("AA-1", stopped(core.WorklogPending))),
 			cmd:  core.Remove{Key: "AA-1", Force: true},
 			now:  "10:00",
-			want: state(),
+			want: state(removed(ticket("AA-1"), "10:00")),
+		},
+		{
+			name: "remove --force discards the open entry and keeps the logged worklog",
+			w: world("10:00", ticket("AA-1",
+				withWorklog(entry("E1", hand, seg("08:00", "08:30")), core.Worklog{State: core.WorklogLocal, StartedAt: at("08:00"), TimeSpentSeconds: 1800}),
+				entry("E2", hand, seg("09:00", "09:10")))),
+			cmd: core.Remove{Key: "AA-1", Force: true},
+			now: "10:00",
+			want: state(removed(ticket("AA-1",
+				withWorklog(entry("E1", hand, seg("08:00", "08:30")), core.Worklog{State: core.WorklogLocal, StartedAt: at("08:00"), TimeSpentSeconds: 1800})), "10:00")),
 		},
 		{
 			name: "remove of an untracked key is refused",
 			w:    world("10:00"),
 			cmd:  core.Remove{Key: "AA-1"}, now: "10:00", err: core.ErrNotTracked,
+		},
+		{
+			name: "remove of a removed ticket is refused",
+			w:    world("10:00", removed(ticket("AA-1"), "09:00")),
+			cmd:  core.Remove{Key: "AA-1"}, now: "10:00", err: core.ErrNotTracked,
+		},
+		{
+			name:   "add restores a removed ticket, its addedAt and history intact",
+			w:      world("10:00", removed(ticket("AA-1", stopped(core.WorklogLocal)), "09:45"), ticket("BB-2")),
+			cmd:    core.Add{Tickets: []core.NewTicket{{Key: "AA-1"}, {Key: "BB-2"}}},
+			now:    "10:00",
+			want:   state(ticket("AA-1", stopped(core.WorklogLocal)), ticket("BB-2")),
+			events: []core.Event{{Kind: core.EventRestored, Key: "AA-1"}},
+		},
+		{
+			name:   "add confirms an unverified removed ticket as it restores it",
+			w:      world("10:00", removed(unverified(ticket("AA-1")), "09:45")),
+			cmd:    core.Add{Tickets: []core.NewTicket{{Key: "AA-1", Summary: "Fix it"}}},
+			now:    "10:00",
+			want:   state(summarized(ticket("AA-1"), "Fix it")),
+			events: []core.Event{{Kind: core.EventRestored, Key: "AA-1"}},
+		},
+		{
+			name:   "start restores a removed ticket and opens a new entry",
+			w:      world("10:00", removed(ticket("AA-1", stopped(core.WorklogSynced)), "09:45")),
+			cmd:    core.Start{Key: "AA-1", Origin: hand, NewEntryID: "E2"},
+			now:    "10:00",
+			want:   state(ticket("AA-1", stopped(core.WorklogSynced), entry("E2", hand, seg("10:00", "")))),
+			events: []core.Event{{Kind: core.EventRestored, Key: "AA-1"}},
+		},
+		{
+			name:   "resume KEY restores a removed ticket",
+			w:      world("10:00", removed(ticket("AA-1"), "09:45")),
+			cmd:    core.Resume{Key: "AA-1", Origin: hand, NewEntryID: "E1"},
+			now:    "10:00",
+			want:   state(ticket("AA-1", entry("E1", hand, seg("10:00", "")))),
+			events: []core.Event{{Kind: core.EventRestored, Key: "AA-1"}},
+		},
+		{
+			name: "focus on a removed ticket restores it as a start does",
+			w:    world("10:00", ticket("BB-2", entry("EB", agent, seg("09:00", ""))), removed(ticket("AA-1"), "09:45")),
+			cmd:  core.Touch{Key: "AA-1", Origin: prompt, NewEntryID: "E1"},
+			now:  "10:00",
+			want: focused(state(ticket("BB-2", entry("EB", prompt, seg("09:00", "10:00"))),
+				ticket("AA-1", entry("E1", prompt, seg("10:00", "")))), "AA-1"),
+			events: []core.Event{{Kind: core.EventPaused, Key: "BB-2"}, {Kind: core.EventRestored, Key: "AA-1"}, {Kind: core.EventStarted, Key: "AA-1"}},
+		},
+		{
+			name: "stop names a removed ticket as not tracked",
+			w:    world("10:00", removed(ticket("AA-1"), "09:45")),
+			cmd:  core.Stop{Key: "AA-1"}, now: "10:00", err: core.ErrNotTracked,
+		},
+		{
+			name: "verify of a removed ticket is refused",
+			w:    world("10:00", removed(unverified(ticket("AA-1")), "09:45")),
+			cmd:  core.Verify{Key: "AA-1", Summary: "Fix it"}, now: "10:00", err: core.ErrNotTracked,
 		},
 	})
 }
@@ -171,5 +244,42 @@ func TestApplyTouch(t *testing.T) {
 			diff(t, "events", tc.events, events)
 			diff(t, "lastSeen", tc.lastSeen, got.Heartbeat.LastSeen)
 		})
+	}
+}
+
+func removed(t core.TrackedTicket, clock string) core.TrackedTicket {
+	t.RemovedAt = at(clock)
+	return t
+}
+
+func unverified(t core.TrackedTicket) core.TrackedTicket { t.Unverified = true; return t }
+
+func summarized(t core.TrackedTicket, summary string) core.TrackedTicket {
+	t.Summary = summary
+	return t
+}
+
+// #56: the list is the tickets not removed; a removed ticket's worklogs
+// are still counted wherever the range, not the list, decides.
+func TestListOrderLeavesOutRemovedTickets(t *testing.T) {
+	s := state(ticket("AA-1"), removed(ticket("BB-2"), "09:00"), ticket("CC-3"))
+	keys := func(ts []core.TrackedTicket) []string {
+		var out []string
+		for _, t := range ts {
+			out = append(out, t.Key)
+		}
+		return out
+	}
+	diff(t, "list", []string{"AA-1", "CC-3"}, keys(core.ListOrder(s, at("10:00").Time)))
+	diff(t, "all", []string{"AA-1", "BB-2", "CC-3"}, keys(core.AllOrder(s, at("10:00").Time)))
+}
+
+func TestKeptWorklogsCountsOnlyLogged(t *testing.T) {
+	wl := func(id string, st core.WorklogState) core.TimeEntry {
+		return withWorklog(entry(id, hand, seg("08:00", "08:30")), core.Worklog{State: st, StartedAt: at("08:00"), TimeSpentSeconds: 1800})
+	}
+	tk := ticket("AA-1", wl("E1", core.WorklogSynced), wl("E2", core.WorklogLocal), wl("E3", core.WorklogFailed), entry("E4", hand, seg("09:00", "")))
+	if n := core.KeptWorklogs(tk); n != 2 {
+		t.Errorf("KeptWorklogs = %d, want 2", n)
 	}
 }

@@ -54,3 +54,7 @@ The reason is false positives. Lowercase branch names are full of dash-number wo
 ## Amendment, 2026-10-12: focus moves a timer set by hand
 
 "Never moves a held one" above is no longer the rule. A change of focus moves the running timer whoever set it; focus still never starts one from idle. See ADR 0010.
+
+## Amendment, 2026-10-13 (#56): removal hides
+
+"Local mode has no forgetting" holds for `rm` too: removing a ticket hides it from the list (`removedAt` on the ticket, additive to schema 1) and never deletes a worklog. Before this, `rm` dropped the ticket with its entries, so with no tracker it destroyed the only record of its logged time without a warning, while the guard spoke only of unlogged time. Now the list is the tickets not removed; `log` is decided by the range, not by list membership; and starting, resuming, adding or focusing a removed key restores the ticket with its history. `--force` still discards only time never logged. An archive or pruning stays deferred, with the trigger above.

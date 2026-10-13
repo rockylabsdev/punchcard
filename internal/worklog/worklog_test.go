@@ -459,8 +459,9 @@ func TestASyncedWorklogConfirmsAnUnverifiedTicket(t *testing.T) {
 		f.jira = removing{fake, f}
 		f.unverifiedStopped("NEW-1", "E1", "08:00", "08:30")
 		sync(t, f)
-		if _, ok := f.world().State.Ticket("NEW-1"); ok {
-			t.Error("the removed ticket came back")
+		// Its synced worklog keeps it in the state, off the list.
+		if tk, _ := f.world().State.Ticket("NEW-1"); tk.Listed() || tk.Summary != "" {
+			t.Errorf("the removed ticket came back: %+v", tk)
 		}
 	})
 	t.Run("stop confirms it too", func(t *testing.T) {
