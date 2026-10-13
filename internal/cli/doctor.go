@@ -59,6 +59,9 @@ type DoctorState struct {
 	Tickets       int            `json:"tickets"`
 	Heartbeat     core.Timestamp `json:"heartbeat"` // null when never seen
 	Locked        bool           `json:"locked"`
+	// today is the day doctor ran, in its zone: the human text dates a
+	// heartbeat from another day.
+	today string
 }
 
 // DoctorConfig is config.json, never the token.
@@ -170,7 +173,8 @@ func (a *app) doctorState(r redactor, d *DoctorData) DoctorState {
 	if err := st.Err(); err != nil {
 		return DoctorState{State: "error", Problem: err.Error()}
 	}
-	s := DoctorState{Dir: r.path(st.Dir()), Locked: st.Locked()}
+	now := a.env.Now()
+	s := DoctorState{Dir: r.path(st.Dir()), Locked: st.Locked(), today: now.Format(time.DateOnly)}
 	w, notices, err := st.Read()
 	switch {
 	case errors.Is(err, store.ErrNewerSchema):
@@ -195,7 +199,6 @@ func (a *app) doctorState(r redactor, d *DoctorData) DoctorState {
 			s.Tickets++
 		}
 	}
-	now := a.env.Now()
 	if hb := w.Heartbeat.LastSeen; !hb.IsZero() {
 		s.Heartbeat = core.At(hb.In(now.Location()))
 	}
@@ -339,6 +342,9 @@ func (s DoctorState) text() string {
 	hb := "never"
 	if !s.Heartbeat.IsZero() {
 		hb = s.Heartbeat.Format("15:04")
+		if day := s.Heartbeat.Format(time.DateOnly); day != s.today {
+			hb = day + " " + hb
+		}
 	}
 	return s.Dir + "  " + state + "  heartbeat " + hb
 }

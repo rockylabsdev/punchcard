@@ -18,6 +18,7 @@ import (
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/jira"
 	"github.com/j-dsmith/punchcard/internal/store"
+	"golang.org/x/sys/unix"
 )
 
 // fakeClaude is `claude` on PATH for doctor: its version and its
@@ -155,4 +156,224 @@ os          %s 15.1 %s
 	if d := cmp.Diff(want, got.stdout); d != "" {
 		t.Errorf("doctor (-want +got):\n%s", d)
 	}
+}
+
+func TestDoctorClaudeAndPlugin(t *testing.T) {
+	cases := []struct {
+		name               string
+		claude             *fakeClaude
+		wantClaude, wantPl string
+	}{
+		{"no claude", &fakeClaude{}, "not found on PATH", "claude not found"},
+		{"plugin at this version", nil, "2.1.291 at /opt/homebrew/bin/claude", "punchcard@punchcard 1.2.3  ✓ matches binary"},
+		{"plugin at another release",
+			&fakeClaude{path: "/opt/homebrew/bin/claude", list: `[{"id":"punchcard@punchcard","version":"1.2.0"}]`},
+			"2.1.291 at /opt/homebrew/bin/claude", "punchcard@punchcard 1.2.0  ≠ 1.2.3 → run punchcard setup"},
+		{"plugin not installed", &fakeClaude{path: "/opt/homebrew/bin/claude", list: `[]`},
+			"2.1.291 at /opt/homebrew/bin/claude", "not installed → run punchcard setup"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newDoctorRig(t)
+			if c.claude != nil {
+				r.claude = c.claude
+			}
+			got := r.run()
+			if got.code != 0 {
+				t.Fatalf("exit %d", got.code)
+			}
+			if l := line(t, got.stdout, "claude"); l != c.wantClaude {
+				t.Errorf("claude line %q, want %q", l, c.wantClaude)
+			}
+			if l := line(t, got.stdout, "plugin"); l != c.wantPl {
+				t.Errorf("plugin line %q, want %q", l, c.wantPl)
+			}
+		})
+	}
+}
+
+func TestDoctorAskRule(t *testing.T) {
+	for name, c := range map[string]struct{ settings, want string }{
+		"absent":      {`{"model":"opus"}`, "absent → punchcard setup adds it"},
+		"no file":     {"", "absent → punchcard setup adds it"},
+		"unparseable": {`{"permissions": {`, "~/.claude/settings.json unparseable"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newDoctorRig(t)
+			p := filepath.Join(r.home, ".claude", "settings.json")
+			if c.settings == "" {
+				os.Remove(p)
+			} else {
+				r.settings(c.settings)
+			}
+			if l := line(t, r.run().stdout, "ask rule"); l != c.want {
+				t.Errorf("ask rule line %q, want %q", l, c.want)
+			}
+		})
+	}
+}
+
+func TestDoctorTrackerAndToken(t *testing.T) {
+	t.Run("no tracker", func(t *testing.T) {
+		r := newDoctorRig(t)
+		os.Remove(filepath.Join(r.home, ".config", "punchcard", "config.json"))
+		out := r.run().stdout
+		if l := line(t, out, "config"); l != "~/.config/punchcard/config.json  none yet  tracker none" {
+			t.Errorf("config line %q", l)
+		}
+		if l := line(t, out, "token"); l != "none (no tracker)" {
+			t.Errorf("token line %q", l)
+		}
+		if r.kc.reads != 0 {
+			t.Errorf("Keychain read %d times with no tracker", r.kc.reads)
+		}
+	})
+	sources := []struct {
+		name    string
+		prepare func(r *doctorRig)
+		want    string
+	}{
+		{"Keychain", func(*doctorRig) {}, "Keychain"},
+		{"PUNCHCARD_TOKEN", func(r *doctorRig) { r.env["PUNCHCARD_TOKEN"] = "tok-env" }, "PUNCHCARD_TOKEN"},
+		{"file", func(r *doctorRig) {
+			r.kc.token = ""
+			if err := config.WriteTokenFile(r.getenv, "tok-file"); err != nil {
+				t.Fatal(err)
+			}
+		}, "file"},
+		{"none", func(r *doctorRig) { r.kc.token = "" }, "none"},
+	}
+	for _, s := range sources {
+		t.Run("Jira, token from "+s.name, func(t *testing.T) {
+			r := newDoctorRig(t)
+			s.prepare(r)
+			got := r.run()
+			if l := line(t, got.stdout, "token"); l != s.want {
+				t.Errorf("token line %q, want %q", l, s.want)
+			}
+			for _, secret := range []string{"tok-env", "tok-file"} {
+				if strings.Contains(got.stdout, secret) {
+					t.Errorf("output carries the token %q", secret)
+				}
+			}
+		})
+	}
+}
+
+func TestDoctorRedacts(t *testing.T) {
+	r := newDoctorRig(t)
+	got := r.run()
+	for _, secret := range []string{doctorSite, "acme", doctorEmail, r.home} {
+		if strings.Contains(got.stdout, secret) {
+			t.Errorf("redacted output carries %q:\n%s", secret, got.stdout)
+		}
+	}
+	plain := r.run("--no-redact").stdout
+	if l := line(t, plain, "config"); l != filepath.Join(r.home, ".config/punchcard/config.json")+"  tracker jira  site "+doctorSite+"  email "+doctorEmail {
+		t.Errorf("--no-redact config line %q", l)
+	}
+	if l := line(t, plain, "binary"); l != filepath.Join(r.home, "bin/punchcard") {
+		t.Errorf("--no-redact binary line %q", l)
+	}
+}
+
+func TestDoctorJSON(t *testing.T) {
+	r := newDoctorRig(t)
+	got := r.run("--json")
+	if got.code != 0 {
+		t.Fatalf("exit %d", got.code)
+	}
+	env := decode(t, got.stdout)
+	if env["ok"] != true || env["command"] != "doctor" {
+		t.Fatalf("envelope %v", env)
+	}
+	d := env["data"].(map[string]any)
+	want := map[string]any{
+		"binary": "~/bin/punchcard",
+		"data": map[string]any{"dir": "~/.local/share/punchcard", "state": "ok", "schemaVersion": 1.0, "tickets": 1.0,
+			"heartbeat": "2026-08-09T08:00:00.000-0500", "locked": false},
+		"config": map[string]any{"path": "~/.config/punchcard/config.json", "exists": true, "tracker": "jira",
+			"site": "<redacted>", "email": "<redacted>"},
+		"token":   "keychain",
+		"unsent":  map[string]any{"count": 0.0, "seconds": 0.0},
+		"claude":  map[string]any{"found": true, "version": "2.1.291", "path": "/opt/homebrew/bin/claude"},
+		"plugin":  map[string]any{"installed": true, "version": "1.2.3", "matches": true, "skewed": false},
+		"askRule": map[string]any{"path": "~/.claude/settings.json", "state": "present"},
+		"terminal": map[string]any{"TERM": "xterm-ghostty", "TERM_PROGRAM": "ghostty", "COLORTERM": "truecolor",
+			"NO_COLOR": false, "width": 120.0, "height": 32.0},
+		"os": map[string]any{"goos": runtime.GOOS, "version": "15.1", "arch": runtime.GOARCH},
+	}
+	for k, w := range want {
+		if diff := cmp.Diff(w, d[k]); diff != "" {
+			t.Errorf("data.%s (-want +got):\n%s", k, diff)
+		}
+	}
+	if tm, _ := d["timer"].(map[string]any); tm["key"] != "PUN-142" || tm["byHand"] != true {
+		t.Errorf("data.timer = %v", d["timer"])
+	}
+	if pc, _ := d["punchcard"].(map[string]any); pc["version"] != "1.2.3" || pc["contract"] != 1.0 {
+		t.Errorf("data.punchcard = %v", d["punchcard"])
+	}
+}
+
+// doctor never fixes state.json: an unreadable file stays where it is,
+// and doctor still exits 0.
+func TestDoctorReportsStateProblemsWithoutFixingThem(t *testing.T) {
+	statePath := func(r *doctorRig) string { return filepath.Join(r.home, ".local/share/punchcard/state.json") }
+	t.Run("unreadable", func(t *testing.T) {
+		r := newDoctorRig(t)
+		r.write(statePath(r), "{not json")
+		got := r.run()
+		if got.code != 0 {
+			t.Fatalf("exit %d", got.code)
+		}
+		if l := line(t, got.stdout, "data"); !strings.Contains(l, "state.json unreadable: ") ||
+			!strings.Contains(l, "the next change will move it aside") || strings.Contains(l, r.home) {
+			t.Errorf("data line %q", l)
+		}
+		if b, _ := os.ReadFile(statePath(r)); string(b) != "{not json" {
+			t.Errorf("state.json changed: %q", b)
+		}
+		if got := r.run("--json"); got.code != 0 || decode(t, got.stdout)["ok"] != true {
+			t.Errorf("--json: exit %d %s", got.code, got.stdout)
+		}
+	})
+	t.Run("newer", func(t *testing.T) {
+		r := newDoctorRig(t)
+		r.write(statePath(r), `{"schemaVersion": 99}`)
+		got := r.run()
+		if l := line(t, got.stdout, "data"); got.code != 0 || !strings.Contains(l, "state.json written by a newer punchcard") {
+			t.Errorf("exit %d data line %q", got.code, l)
+		}
+	})
+	t.Run("locked", func(t *testing.T) {
+		r := newDoctorRig(t)
+		f, err := os.OpenFile(filepath.Join(r.home, ".local/share/punchcard", store.LockFile), os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+			t.Fatal(err)
+		}
+		if l := line(t, r.run().stdout, "data"); !strings.Contains(l, "state is locked by another punchcard") {
+			t.Errorf("data line %q", l)
+		}
+	})
+	t.Run("a heartbeat from another day shows its date", func(t *testing.T) {
+		r := newDoctorRig(t)
+		r.now = at("09:12").Add(24 * time.Hour)
+		if l := line(t, r.run().stdout, "data"); !strings.HasSuffix(l, "heartbeat 2026-08-09 08:00") {
+			t.Errorf("data line %q", l)
+		}
+	})
+	t.Run("no data directory", func(t *testing.T) {
+		r := newDoctorRig(t)
+		r.env = map[string]string{}
+		r.st = store.Open(r.getenv, func() time.Time { return r.now })
+		got := r.run()
+		if l := line(t, got.stdout, "data"); got.code != 0 || !strings.HasPrefix(l, "no data directory") {
+			t.Errorf("exit %d data line %q", got.code, l)
+		}
+	})
 }
