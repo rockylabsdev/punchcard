@@ -25,6 +25,8 @@ Run the bare `punchcard` through Bash and always pass `--json`; read the envelop
 
 `--duration` takes `1h30m`, `1h 30m`, `1h`, `90m`, `1:30` or bare minutes (1 m to 24 h).
 
+`pause`, `resume` and `start` take `--at TIME`: the change happens then instead of now. TIME is `HH:MM` (the latest such time, so `23:50` just after midnight is last night) or `-D`, that long ago (`-45m`, `-1h30m`). The `paused`/`started` events then carry `at`.
+
 `data.todaySeconds` in `punchcard status --json` answers "how long have I worked today": the day's total over every ticket.
 
 ## Rules
@@ -36,6 +38,7 @@ Run the bare `punchcard` through Bash and always pass `--json`; read the envelop
 5. **Unattended** (no one to approve, the `--yes` call was denied): leave the gate as it is and leave the timer running. Tell the user: "run `/punch stop` when you're back".
 6. **Start a timer only when the user asks.** Start, pause and resume need no approval, but they move only a timer the user has not set by hand. If `start` reports a timer set by hand (exit 4, `error.code` `by_hand`), say so and leave it.
 7. **Reporting a period** ("what did I work on this week", a timesheet): run `punchcard log --json` with the range, and answer from `data.rows` (each: `date`, `started`, `key`, `summary`, `minutes`, `comment`, `state`), `data.open` (a running or paused timer, not yet logged, or null) and `data.range` (`from`, `to`). The default range is Monday through today; `--month` is the 1st through today; `--from`/`--to` are inclusive `YYYY-MM-DD`. For a table to paste, `punchcard log --md` (no `--json`) prints Markdown.
+8. **Time away the user describes** ("I was in a meeting from ten to quarter to eleven") is `punchcard pause --at 10:00 --json` then `punchcard resume --at 10:45 --json`. Never backdate on your own: use `--at` only with a time the user gave you. A refused time is exit 64; `error.message` says why.
 
 ## Exit codes
 

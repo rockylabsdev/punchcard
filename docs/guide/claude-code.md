@@ -116,9 +116,11 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 
 | Command | Does |
 | --- | --- |
-| `/punch start [KEY]` | Start KEY, or this session's ticket (`here`, asked fresh) when no key is given. With neither: `No ticket here (no .punchcard, and the branch names none): use /punch start KEY.` |
-| `/punch pause` | Pause the running timer. |
-| `/punch resume [KEY]` | Resume the last paused entry, or start KEY. |
+| `/punch start [KEY] [--at TIME]` | Start KEY, or this session's ticket (`here`, asked fresh) when no key is given. With neither: `No ticket here (no .punchcard, and the branch names none): use /punch start KEY.` |
+| `/punch pause [--at TIME]` | Pause the running timer. |
+| `/punch resume [KEY] [--at TIME]` | Resume the last paused entry, or start KEY. |
+
+`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and the toasts say `⏸ ABC-123 paused at 10:00` and `▶ ABC-123 started at 10:45`. Being by hand, it works on a timer you set by hand.
 | `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
 
 `/punch stop` runs a dry run first and shows a dialog with the exact worklog, for example `Log 1h30m to ABC-123 with "fixed the formatter"?`, and these answers:
@@ -156,7 +158,7 @@ Why an agent proposes and you dispose: [ADR 0005](../adr/0005-agent-stop-gated-b
 
 ## What the skill teaches the agent
 
-The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start a timer only when the user asks; start, pause and resume need no approval but a timer set by hand is the user's; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
+The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start a timer only when the user asks; start, pause and resume need no approval but a timer set by hand is the user's; time away the user describes ("I was in a meeting from ten to quarter to eleven") is `pause --at` then `resume --at`, and an agent never backdates on its own; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
 
 ## Checking it is working
 

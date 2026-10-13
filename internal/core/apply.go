@@ -25,7 +25,9 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 		origin, err = c.Origin, a.start(c)
 	case Pause:
 		origin = c.Origin
-		if _, e := a.running(); e != nil || !recovered {
+		if !c.At.IsZero() {
+			err = a.pauseAt(c)
+		} else if _, e := a.running(); e != nil || !recovered {
 			err = a.pause(c)
 		} // else: recovery already paused it, which is what was asked.
 	case Resume:
@@ -82,8 +84,19 @@ func (a *applier) start(c Start) error {
 	if !c.Grammar.Valid(c.Key) {
 		return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
+	named := !c.At.IsZero()
+	when := a.now
+	if named {
+		when = At(c.At)
+		if err := a.notFuture(when); err != nil {
+			return err
+		}
+	}
 	if t, e := a.running(); e != nil {
 		if t.Key == c.Key {
+			if named {
+				return fmt.Errorf("%w: %s is already running; to cut time out of it, pause and resume at a time", ErrUsage, c.Key)
+			}
 			a.track(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}) // confirms only
 			if c.Origin == OriginHand && !e.ByHand {
 				e.ByHand, e.Origin = true, OriginHand
@@ -95,17 +108,46 @@ func (a *applier) start(c Start) error {
 	if err := a.guardByHand(c.Origin); err != nil {
 		return err
 	}
-	_, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
+	if named {
+		var skip *Segment
+		if t, e := a.running(); e != nil {
+			skip = &e.Segments[len(e.Segments)-1]
+			if when.Before(skip.StartedAt.Time) {
+				return fmt.Errorf("%w: %s is before %s started at %s", ErrUsage, a.hhmm(when), t.Key, a.hhmm(skip.StartedAt))
+			}
+		}
+		if e := openEntry(a.ticket(c.Key)); e != nil && len(e.Segments) > 0 && when.Before(lastEnd(*e).Time) {
+			return fmt.Errorf("%w: %s is before %s", ErrUsage, a.hhmm(when), a.hhmm(lastEnd(*e)))
+		}
+		if err := a.overlaps(when, a.now, skip); err != nil {
+			return err
+		}
+	}
+	_, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID, when, named)
+	if err == nil && named {
+		a.events = append(a.events, Event{Kind: EventStarted, Key: c.Key, At: when})
+	}
 	return err
 }
 
 // switchTo closes any running segment (announced) and opens one on n's
-// key, tracking n first if needed. It returns the entry it opened.
-func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*TimeEntry, error) {
+// key, tracking n first if needed, both at when. named says when is a
+// time the user named rather than now. It returns the entry it opened.
+func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string, when Timestamp, named bool) (*TimeEntry, error) {
 	if openEntry(a.ticket(n.Key)) == nil && newEntryID == "" {
 		return nil, fmt.Errorf("%w: a new entry needs an id", ErrUsage)
 	}
-	a.pauseRunning(origin, true)
+	if t, e := a.running(); e != nil {
+		ev := Event{Kind: EventPaused, Key: t.Key}
+		if named {
+			ev.At = when
+			ev.Message = a.closeAt(e, when, false)
+		} else {
+			e.Segments[len(e.Segments)-1].EndedAt = when
+		}
+		e.Origin = origin
+		a.events = append(a.events, ev)
+	}
 	if ev := a.track(n); ev != "" {
 		a.emit(ev, n.Key)
 	}
@@ -115,9 +157,116 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*Time
 		t.Entries = append(t.Entries, TimeEntry{ID: newEntryID})
 		e = &t.Entries[len(t.Entries)-1]
 	}
-	a.open(e, origin)
+	a.openAt(e, origin, when)
 	return e, nil
 }
+
+// pauseAt is a Pause at a named time: it closes the running segment
+// then, or moves a paused entry's pause there (see Pause).
+func (a *applier) pauseAt(c Pause) error {
+	when := At(c.At)
+	if err := a.notFuture(when); err != nil {
+		return err
+	}
+	t, e := a.running()
+	if e != nil && c.Key != "" && t.Key != c.Key {
+		t, e = nil, nil
+	}
+	switch {
+	case e != nil:
+		if err := a.guardByHand(c.Origin); err != nil {
+			return err
+		}
+	case c.Key != "":
+		t = a.listed(c.Key)
+		e = openEntry(t)
+	default:
+		if i, j := lastPaused(a.w.State); i >= 0 {
+			t = &a.w.State.TrackedTickets[i]
+			e = &t.Entries[j]
+		}
+	}
+	if e == nil || len(e.Segments) == 0 {
+		return fmt.Errorf("%w: nothing is running or paused", ErrNoTimer)
+	}
+	if e.ByHand && c.Origin != OriginHand {
+		return fmt.Errorf("%s %w", t.Key, ErrByHand)
+	}
+	last := len(e.Segments) - 1
+	s := e.Segments[last]
+	if when.Before(s.StartedAt.Time) {
+		since := "the entry started"
+		if last > 0 {
+			since = "it resumed"
+		}
+		return fmt.Errorf("%w: %s is before %s at %s", ErrUsage, a.hhmm(when), since, a.hhmm(s.StartedAt))
+	}
+	if !s.Open() && when.After(s.EndedAt.Time) {
+		if err := a.overlaps(s.EndedAt, when, &e.Segments[last]); err != nil {
+			return err
+		}
+	}
+	msg := a.closeAt(e, when, true)
+	e.Origin = c.Origin
+	a.events = append(a.events, Event{Kind: EventPaused, Key: t.Key, At: when, Message: msg})
+	return nil
+}
+
+// closeAt closes e's last segment at when, a time the user named, marked
+// cut if cut. A segment that would be left under a minute is dropped,
+// or with no other segment closed at its own start; the returned note
+// says so ("" otherwise).
+func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
+	i := len(e.Segments) - 1
+	s := &e.Segments[i]
+	d := when.Sub(s.StartedAt.Time)
+	if d <= 0 || d >= time.Minute {
+		s.EndedAt, s.Cut = when, cut
+		return ""
+	}
+	note := fmt.Sprintf("the %s from %s was under a minute, so it was dropped", d.Round(time.Second), a.hhmm(s.StartedAt))
+	if i > 0 {
+		e.Segments = e.Segments[:i]
+		e.Segments[i-1].Cut = e.Segments[i-1].Cut || cut
+		return note
+	}
+	s.EndedAt, s.Cut = s.StartedAt, cut
+	return note
+}
+
+// notFuture refuses a named time after now.
+func (a *applier) notFuture(when Timestamp) error {
+	if when.After(a.now.Time) {
+		return fmt.Errorf("%w: %s is in the future", ErrUsage, a.hhmm(when))
+	}
+	return nil
+}
+
+// overlaps refuses measuring [from, to) when any segment but skip
+// already has time in it: the user's time is one stream.
+func (a *applier) overlaps(from, to Timestamp, skip *Segment) error {
+	for i := range a.w.State.TrackedTickets {
+		t := &a.w.State.TrackedTickets[i]
+		for j := range t.Entries {
+			for k := range t.Entries[j].Segments {
+				s := &t.Entries[j].Segments[k]
+				end := s.EndedAt
+				if s.Open() {
+					end = a.now
+				}
+				if s == skip || !s.StartedAt.Before(to.Time) || !end.After(from.Time) {
+					continue
+				}
+				return fmt.Errorf("%w: that overlaps %s's time from %s to %s", ErrUsage,
+					t.Key, a.hhmm(s.StartedAt), a.hhmm(end))
+			}
+		}
+	}
+	return nil
+}
+
+// hhmm is a time as the user named it, in now's zone.
+func (a *applier) hhmm(ts Timestamp) string { return ts.In(a.now.Location()).Format("15:04") }
 
 func (a *applier) pause(c Pause) error {
 	if _, e := a.running(); e == nil {
@@ -126,22 +275,44 @@ func (a *applier) pause(c Pause) error {
 	if err := a.guardByHand(c.Origin); err != nil {
 		return err
 	}
-	a.pauseRunning(c.Origin, false)
+	_, e := a.running()
+	e.Segments[len(e.Segments)-1].EndedAt = a.now
+	e.Origin = c.Origin
 	return nil
 }
 
 func (a *applier) resume(c Resume) error {
 	if c.Key != "" {
-		return a.start(Start{Key: c.Key, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
+		return a.start(Start{Key: c.Key, At: c.At, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
 	}
-	if _, e := a.running(); e != nil {
+	named := !c.At.IsZero()
+	if t, e := a.running(); e != nil {
+		if named {
+			return fmt.Errorf("%w: %s is running; resume at a time reopens a paused entry", ErrUsage, t.Key)
+		}
 		return nil
 	}
 	i, j := lastPaused(a.w.State)
 	if i < 0 {
 		return fmt.Errorf("%w: nothing is paused", ErrNoTimer)
 	}
-	a.open(&a.w.State.TrackedTickets[i].Entries[j], c.Origin)
+	t, e := &a.w.State.TrackedTickets[i], &a.w.State.TrackedTickets[i].Entries[j]
+	if !named {
+		a.openAt(e, c.Origin, a.now)
+		return nil
+	}
+	when := At(c.At)
+	if err := a.notFuture(when); err != nil {
+		return err
+	}
+	if end := lastEnd(*e); when.Before(end.Time) {
+		return fmt.Errorf("%w: %s is before %s", ErrUsage, a.hhmm(when), a.hhmm(end))
+	}
+	if err := a.overlaps(when, a.now, nil); err != nil {
+		return err
+	}
+	a.openAt(e, c.Origin, when)
+	a.events = append(a.events, Event{Kind: EventStarted, Key: t.Key, At: when})
 	return nil
 }
 
@@ -224,9 +395,10 @@ func worklogFor(e TimeEntry, c Stop, now Timestamp) (Worklog, error) {
 	}, nil
 }
 
-// open starts a new segment on e; ByHand and origin describe this stretch.
-func (a *applier) open(e *TimeEntry, origin Origin) {
-	e.Segments = append(e.Segments, Segment{StartedAt: a.now})
+// openAt starts a new segment on e at when; ByHand and origin describe
+// this stretch.
+func (a *applier) openAt(e *TimeEntry, origin Origin, when Timestamp) {
+	e.Segments = append(e.Segments, Segment{StartedAt: when})
 	e.ByHand, e.Origin = origin == OriginHand, origin
 }
 
@@ -237,19 +409,6 @@ func (a *applier) guardByHand(origin Origin) error {
 		return fmt.Errorf("%s %w", t.Key, ErrByHand)
 	}
 	return nil
-}
-
-// pauseRunning closes the open segment, if any, at now.
-func (a *applier) pauseRunning(origin Origin, announce bool) {
-	t, e := a.running()
-	if e == nil {
-		return
-	}
-	e.Segments[len(e.Segments)-1].EndedAt = a.now
-	e.Origin = origin
-	if announce {
-		a.emit(EventPaused, t.Key)
-	}
 }
 
 func lastEnd(e TimeEntry) Timestamp { return e.Segments[len(e.Segments)-1].EndedAt }

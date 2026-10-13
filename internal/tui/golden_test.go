@@ -70,6 +70,24 @@ var scenarios = []struct {
 	// d on a ticket with a logged worklog: the dialog says it stays in
 	// the log (#56).
 	{"remove_logged", localDay, []string{"down", "d"}},
+	// - on the running row: a meeting from 08:59:30 to 09:05 is cut
+	// out of the entry running since 08:58 (#57).
+	{"away", runningDay, []string{"-", "type:-13m", "tab", "type:09:05"}},
+	// - on a paused row: From starts at the pause, which it moves.
+	{"away_paused", pausedDay, []string{"-"}},
+	// - with a To before From: the preview says why it cannot cut.
+	{"away_invalid", runningDay, []string{"-", "type:09:05", "tab", "type:09:00"}},
+	// A cut made earlier: its gap reads ‖ away, and the hint counts it
+	// as time away.
+	{"cut", cutDay, nil},
+}
+
+// cutDay is runningDay with 08:59–09:05 cut out of PUN-142 by the CLI.
+func cutDay(hs *harness) {
+	runningDay(hs)
+	hs.setup("09:06:00",
+		core.Pause{Origin: core.OriginHand, At: at("08:59:00")},
+		core.Resume{Origin: core.OriginHand, At: at("09:05:00")})
 }
 
 // localDay is a morning with no tracker: payroll stopped (a local

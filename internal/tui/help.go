@@ -22,6 +22,7 @@ func (helpDialog) body(m Model, w int) []string {
 		key("space / enter", "start · pause · resume the selected ticket"),
 		key("p", "pause whatever is running, from any row"),
 		key("x", "stop the selected entry: review, then log it"),
+		key("-", "away: cut time you were away out of the selected entry"),
 		key("a / d", "add a ticket / remove the selected one"),
 		"  " + fit(sSyncKey.Render("r"), 16) + "sync: send pending and failed worklogs",
 		key("S", "setup: a tracker, the Claude Code plugin"),

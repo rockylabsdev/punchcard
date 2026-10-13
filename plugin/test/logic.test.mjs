@@ -277,6 +277,12 @@ describe('hereKey', () => {
 test('eventText', () => {
   assert.equal(eventText({ kind: 'started', key: 'A-1' }), '▶ A-1 started')
   assert.equal(eventText({ kind: 'paused', key: 'A-1' }), '⏸ A-1 paused')
+  assert.equal(eventText({ kind: 'paused', key: 'A-1', at: '2026-08-09T10:00:00.000-0500' }), '⏸ A-1 paused at 10:00')
+  assert.equal(eventText({ kind: 'started', key: 'A-1', at: '2026-08-09T10:45:00.000-0500' }), '▶ A-1 started at 10:45')
+  assert.equal(
+    eventText({ kind: 'paused', key: 'A-1', at: '2026-08-09T10:00:00.000-0500', message: 'the 30s from 09:59 was under a minute, so it was dropped' }),
+    '⏸ A-1 paused at 10:00 (the 30s from 09:59 was under a minute, so it was dropped)',
+  )
   assert.equal(eventText({ kind: 'byHand', key: 'A-1' }), "A-1 set by hand: agents can't move it")
   assert.equal(eventText({ kind: 'syncFailed', key: 'A-1', message: '500' }), 'A-1 worklog not sent: 500')
   assert.equal(eventText({ kind: 'novel', key: 'A-1' }), 'novel A-1')
@@ -425,11 +431,16 @@ describe('parsePunch', () => {
     ['stop -m fixed the login bug', '', { verb: 'stop', duration: '', message: 'fixed the login bug' }],
     ['stop 45m -m "fixed it"', '', { verb: 'stop', duration: '45m', message: 'fixed it' }],
     ['stop 45m --message fixed -m twice', '', { verb: 'stop', duration: '45m', message: 'fixed -m twice' }],
+    ['pause --at 10:00', '', { verb: 'pause', argv: ['pause', '--at', '10:00'] }],
+    ['resume --at -5m', '', { verb: 'resume', argv: ['resume', '--at', '-5m'] }],
+    ['resume DEF-2 --at=10:45', '', { verb: 'resume', argv: ['resume', 'DEF-2', '--at', '10:45'] }],
+    ['start --at 09:00', 'ABC-1', { verb: 'start', argv: ['start', 'ABC-1', '--at', '09:00'] }],
+    ['start DEF-2 --at 09:00', 'ABC-1', { verb: 'start', argv: ['start', 'DEF-2', '--at', '09:00'] }],
   ]
   for (const [args, here, want] of cases) {
     test(JSON.stringify(args), () => assert.deepEqual(parsePunch(args, here), want))
   }
-  for (const bad of ['', 'frobnicate', 'start A-1 B-2', 'pause now', 'stop 1h 2h']) {
+  for (const bad of ['', 'frobnicate', 'start A-1 B-2', 'pause now', 'stop 1h 2h', 'pause --at', 'pause --at 10:00 11:00']) {
     test(`usage: ${JSON.stringify(bad)}`, () => assert.match(parsePunch(bad, 'ABC-1').error, /^Usage: \/punch/))
   }
 })
