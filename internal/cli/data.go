@@ -75,6 +75,8 @@ type Ticket struct {
 	Summary    string         `json:"summary,omitempty"`
 	Unverified bool           `json:"unverified"`
 	AddedAt    core.Timestamp `json:"addedAt"`
+	// RemovedAt is set only for a removed ticket, which only ls --all lists.
+	RemovedAt core.Timestamp `json:"removedAt,omitzero"`
 	// State is the open entry's (running|paused|stale); absent when idle.
 	State core.TimerState `json:"state,omitempty"`
 	// ElapsedSeconds is the open entry's elapsed (capped if stale), else 0.
@@ -108,9 +110,11 @@ type PreviewData struct {
 	Preview Preview `json:"preview"`
 }
 
-// RemoveData is `data` for rm.
+// RemoveData is `data` for rm. KeptWorklogs counts the ticket's logged
+// worklogs, which stay in the log.
 type RemoveData struct {
-	Key string `json:"key"`
+	Key          string `json:"key"`
+	KeptWorklogs int    `json:"keptWorklogs"`
 }
 
 // UnsentWorklog is one worklog still owed to the tracker.
@@ -180,7 +184,7 @@ func snapshot(w core.World, now time.Time) StatusData {
 
 // ticketRow is one ls row for t.
 func ticketRow(w core.World, t core.TrackedTicket, now time.Time) Ticket {
-	r := Ticket{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, AddedAt: t.AddedAt,
+	r := Ticket{Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, AddedAt: t.AddedAt, RemovedAt: t.RemovedAt,
 		TodaySeconds: seconds(core.TimeToday(t, now))}
 	for _, e := range t.Entries {
 		switch {
@@ -196,9 +200,15 @@ func ticketRow(w core.World, t core.TrackedTicket, now time.Time) Ticket {
 	return r
 }
 
-func listData(w core.World, now time.Time, only []string) ListData {
+// listData is the list's rows, only those keys if only is set; all
+// includes removed tickets.
+func listData(w core.World, now time.Time, only []string, all bool) ListData {
 	d := ListData{Tickets: []Ticket{}}
-	for _, t := range core.ListOrder(w.State, now) {
+	order := core.ListOrder
+	if all {
+		order = core.AllOrder
+	}
+	for _, t := range order(w.State, now) {
 		if only == nil || slices.Contains(only, t.Key) {
 			d.Tickets = append(d.Tickets, ticketRow(w, t, now))
 		}
@@ -248,6 +258,8 @@ func (o output) describe(e core.Event, w core.World, loc *time.Location) string 
 			}
 		}
 		return fmt.Sprintf("+ %s added (not verified with Jira yet)\n", e.Key)
+	case core.EventRestored:
+		return fmt.Sprintf("+ %s restored\n", e.Key)
 	case core.EventPaused:
 		return fmt.Sprintf("%s %s paused\n", o.paint(yellow, "⏸"), e.Key)
 	case core.EventByHand:

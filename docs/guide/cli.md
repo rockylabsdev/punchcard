@@ -14,9 +14,9 @@ All output below was produced by running the binary in throwaway directories, mo
 | `stop [KEY]` | Stop an entry and log its worklog. No KEY: the running entry, else the single paused one. | Also sends the worklog, one POST |
 | `status` | The running ticket, paused tickets, the tracker; with Jira, unsent worklogs and the connection. | no call (reads the token) |
 | `status --short` | One line for a shell prompt. | no call |
-| `ls` | The list, most recently active first. | no call |
+| `ls [--all]` | The list, most recently active first. `--all` adds removed tickets. | no call |
 | `add KEY... [--summary TEXT]` | Put tickets on the list without starting anything. | as `start` |
-| `rm KEY` | Take a ticket off the list. | no call |
+| `rm KEY` | Take a ticket off the list; its logged worklogs stay in the log. | no call |
 | `log` | Worklogs over a range (this week by default) as Markdown, CSV or JSON. | no call |
 | `sync [KEY]` | With a tracker: send every pending and failed worklog, or only KEY's. Without one: exit 3, nothing to send. | yes |
 | `setup` | The wizard: choose a tracker (none or Jira), then the Claude Code plugin. Needs a terminal. | Test Connection |
@@ -356,7 +356,15 @@ $ punchcard ls
   DEMO-1  -        1 unsent   Add the worklog POST
 ```
 
-Columns: marker (`▶`, `⏸`, `!` for stale, blank), key, state (`running`, `paused`, `stale`, `-`), the open entry's elapsed, the unsent count, the summary or `(unverified)`. Most recently active first. Empty list: `No tickets yet. Add one with `punchcard add KEY` or `punchcard start KEY`.`
+Columns: marker (`▶`, `⏸`, `!` for stale, blank), key, state (`running`, `paused`, `stale`, `-`, or `removed` with `--all`), the open entry's elapsed, the unsent count, the summary or `(unverified)`. Most recently active first. Empty list: `No tickets yet. Add one with `punchcard add KEY` or `punchcard start KEY`.`
+
+`ls --all` lists removed tickets too, marked `removed`, so you can find one to restore:
+
+```
+$ punchcard ls --all
+  DEMO-2   -                 Fix flaky CI timeouts
+  payroll  removed           Monthly payroll run
+```
 
 ### `add KEY...`
 
@@ -367,7 +375,12 @@ $ punchcard add DEMO-3 DEMO-4
 
 $ punchcard add DEMO-3
 DEMO-3 is already on the list
+
+$ punchcard add payroll
++ payroll restored
 ```
+
+A removed ticket's key **restores** it: back on the list with its `addedAt` and its history. `start KEY` and `resume KEY` restore it too (`+ payroll restored`, event `restored`), and so does focus when it moves the timer there. With Jira, a restored ticket that is still unverified is looked up again, as `add` looks up a new one.
 
 With Jira, each new key is looked up as `start` does, and a 404 refuses the whole command with exit 5. Without a tracker nothing is looked up.
 
@@ -382,8 +395,13 @@ $ punchcard add payroll --summary "Monthly payroll run"
 
 ```
 $ punchcard rm payroll
-- payroll removed
+- payroll removed (its 3 worklogs stay in the log)
+
+$ punchcard rm standup
+- standup removed
 ```
+
+`rm` hides the ticket from the list. It deletes no worklog: every logged worklog (synced, or `local` with no tracker) stays in `punchcard log`, and the message counts them when there are any. `ls --all` still shows the ticket, and `add`, `start` or `resume` with its key restores it.
 
 Refused while the ticket has a running or paused entry, or (with a tracker) a worklog not sent yet. A `local` worklog is logged, so it never blocks:
 
@@ -397,7 +415,9 @@ $ punchcard rm --force DEMO-2
 - DEMO-2 removed
 ```
 
-A key not on the list is exit 4: `ticket not tracked: NOPE-1`. Removing never touches the tracker.
+`--force` discards only that open or unsent time, which was never logged; the ticket's logged worklogs are kept as always.
+
+A key not on the list (never tracked, or already removed) is exit 4: `ticket not tracked: NOPE-1`. Removing never touches the tracker.
 
 ### `sync [KEY]`
 
@@ -581,9 +601,9 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 | `status` | `{running, paused, unsent, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
 | `status --short` | The same without the Jira fields. |
 | `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, authFailedAt}` after the change. |
-| `ls` | `{tickets: [{key, summary?, unverified, addedAt, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. |
+| `ls` | `{tickets: [{key, summary?, unverified, addedAt, removedAt?, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. `removedAt` appears only on a removed ticket, which only `ls --all` lists. |
 | `add` | As `ls`, for the keys given. |
-| `rm` | `{key}`. |
+| `rm` | `{key, keptWorklogs}`: `keptWorklogs` counts the logged worklogs that stay in the log. |
 | `stop` | `{key, entryId, worklog}`. |
 | `stop --dry-run`, exit 6 | `{preview: {key, entryId, worklog, recovered}}`. |
 | `sync` | `{sent: [...], remaining: [...]}`, each `{key, entryId, worklog}`. With no tracker `sent` is empty and `remaining` lists any old pending worklogs. |
@@ -602,6 +622,7 @@ Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no 
 | `kind` | When |
 | --- | --- |
 | `added` | A start or a focus put an untracked ticket on the list. |
+| `restored` | A start, resume, add or focus put a removed ticket back on the list, its history intact. |
 | `paused` | Starting this ticket's rival paused it. |
 | `started` | Focus moved the timer to this ticket. |
 | `byHand` | A start by hand made the running timer one an agent can't move. |

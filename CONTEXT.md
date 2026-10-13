@@ -22,6 +22,10 @@ A ticket the user has added to their list, **whether or not it currently has tim
 
 "Tracked" means *on the list*, not *running*. A ticket added a moment ago with zero elapsed time is a `TrackedTicket`; so is one last worked a week ago. This is deliberately not defined as "a row in the TUI" — the TUI renders `TrackedTicket`s, but the concept does not depend on being displayed.
 
+### The list
+
+The `TrackedTicket`s not removed. Removing a ticket (`rm`, the TUI's `d`) hides it from the list and sets its `removedAt`; it never deletes a worklog, so a removed ticket's logged worklogs stay in the log. Only time that was never logged (an open entry, or with a tracker an unsent worklog) is lost, and only when the user forces it. Starting, resuming, adding or focusing a removed ticket's key **restores** it: back on the list with its `addedAt` and history. Everything that shows "the list" (`ls`, the Tickets pane, recents, `status`) leaves removed tickets out; everything that answers for a range of time (`log`, the day's log) does not.
+
 ### Unverified
 
 A `TrackedTicket` whose key the tracker has not yet confirmed. It was added while the tracker could not be reached, so it has no summary and may be a typo. Time against it accrues normally. It stops being unverified the first time the tracker confirms the key; a key the tracker reports not found is never added in the first place. Without a tracker there is nothing to confirm, so no ticket is ever unverified.

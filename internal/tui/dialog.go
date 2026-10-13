@@ -245,13 +245,15 @@ func parseDuration(s string) (time.Duration, bool) {
 	return d, true
 }
 
-// removeDialog is d: y removes the ticket, any other key keeps it. When
-// the ticket holds time not yet logged it says how much would be lost,
-// and only then does the remove force past core's refusal.
+// removeDialog is d: y removes the ticket, any other key keeps it. It
+// says how many logged worklogs stay in the log. When the ticket holds
+// time not yet logged it says how much would be lost, and only then does
+// the remove force past core's refusal.
 type removeDialog struct {
 	ticket, summary string
 	unsent          time.Duration // open entry plus unsent worklogs, when opened
 	owes            bool
+	kept            int // logged worklogs, which removing keeps
 }
 
 func (m Model) openRemove() Model {
@@ -259,7 +261,7 @@ func (m Model) openRemove() Model {
 	if !ok {
 		return m
 	}
-	d := removeDialog{ticket: t.Key, summary: summaryText(t)}
+	d := removeDialog{ticket: t.Key, summary: summaryText(t), kept: core.KeptWorklogs(t)}
 	for _, e := range t.Entries {
 		switch {
 		case e.Worklog == nil:
@@ -291,7 +293,15 @@ func (d removeDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 func (d removeDialog) body(m Model, w int) []string {
-	lines := []string{fit(sBold.Render(d.ticket)+" "+sDim.Render(d.summary), w), ""}
+	lines := []string{fit(sBold.Render(d.ticket)+" "+sDim.Render(d.summary), w)}
+	switch d.kept {
+	case 0:
+	case 1:
+		lines = append(lines, wrap(sDim.Render("its 1 logged worklog stays in the log"), w)...)
+	default:
+		lines = append(lines, wrap(sDim.Render(fmt.Sprintf("its %d logged worklogs stay in the log", d.kept)), w)...)
+	}
+	lines = append(lines, "")
 	if d.owes {
 		lost := " its unsent " + hm(d.unsent) + " would be lost: it never reaches Jira"
 		if m.noTracker {

@@ -12,7 +12,8 @@ type Command interface{ command() }
 
 // Start starts the timer on Key, closing any other running segment first
 // (with an EventPaused). If Key is not tracked it is added with Summary
-// and Unverified (EventAdded). If Key has an open (unstopped) entry that
+// and Unverified (EventAdded); if it was removed it is restored
+// (EventRestored). If Key has an open (unstopped) entry that
 // entry gets a new segment; otherwise a new entry with NewEntryID is
 // created. Start on the running ticket is a no-op, except that by hand
 // it sets the timer by hand (EventByHand). Another origin may not move
@@ -72,7 +73,8 @@ type NewTicket struct {
 	Unverified bool
 }
 
-// Add puts tickets on the list. Keys already tracked are left alone.
+// Add puts tickets on the list. Keys already on it are left alone; a
+// removed ticket is restored with its history (EventRestored).
 type Add struct {
 	Tickets []NewTicket
 	Origin  Origin
@@ -81,9 +83,11 @@ type Add struct {
 	Grammar tracker.Grammar
 }
 
-// Remove takes a ticket off the list. It refuses (ErrUnlogged) while the
-// ticket has a running or paused entry or a worklog not yet synced,
-// unless Force.
+// Remove takes a ticket off the list: it sets RemovedAt and keeps its
+// logged worklogs, which stay in the log. It refuses (ErrUnlogged) while
+// the ticket has a running or paused entry or a worklog not yet synced,
+// unless Force, which discards that unlogged time; a logged worklog is
+// never discarded. A ticket already removed is ErrNotTracked.
 type Remove struct {
 	Key    string
 	Force  bool
@@ -148,9 +152,10 @@ type RecordAuthFailure struct{}
 // setup applies this.
 type ClearAuthFailure struct{}
 
-// Verify records what Jira said of a tracked ticket: its summary, and
+// Verify records what Jira said of a ticket on the list: its summary, and
 // that it exists (clearing Unverified), and, since Jira answered, clears
-// AuthFailedAt. An untracked key is ErrNotTracked.
+// AuthFailedAt. A key not on the list (untracked or removed) is
+// ErrNotTracked.
 // Start, Add and Touch carrying a confirmed NewTicket (Unverified false)
 // confirm a tracked unverified ticket the same way, in one transition;
 // MarkSynced confirms it too, but leaves the summary for a Verify.
@@ -177,10 +182,13 @@ func (Verify) command()            {}
 type EventKind string
 
 const (
-	EventAdded   EventKind = "added"   // start or focus added an untracked ticket
-	EventPaused  EventKind = "paused"  // another ticket's start paused this one
-	EventByHand  EventKind = "byHand"  // a start by hand made the running timer one an agent can't move
-	EventStarted EventKind = "started" // focus moved the timer to this ticket
+	EventAdded EventKind = "added" // start or focus added an untracked ticket
+	// EventRestored: start, focus or add put a removed ticket back on the
+	// list, its history intact.
+	EventRestored EventKind = "restored"
+	EventPaused   EventKind = "paused"  // another ticket's start paused this one
+	EventByHand   EventKind = "byHand"  // a start by hand made the running timer one an agent can't move
+	EventStarted  EventKind = "started" // focus moved the timer to this ticket
 	// EventRecovered: a stale timer was capped; At is where it was capped.
 	EventRecovered  EventKind = "recovered"
 	EventSynced     EventKind = "synced"

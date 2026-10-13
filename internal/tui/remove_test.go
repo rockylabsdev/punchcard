@@ -14,7 +14,7 @@ func TestRemoveConfirmsWithY(t *testing.T) {
 
 	hs.key("d")
 	frameHas(t, hs, "Remove AA-1?", "y removes it")
-	frameLacks(t, hs, "would be lost")
+	frameLacks(t, hs, "would be lost", "stays in the log")
 	hs.key("y")
 
 	want := []core.Command{core.Remove{Key: "AA-1", Origin: core.OriginHand}}
@@ -47,7 +47,7 @@ func TestRemoveDoesNotWarnAboutLocalTime(t *testing.T) {
 	hs.open("09:00:00", 120, 32)
 
 	hs.key("d")
-	frameHas(t, hs, "Remove AA-1?", "y removes it")
+	frameHas(t, hs, "Remove AA-1?", "y removes it", "its 1 logged worklog stays in the log")
 	frameLacks(t, hs, "would be lost")
 	hs.key("y")
 
@@ -55,6 +55,9 @@ func TestRemoveDoesNotWarnAboutLocalTime(t *testing.T) {
 	if d := cmp.Diff(want, changes(hs.st.commands()), anyGrammar); d != "" {
 		t.Errorf("changes (-want +got)\n%s", d)
 	}
+	// #56: off the list, but its worklog is still in the day's log.
+	frameLacks(t, hs, "AA-1 Summary")
+	frameHas(t, hs, "removed AA-1", "logged 20m")
 }
 
 func TestRemoveWarnsWhenUnsentTimeWouldBeLost(t *testing.T) {

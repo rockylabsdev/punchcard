@@ -106,8 +106,8 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*Time
 		return nil, fmt.Errorf("%w: a new entry needs an id", ErrUsage)
 	}
 	a.pauseRunning(origin, true)
-	if a.track(n) {
-		a.emit(EventAdded, n.Key)
+	if ev := a.track(n); ev != "" {
+		a.emit(ev, n.Key)
 	}
 	t := a.ticket(n.Key)
 	e := openEntry(t)
@@ -170,7 +170,7 @@ func (a *applier) stop(c Stop) error {
 // stopTarget finds the entry a stop acts on (see Stop).
 func (a *applier) stopTarget(key string) (*TrackedTicket, *TimeEntry, error) {
 	if key != "" {
-		t := a.ticket(key)
+		t := a.listed(key)
 		if t == nil {
 			return nil, nil, fmt.Errorf("%w: %s", ErrNotTracked, key)
 		}
@@ -260,6 +260,14 @@ func (a *applier) ticket(key string) *TrackedTicket {
 		if a.w.State.TrackedTickets[i].Key == key {
 			return &a.w.State.TrackedTickets[i]
 		}
+	}
+	return nil
+}
+
+// listed is ticket, but nil for a removed ticket: one off the list.
+func (a *applier) listed(key string) *TrackedTicket {
+	if t := a.ticket(key); t != nil && t.Listed() {
+		return t
 	}
 	return nil
 }

@@ -67,6 +67,9 @@ var scenarios = []struct {
 	// No tracker: the add dialog takes a summary after the key, since
 	// nothing will look one up.
 	{"no_tracker_add", localDay, []string{"a", "type:standup", "tab", "type:Daily standup"}},
+	// d on a ticket with a logged worklog: the dialog says it stays in
+	// the log (#56).
+	{"remove_logged", localDay, []string{"down", "d"}},
 }
 
 // localDay is a morning with no tracker: payroll stopped (a local

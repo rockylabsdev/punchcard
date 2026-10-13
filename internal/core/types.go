@@ -40,16 +40,24 @@ func NewState() State {
 	return State{SchemaVersion: SchemaVersion, TrackedTickets: []TrackedTicket{}}
 }
 
-// TrackedTicket is a Jira ticket on the user's list, whether or not it
-// has time against it. Key is its identity.
+// TrackedTicket is a ticket the user has tracked, whether or not it has
+// time against it. Key is its identity. It is on the list unless it was
+// removed; a removed ticket keeps its entries, so its logged worklogs
+// stay in the log.
 type TrackedTicket struct {
 	Key     string `json:"key"`
 	Summary string `json:"summary,omitempty"`
 	// Unverified: added while Jira could not be reached; no summary yet.
-	Unverified bool        `json:"unverified"`
-	AddedAt    Timestamp   `json:"addedAt"`
-	Entries    []TimeEntry `json:"entries"`
+	Unverified bool      `json:"unverified"`
+	AddedAt    Timestamp `json:"addedAt"`
+	// RemovedAt is when rm took the ticket off the list; zero (as in a
+	// file written before it existed) while it is on the list.
+	RemovedAt Timestamp   `json:"removedAt,omitzero"`
+	Entries   []TimeEntry `json:"entries"`
 }
+
+// Listed reports whether t is on the list: not removed.
+func (t TrackedTicket) Listed() bool { return t.RemovedAt.IsZero() }
 
 // TimeEntry is one start→stop period. Pausing closes a segment but not
 // the entry; one entry produces exactly one Worklog.

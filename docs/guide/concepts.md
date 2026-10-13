@@ -12,6 +12,8 @@ A **tracker** is the optional remote a worklog is sent to. Jira is the only one 
 
 A **ticket** is a unit of work, named by its key. Without a tracker the key is whatever you choose, as a slug: letters, digits, `.`, `_` and `-`, starting with a letter or digit, case kept as typed (`payroll`, `client-acme`, `ABC-123`). With Jira, a ticket is a Jira issue and its key has Jira's shape (`ABC-123`, typed in any case and stored upper-case). Your **list** is the tickets you have put on it, whether or not they have time against them. `punchcard ls` and the TUI's Tickets pane show the list, most recently active first. Starting a ticket that is not on the list adds it.
 
+Removing a ticket (`punchcard rm`, or `d` in the TUI) takes it off the list but keeps its history: every worklog it ever logged stays in `punchcard log`. Starting or adding it again restores it, history and all. `punchcard ls --all` shows removed tickets too.
+
 *Scenario:* Monday morning you run `punchcard add PUN-142 PUN-138 OPS-77` to queue the day. All three sit on the list with no time. You start `PUN-142` and it moves to the top.
 
 ## Entry, segment and worklog
