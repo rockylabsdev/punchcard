@@ -121,12 +121,14 @@ const (
 	intentAuthFailure                   // Jira answered 401
 	intentReload                        // re-read the store (after a sync)
 	intentClearAuth                     // Jira answered with these credentials
+	intentCommand                       // a command a dialog built and previewed
 )
 
 type intent struct {
 	kind    intentKind
 	key     string
 	stop    core.Stop      // intentStop
+	cmd     core.Command   // intentCommand
 	ticket  core.NewTicket // intentAdd
 	summary string         // intentVerify
 	force   bool           // intentRemove: the user was warned of unsent time
@@ -241,6 +243,8 @@ func (m Model) key(k string) (tea.Model, tea.Cmd) {
 		return m.enqueue(intent{kind: intentPause})
 	case "x":
 		m = m.openStop()
+	case "-":
+		m = m.openAway()
 	case "a":
 		m, cmd = m.openAdd()
 	case "d":
@@ -363,6 +367,8 @@ func (m Model) command(i intent) core.Command {
 		return core.Touch{Origin: core.OriginHand}
 	case intentStop:
 		return i.stop
+	case intentCommand:
+		return i.cmd
 	case intentAdd:
 		return core.Add{Tickets: []core.NewTicket{i.ticket}, Origin: core.OriginHand, Grammar: m.grammar}
 	case intentRemove:

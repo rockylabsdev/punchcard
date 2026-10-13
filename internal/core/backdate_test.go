@@ -59,11 +59,11 @@ func TestPauseAt(t *testing.T) {
 				Message: "the 30s from 09:59 was under a minute, so it was dropped"}},
 		},
 		{
-			name: "pause --at on a paused entry moves its pause",
-			w:    world("10:50", ticket("AA-1", entry("EA", hand, seg("08:58", "10:30")))),
-			cmd:  core.Pause{Origin: hand, At: at("10:00").Time},
-			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
+			name:   "pause --at on a paused entry moves its pause",
+			w:      world("10:50", ticket("AA-1", entry("EA", hand, seg("08:58", "10:30")))),
+			cmd:    core.Pause{Origin: hand, At: at("10:00").Time},
+			now:    "10:50",
+			want:   state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:00")}},
 		},
 		{
@@ -148,11 +148,11 @@ func TestResumeAt(t *testing.T) {
 func TestStartAt(t *testing.T) {
 	runApply(t, []applyCase{
 		{
-			name: "start --at starts a new entry at that time",
-			w:    world("10:50", ticket("AA-1")),
-			cmd:  core.Start{Key: "AA-1", Origin: hand, NewEntryID: "EA", At: at("09:00").Time},
-			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
+			name:   "start --at starts a new entry at that time",
+			w:      world("10:50", ticket("AA-1")),
+			cmd:    core.Start{Key: "AA-1", Origin: hand, NewEntryID: "EA", At: at("09:00").Time},
+			now:    "10:50",
+			want:   state(ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
 			events: []core.Event{{Kind: core.EventStarted, Key: "AA-1", At: at("09:00")}},
 		},
 		{

@@ -116,6 +116,9 @@ func (a *applier) start(c Start) error {
 				return fmt.Errorf("%w: %s is before %s started at %s", ErrUsage, a.hhmm(when), t.Key, a.hhmm(skip.StartedAt))
 			}
 		}
+		if e := openEntry(a.ticket(c.Key)); e != nil && len(e.Segments) > 0 && when.Before(lastEnd(*e).Time) {
+			return fmt.Errorf("%w: %s is before %s", ErrUsage, a.hhmm(when), a.hhmm(lastEnd(*e)))
+		}
 		if err := a.overlaps(when, a.now, skip); err != nil {
 			return err
 		}
