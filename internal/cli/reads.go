@@ -118,6 +118,9 @@ func (o output) statusText(rep StatusReport, now time.Time) string {
 	if rep.StrayTokenFile != "" {
 		fmt.Fprintf(&b, "%s a stray token file at %s is ignored (the Keychain wins); delete it\n", o.paint(yellow, "!"), rep.StrayTokenFile)
 	}
+	if rep.TodaySeconds > 0 {
+		fmt.Fprintf(&b, "Today: %s\n", hm(secs(rep.TodaySeconds)))
+	}
 	return b.String()
 }
 

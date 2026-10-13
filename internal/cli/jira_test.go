@@ -33,7 +33,7 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 	}{
 		{"a new ticket gets its real summary", knows("AA-1", "Fix the thing"), nil,
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(verifiedAA1), `[{"kind": "added", "key": "AA-1"}]`),
+			ok("start", status(0, verifiedAA1), `[{"kind": "added", "key": "AA-1"}]`),
 			[]string{"summary AA-1"}},
 		{"a typo exits 5 and changes nothing", knows(), nil,
 			[]string{"start", "AA-1"}, 5,
@@ -41,12 +41,12 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 			[]string{"summary AA-1"}},
 		{"unreachable starts anyway, unverified", &tracker.Fake{Err: tracker.ErrUnreachable}, nil,
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(running("AA-1", "ID-1", true, "hand", 0)), `[{"kind": "added", "key": "AA-1"}]`),
+			ok("start", status(0, running("AA-1", "ID-1", true, "hand", 0)), `[{"kind": "added", "key": "AA-1"}]`),
 			[]string{"summary AA-1"}},
 		{"a ticket already on the list does not fetch", knows("AA-1", "Fix the thing"),
 			func(h *harness) { h.do("08:00", "start", "AA-1"); h.do("08:30", "pause") },
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(`{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "byHand": true, "origin": "hand", "recovered": false, "elapsedSeconds": 1800}`), noEvents),
+			ok("start", status(1800, `{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-1", "state": "running", "byHand": true, "origin": "hand", "recovered": false, "elapsedSeconds": 1800}`), noEvents),
 			[]string{"summary AA-1"}}, // the setup's start only
 		{"an unverified ticket is confirmed by a later start", &tracker.Fake{Err: tracker.ErrUnreachable},
 			func(h *harness) {
@@ -55,12 +55,12 @@ func TestStartFetchesTheSummaryOfANewTicket(t *testing.T) {
 				h.jira.Summaries = map[string]string{"AA-1": "Fix the thing"}
 			},
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(verifiedAA1), noEvents),
+			ok("start", status(0, verifiedAA1), noEvents),
 			[]string{"summary AA-1", "summary AA-1"}},
 		{"an unverified ticket that now 404s still starts, unverified", &tracker.Fake{Err: tracker.ErrUnreachable},
 			func(h *harness) { h.do("09:00", "add", "AA-1"); h.jira.Err = nil },
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(running("AA-1", "ID-1", true, "hand", 0)), noEvents),
+			ok("start", status(0, running("AA-1", "ID-1", true, "hand", 0)), noEvents),
 			[]string{"summary AA-1", "summary AA-1"}},
 		{"resume KEY fetches like start", knows(), nil,
 			[]string{"resume", "AA-1"}, 5,
