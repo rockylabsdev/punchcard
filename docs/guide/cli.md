@@ -171,13 +171,15 @@ Refused with exit 64, nothing changed:
 - a TIME that is not one of those forms;
 - a time in the future;
 - `pause --at` before the open segment started;
-- `resume --at` before the pause (the gap cannot be negative), or with a timer running;
-- `start --at` before the running ticket's open segment started, or on the running ticket itself;
-- any time that would overlap time already measured, such as the ticket's last stopped entry.
+- `pause --at` moving a recovered entry's pause past `lastSeen`, the last time you were seen (recovery capped it there);
+- `resume --at` before the pause (the gap cannot be negative);
+- `resume --at` with no KEY while any timer runs: it reopens a paused entry (`resume KEY --at` is `start KEY --at`);
+- `start --at` before the running ticket's open segment started, or on the running ticket itself (to cut time out of it, `pause --at` then `resume --at`);
+- any time that would overlap time already measured on any ticket, not only this one: the ticket's last stopped entry, or another ticket's stretch (`that overlaps PUN-7's time from 09:00 to 10:00`).
 
 A cut that would leave a stretch under a minute drops it instead, and says so: `the 30s from 09:59 was under a minute, so it was dropped`.
 
-`--at` changes measured time and never logs anything, so it needs no approval: an agent may use it under the same rules as the plain commands, so a timer set by hand refuses it (`by_hand`). It is presence like any command by hand. It never touches a stopped entry or `lastSeen`. In `--json`, `data` is the timer after the change as usual, and the `paused` and `started` events carry `at`:
+`--at` changes measured time and never logs anything, so it needs no approval: an agent may use it under the same rules as the plain commands, so a timer set by hand refuses it (`by_hand`), and so does moving the pause of an entry paused while set by hand. It is presence like any command by hand. It never touches a stopped entry or `lastSeen`. In `--json`, `data` is the timer after the change as usual, and the `paused` and `started` events carry `at`:
 
 ```
 $ punchcard pause --at 10:00 --json
