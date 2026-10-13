@@ -68,7 +68,7 @@ Presence says nothing about *which* ticket the user is on. That is **focus**.
 
 ### Focus
 
-Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs: a `.punchcard` file naming a key, found at the nearest ancestor of the session's directory within its repository, or failing that a ticket key in the git branch name. Nothing else names a session's ticket. A session whose ticket cannot be told gives presence but never focus.
+Evidence of which `TrackedTicket` the user is working on: a ticket they start or switch to by hand, or their own prompt in a Claude Code session whose ticket can be told from where it runs: a `.punchcard` file naming a key, found at the nearest ancestor of the session's directory within its repository, or failing that a ticket key in the git branch name (in lower case only for a project already on the list, spelled as that project is). Nothing else names a session's ticket. A session whose ticket cannot be told gives presence but never focus.
 
 Focus from a prompt moves a running timer only when it **changes**: when the prompt's session ticket differs from the **last focus**. A `punchcard touch KEY` typed by hand is the same call and follows the same rule; it never holds. Repeating the same focus prompt after prompt moves nothing, so a timer the user switched away from the session's ticket stays switched until focus changes.
 
