@@ -5,13 +5,13 @@
 │                                               ││! RECOVERED               45m│
 │                                               ││  stop sends this as one     │
 │                                               ││  worklog — x                │
+│                                               ││  pauses and time away are   │
+│                                               ││  left out                   │
 │                                               ││                             │
 │                                               ││ 06:50–now   ! away 2h 22m   │
-│                                               ││             not counted     │
-│                                               ││ 06:20–06:50     30m counted │
+│                                               ││ 06:20–06:50     30m         │
 │                                               ││ 06:15–06:20 ‖ paused 5m     │
-│                                               ││             not counted     │
-│                                               ││ 06:00–06:15     15m counted │
+│                                               ││ 06:00–06:15     15m         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
