@@ -15,6 +15,7 @@ import (
 	"github.com/j-dsmith/punchcard/internal/config"
 	"github.com/j-dsmith/punchcard/internal/core"
 	"github.com/j-dsmith/punchcard/internal/exitcode"
+	"github.com/j-dsmith/punchcard/internal/setup"
 	"github.com/j-dsmith/punchcard/internal/store"
 	"github.com/j-dsmith/punchcard/internal/tracker"
 	"github.com/spf13/cobra"
@@ -111,6 +112,11 @@ type Env struct {
 	// Keychain through security, the claude CLI, ~/.claude/settings.json);
 	// tests always inject one.
 	Setup func(Env) int
+	// Claude is `claude` on PATH, for doctor. Nil means the real one.
+	Claude setup.Claude
+	// Machine is what doctor reads about this computer; zero means the
+	// real one.
+	Machine Machine
 }
 
 // Choice is one ticket offered by the picker.
@@ -137,6 +143,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Setup == nil {
 		e.Setup = runWizard
+	}
+	if e.Claude == nil {
+		e.Claude = setup.SystemClaude{}
 	}
 	if e.Tracker == "" {
 		e.Tracker = chosenTracker(e.Getenv)
@@ -246,7 +255,7 @@ func (a *app) root() *cobra.Command {
 	root.AddCommand(
 		a.startCmd(), a.pauseCmd(), a.resumeCmd(), a.stopCmd(), a.statusCmd(), a.lsCmd(),
 		a.addCmd(), a.rmCmd(), a.syncCmd("sync", false), a.syncCmd("retry", true), a.setupCmd(),
-		a.versionCmd(), a.touchCmd(), a.logCmd(),
+		a.versionCmd(), a.touchCmd(), a.logCmd(), a.doctorCmd(),
 	)
 	return root
 }
