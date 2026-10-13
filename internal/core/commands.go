@@ -42,8 +42,9 @@ type Start struct {
 // At, when set, closes it at that time instead of now and marks it Cut:
 // the user was away from then. With nothing running it moves the pause
 // of Key's paused entry, or with no Key the most recently paused one. At
-// may not be in the future, before the segment started, or over other
-// time already measured (ErrUsage). A cut that would leave a segment
+// may not be in the future, before the segment started, over other time
+// already measured, or, moving a recovered entry's pause later, past
+// lastSeen (ErrUsage). A cut that would leave a segment
 // under a minute drops it, and its EventPaused says so in Message. Key
 // is read only with At.
 type Pause struct {

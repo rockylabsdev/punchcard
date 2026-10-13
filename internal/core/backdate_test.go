@@ -109,6 +109,28 @@ func TestPauseAt(t *testing.T) {
 			},
 		},
 		{
+			name: "pause --at on a stale timer may not move the pause past lastSeen",
+			w:    world("09:30", ticket("AA-1", entry("EA", hand, seg("08:58", "")))),
+			cmd:  core.Pause{Origin: hand, At: at("10:00").Time},
+			now:  "12:00",
+			err:  core.ErrUsage,
+		},
+		{
+			name: "a recovered entry's pause may not move past lastSeen",
+			w:    world("09:30", ticket("AA-1", recovered(entry("EA", hand, seg("08:58", "09:30"))))),
+			cmd:  core.Pause{Origin: hand, At: at("09:31").Time},
+			now:  "12:00",
+			err:  core.ErrUsage,
+		},
+		{
+			name:   "a recovered entry's pause may move later up to lastSeen",
+			w:      world("09:40", ticket("AA-1", recovered(entry("EA", hand, seg("08:58", "09:30"))))),
+			cmd:    core.Pause{Origin: hand, At: at("09:40").Time},
+			now:    "12:00",
+			want:   state(ticket("AA-1", recovered(entry("EA", hand, cut("08:58", "09:40"))))),
+			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("09:40")}},
+		},
+		{
 			name: "pause --at with nothing open is refused",
 			w:    world("10:50", ticket("AA-1")), cmd: core.Pause{Origin: hand, At: at("10:00").Time}, now: "10:50", err: core.ErrNoTimer,
 		},

@@ -202,6 +202,10 @@ func (a *applier) pauseAt(c Pause) error {
 		return fmt.Errorf("%w: %s is before %s at %s", ErrUsage, a.hhmm(when), since, a.hhmm(s.StartedAt))
 	}
 	if !s.Open() && when.After(s.EndedAt.Time) {
+		// lastSeen bounds a recovered entry: time past it was never seen.
+		if seen := EffectiveLastSeen(a.w.Heartbeat, *e); e.Recovered && when.After(seen.Time) {
+			return fmt.Errorf("%w: %s is after %s, when you were last seen", ErrUsage, a.hhmm(when), a.hhmm(seen))
+		}
 		if err := a.overlaps(s.EndedAt, when, &e.Segments[last]); err != nil {
 			return err
 		}
