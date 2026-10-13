@@ -17,7 +17,8 @@ import (
 // the frame reads with no colour at all.
 //
 // The one colour that is Punchcard's own is the brand, a chartreuse: the
-// running state, the focused pane and the cursor. It has a darker shade
+// running state, the focused pane and the cursor, never a status (green
+// and yellow keep meaning good and warning). It has a darker shade
 // for light backgrounds, and on 16 colours it falls back to bright green.
 var (
 	BrandDark  = lipgloss.Color("#C8FF00")
