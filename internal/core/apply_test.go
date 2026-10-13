@@ -29,7 +29,7 @@ func TestStartOnEmptyStateTracksTicketAndOpensSegment(t *testing.T) {
 			Key: "PUNCH-12", Summary: "Wire up", AddedAt: at("09:00"),
 			Entries: []core.TimeEntry{{
 				ID: "E1", Segments: []core.Segment{seg("09:00", "")},
-				Held: true, Origin: hand,
+				ByHand: true, Origin: hand,
 			}},
 		}},
 	}
@@ -90,12 +90,12 @@ func TestApplyStart(t *testing.T) {
 			want: state(ticket("AA-1", entry("EA", agent, seg("09:00", "")))),
 		},
 		{
-			name:   "start A by hand while A runs un-held holds it",
+			name:   "start A by hand while A runs sets it by hand",
 			w:      world("09:30", ticket("AA-1", entry("EA", agent, seg("09:00", "")))),
 			cmd:    core.Start{Key: "AA-1", Origin: hand, NewEntryID: "X"},
 			now:    "09:30",
 			want:   state(ticket("AA-1", entry("EA", hand, seg("09:00", "")))),
-			events: []core.Event{{Kind: core.EventHeld, Key: "AA-1"}},
+			events: []core.Event{{Kind: core.EventByHand, Key: "AA-1"}},
 		},
 		{
 			name: "start on a paused ticket continues the same entry",

@@ -108,7 +108,7 @@ Also try: run `punchcard setup` again and press Esc at the first question. Expec
 punchcard start ABC-123        # your throwaway ticket
 ```
 
-Expect `+ ABC-123 added` and `▶ ABC-123 running  0:00:00  held  <the ticket's real summary>`. Then a typo:
+Expect `+ ABC-123 added` and `▶ ABC-123 running  0:00:00  by hand  <the ticket's real summary>`. Then a typo:
 
 ```sh
 punchcard start ABC-999999
@@ -128,7 +128,7 @@ punchcard resume ABC-123
 punchcard status
 ```
 
-Expect: starting the second ticket prints `⏸ ABC-123 paused` before `▶ ABC-124 running`. `pause` pauses it, `resume` resumes it, `resume ABC-123` pauses `ABC-124` and starts `ABC-123`. `status` lists one running and one paused line, and the running one says `held`.
+Expect: starting the second ticket prints `⏸ ABC-123 paused` before `▶ ABC-124 running`. `pause` pauses it, `resume` resumes it, `resume ABC-123` pauses `ABC-124` and starts `ABC-123`. `status` lists one running and one paused line, and the running one says `by hand`.
 
 ### 7. No process, no drift
 
@@ -223,7 +223,7 @@ claude
 
 Expect a band above the prompt within a few seconds. The plugin and the binary come from the same pre-release, so it never says `plugin … ≠ punchcard …`; if it does, that is a bug. Because nothing is running yet it also says `ABC-123 not running · /punch start`; with another ticket running it would say `timer on <that ticket> … · here: ABC-123` instead. With no tracker the band never mentions Jira, a token or a connection. Put a `.punchcard` naming another key in the checkout (scenario 3) and the band names that key instead of the branch's within ten seconds; remove it again.
 
-- Type `/punch start` and send it. Expect `▶ ABC-123 0:00 · held` in the band, followed by the ticket's summary with Jira (and a `+ ABC-123 added` toast if the ticket was not on your list yet).
+- Type `/punch start` and send it. Expect `▶ ABC-123 0:00 · by hand` in the band, followed by the ticket's summary with Jira (and a `+ ABC-123 added` toast if the ticket was not on your list yet).
 - `/punch pause`, then `/punch resume`. The band follows.
 - Ask the agent, in words: "stop my punchcard timer with the comment 'plugin test'". Expect it to show you a preview (ticket, duration, comment) **before** anything is sent, then to run `punchcard stop --yes …`, at which point Claude Code shows a permission dialog mentioning Punchcard. Approve it. Expect the agent to report the time logged and the band to go back to showing nothing (or just the version line). With Jira the worklog is in Jira; delete it.
 - Do the stop again, but **decline** the dialog. Expect the timer still running (`punchcard status` in a shell) and the agent to tell you so, without trying again.
@@ -232,9 +232,11 @@ Expect a band above the prompt within a few seconds. The plugin and the binary c
 
 ### 16. Your prompts move the timer between sessions
 
-This needs a timer that was **not** started by hand. In the session from scenario 15, ask the agent "start the punchcard timer on this ticket". Expect the band `▶ ABC-123 0:00` without `held`. Now open a second Claude Code session in a checkout on a branch named for your second ticket, `feature/ABC-124-x`, and send any prompt, even "hi". Expect `punchcard status` in a shell to show `ABC-124` running and `ABC-123` paused, and the second session's band to show `▶ ABC-124 …`. If the TUI is open, its rows say `started by prompt` and `paused by prompt`.
+In the session from scenario 15, ask the agent "start the punchcard timer on this ticket". Expect the band `▶ ABC-123 0:00` without `by hand`. Now open a second Claude Code session in a checkout on a branch named for your second ticket, `feature/ABC-124-x`, and send any prompt, even "hi". Expect `punchcard status` in a shell to show `ABC-124` running and `ABC-123` paused, and the second session's band to show `▶ ABC-124 …`. If the TUI is open, its rows say `started by prompt` and `paused by prompt`.
 
-Then in the first session send `/punch start` (by hand: held) and prompt again in the second. Expect `ABC-123` to stay running: a held timer never follows a prompt.
+Then in the first session send `/punch start` (by hand) and, still in the first session, any prompt. Expect `ABC-123` to stay running with `by hand` in the band: your focus has not changed. Now prompt in the second session. Expect `ABC-124` running: a change of focus moves a timer set by hand too.
+
+In the second session, ask the agent to "pause the punchcard timer". Expect it to pause `ABC-124` (set by your prompt, not by hand). Send `/punch start` there, then ask the agent to pause again. Expect it to refuse: the timer is set by hand, and the agent says so and leaves it.
 
 Stop whatever is running with `/punch stop` (with Jira, delete the worklogs). With no tracker the `/punch stop` dialog offers Submit and Cancel; with Jira it adds Keep pending.
 

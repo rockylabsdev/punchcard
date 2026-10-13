@@ -85,12 +85,15 @@ func (a *applier) start(c Start) error {
 	if t, e := a.running(); e != nil {
 		if t.Key == c.Key {
 			a.track(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}) // confirms only
-			if c.Origin == OriginHand && !e.Held {
-				e.Held, e.Origin = true, OriginHand
-				a.emit(EventHeld, t.Key)
+			if c.Origin == OriginHand && !e.ByHand {
+				e.ByHand, e.Origin = true, OriginHand
+				a.emit(EventByHand, t.Key)
 			}
 			return nil
 		}
+	}
+	if err := a.guard(c.Origin); err != nil {
+		return err
 	}
 	_, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
 	return err
@@ -121,6 +124,9 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string) (*Time
 func (a *applier) pause(c Pause) error {
 	if _, e := a.running(); e == nil {
 		return fmt.Errorf("%w: nothing is running", ErrNoTimer)
+	}
+	if err := a.guard(c.Origin); err != nil {
+		return err
 	}
 	return a.pauseRunning(c.Origin, false)
 }
@@ -219,21 +225,26 @@ func worklogFor(e TimeEntry, c Stop, now Timestamp) (Worklog, error) {
 	}, nil
 }
 
-// open starts a new segment on e; held and origin describe this stretch.
+// open starts a new segment on e; ByHand and origin describe this stretch.
 func (a *applier) open(e *TimeEntry, origin Origin) {
 	e.Segments = append(e.Segments, Segment{StartedAt: a.now})
-	e.Held, e.Origin = origin == OriginHand, origin
+	e.ByHand, e.Origin = origin == OriginHand, origin
 }
 
-// pauseRunning closes the open segment, if any, at now. Only an act by
-// hand may close a held timer.
+// guard refuses a start or pause of a timer set by hand unless it is by
+// hand too. Focus is the user's and skips it (ADR 0010).
+func (a *applier) guard(origin Origin) error {
+	if t, e := a.running(); e != nil && e.ByHand && origin != OriginHand {
+		return fmt.Errorf("%s %w", t.Key, ErrByHand)
+	}
+	return nil
+}
+
+// pauseRunning closes the open segment, if any, at now.
 func (a *applier) pauseRunning(origin Origin, announce bool) error {
 	t, e := a.running()
 	if e == nil {
 		return nil
-	}
-	if e.Held && origin != OriginHand {
-		return fmt.Errorf("%w: %s was set by hand", ErrHeld, t.Key)
 	}
 	e.Segments[len(e.Segments)-1].EndedAt = a.now
 	e.Origin = origin

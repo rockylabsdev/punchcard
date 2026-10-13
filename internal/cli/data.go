@@ -20,7 +20,7 @@ type Timer struct {
 	Unverified bool            `json:"unverified"`
 	EntryID    string          `json:"entryId"`
 	State      core.TimerState `json:"state"` // running|paused|stale
-	Held       bool            `json:"held"`
+	ByHand     bool            `json:"byHand"`
 	Origin     core.Origin     `json:"origin"`
 	Recovered  bool            `json:"recovered"`
 	// ElapsedSeconds is the measured time; for a stale timer it is
@@ -145,7 +145,7 @@ type VersionData struct {
 func timerOf(w core.World, t core.TrackedTicket, e core.TimeEntry, now time.Time) Timer {
 	tm := Timer{
 		Key: t.Key, Summary: t.Summary, Unverified: t.Unverified, EntryID: e.ID,
-		Held: e.Held, Origin: e.Origin, Recovered: e.Recovered,
+		ByHand: e.ByHand, Origin: e.Origin, Recovered: e.Recovered,
 		ElapsedSeconds: seconds(core.Elapsed(e, now)),
 		State:          core.EntryState(w, e, now),
 	}
@@ -216,8 +216,8 @@ func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
 	switch tm.State {
 	case core.TimerRunning:
 		fmt.Fprintf(&b, "%s %s running  %s", o.paint(green, "▶"), tm.Key, clock(secs(tm.ElapsedSeconds)))
-		if tm.Held {
-			b.WriteString("  held")
+		if tm.ByHand {
+			b.WriteString("  by hand")
 		}
 	case core.TimerPaused:
 		fmt.Fprintf(&b, "%s %s paused  %s", o.paint(yellow, "⏸"), tm.Key, clock(secs(tm.ElapsedSeconds)))
@@ -250,8 +250,8 @@ func (o output) describe(e core.Event, w core.World, loc *time.Location) string 
 		return fmt.Sprintf("+ %s added (not verified with Jira yet)\n", e.Key)
 	case core.EventPaused:
 		return fmt.Sprintf("%s %s paused\n", o.paint(yellow, "⏸"), e.Key)
-	case core.EventHeld:
-		return fmt.Sprintf("%s is now held: only you can move it\n", e.Key)
+	case core.EventByHand:
+		return fmt.Sprintf("%s set by hand: agents can't move it\n", e.Key)
 	case core.EventStarted:
 		return fmt.Sprintf("%s %s started\n", o.paint(green, "▶"), e.Key)
 	case core.EventRecovered:

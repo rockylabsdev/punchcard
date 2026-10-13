@@ -141,14 +141,14 @@ func refused(command, outcome, code, hint, data string) string {
 		outcome, command, data, code, h)
 }
 
-func running(key, id string, held bool, origin string, elapsed int) string {
-	return fmt.Sprintf(`{"key": %q, "unverified": true, "entryId": %q, "state": "running", "held": %t, "origin": %q, "recovered": false, "elapsedSeconds": %d}`,
-		key, id, held, origin, elapsed)
+func running(key, id string, byHand bool, origin string, elapsed int) string {
+	return fmt.Sprintf(`{"key": %q, "unverified": true, "entryId": %q, "state": "running", "byHand": %t, "origin": %q, "recovered": false, "elapsedSeconds": %d}`,
+		key, id, byHand, origin, elapsed)
 }
 
-func paused(key, id string, held bool, origin string, elapsed int) string {
-	return fmt.Sprintf(`{"key": %q, "unverified": true, "entryId": %q, "state": "paused", "held": %t, "origin": %q, "recovered": false, "elapsedSeconds": %d}`,
-		key, id, held, origin, elapsed)
+func paused(key, id string, byHand bool, origin string, elapsed int) string {
+	return fmt.Sprintf(`{"key": %q, "unverified": true, "entryId": %q, "state": "paused", "byHand": %t, "origin": %q, "recovered": false, "elapsedSeconds": %d}`,
+		key, id, byHand, origin, elapsed)
 }
 
 func status(run string, paused ...string) string {
@@ -173,32 +173,32 @@ func TestEnvelopes(t *testing.T) {
 		want  string
 	}{
 		// start
-		{"start adds an untracked ticket and holds it", nil, "09:00",
+		{"start adds an untracked ticket and sets it by hand", nil, "09:00",
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(running("AA-1", "ID-1", true, "hand", 0)), `[{"kind": "added", "key": "AA-1"}]`)},
 		{"start B pauses A", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:10",
 			[]string{"start", "AA-2"}, 0,
 			ok("start", status(running("AA-2", "ID-2", true, "hand", 0), paused("AA-1", "ID-1", true, "hand", 600)),
 				`[{"kind": "paused", "key": "AA-1"}, {"kind": "added", "key": "AA-2"}]`)},
-		{"start A by hand while an agent's A runs is a no-op that holds", func(h *harness) {
+		{"start A by hand while an agent's A runs is a no-op that sets it by hand", func(h *harness) {
 			h.env["CLAUDECODE"] = "1"
 			h.do("09:00", "start", "AA-1")
 			delete(h.env, "CLAUDECODE")
 		}, "09:05",
 			[]string{"start", "AA-1"}, 0,
-			ok("start", status(running("AA-1", "ID-1", true, "hand", 300)), `[{"kind": "held", "key": "AA-1"}]`)},
-		{"start A by an agent while A runs is a no-op that does not hold", func(h *harness) {
+			ok("start", status(running("AA-1", "ID-1", true, "hand", 300)), `[{"kind": "byHand", "key": "AA-1"}]`)},
+		{"start A by an agent while A runs is a no-op that does not set it by hand", func(h *harness) {
 			h.env["AI_AGENT"] = "x"
 			h.do("09:00", "start", "AA-1")
 		}, "09:05",
 			[]string{"start", "AA-1"}, 0,
 			ok("start", status(running("AA-1", "ID-1", false, "agent", 300)), noEvents)},
-		{"an agent cannot move a held timer", func(h *harness) {
+		{"an agent cannot move a timer set by hand", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.env["CLAUDECODE"] = "1"
 		}, "09:05",
 			[]string{"start", "AA-2"}, 4,
-			refused("start", "no_timer", "held", "the user started it by hand; only they can move or pause it", "null")},
+			refused("start", "no_timer", "by_hand", "the user set it by hand; only they can move or pause it", "null")},
 		{"--origin hand overrides the agent environment", func(h *harness) {
 			h.do("09:00", "start", "AA-1")
 			h.env["CLAUDECODE"] = "1"
@@ -299,7 +299,7 @@ func TestEnvelopes(t *testing.T) {
 			h.do("09:45", "touch")
 		}, "13:00",
 			[]string{"status"}, 0,
-			ok("status", unlinked(`{"running": {"key": "AA-1", "unverified": true, "entryId": "ID-1", "state": "stale", "held": true, "origin": "hand",
+			ok("status", unlinked(`{"running": {"key": "AA-1", "unverified": true, "entryId": "ID-1", "state": "stale", "byHand": true, "origin": "hand",
 				"recovered": false, "elapsedSeconds": 2700, "uncappedSeconds": 14400, "lastSeen": "2026-08-09T09:45:00.000-0500"},
 				"paused": [], "unsent": {"count": 0, "seconds": 0}, "authFailedAt": null}`), noEvents)},
 		{"status counts unsent worklogs", func(h *harness) {
@@ -355,16 +355,17 @@ func TestEnvelopes(t *testing.T) {
 			refused("retry", "not_configured", "not_configured", "run `punchcard setup`",
 				`{"sent": [], "remaining": [{"key": "AA-1", "entryId": "ID-1", "worklog": {"state": "pending", "startedAt": `+nine+`, "timeSpentSeconds": 1800}}]}`)},
 		{"setup needs a terminal", nil, "09:00", []string{"setup"}, 64, refused("setup", "usage", "usage", "see punchcard --help", "null")},
-		{"touch from a prompt moves an un-held timer", func(h *harness) {
+		{"touch from a prompt moves a timer not set by hand", func(h *harness) {
 			h.env["CLAUDECODE"] = "1"
 			h.do("09:00", "start", "AA-1")
 		}, "09:10",
 			[]string{"touch", "AA-2", "--origin", "prompt"}, 0,
 			ok("touch", status(running("AA-2", "ID-2", false, "prompt", 0), paused("AA-1", "ID-1", false, "prompt", 600)),
 				`[{"kind": "paused", "key": "AA-1"}, {"kind": "added", "key": "AA-2"}, {"kind": "started", "key": "AA-2"}]`)},
-		{"touch from a prompt leaves a held timer alone", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:10",
+		{"touch from a prompt moves a timer set by hand", func(h *harness) { h.do("09:00", "start", "AA-1") }, "09:10",
 			[]string{"touch", "AA-2", "--origin", "prompt"}, 0,
-			ok("touch", status(running("AA-1", "ID-1", true, "hand", 600)), noEvents)},
+			ok("touch", status(running("AA-2", "ID-2", false, "prompt", 0), paused("AA-1", "ID-1", true, "prompt", 600)),
+				`[{"kind": "paused", "key": "AA-1"}, {"kind": "added", "key": "AA-2"}, {"kind": "started", "key": "AA-2"}]`)},
 		{"touch skips when the lock is busy", func(h *harness) { h.holdLock() }, "09:00",
 			[]string{"touch"}, 0, ok("touch", "null", noEvents)},
 

@@ -43,7 +43,7 @@ func ticket(key string, entries ...core.TimeEntry) core.TrackedTicket {
 }
 
 func entry(id string, origin core.Origin, segs ...core.Segment) core.TimeEntry {
-	return core.TimeEntry{ID: id, Segments: segs, Held: origin == core.OriginHand, Origin: origin}
+	return core.TimeEntry{ID: id, Segments: segs, ByHand: origin == core.OriginHand, Origin: origin}
 }
 
 func recovered(e core.TimeEntry) core.TimeEntry { e.Recovered = true; return e }

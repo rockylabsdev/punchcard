@@ -12,9 +12,9 @@ var (
 	ErrUsage = errors.New("usage")
 	// ErrNoTimer: nothing running or paused to act on.
 	ErrNoTimer = errors.New("no timer")
-	// ErrHeld: the running timer was set by hand and only another act by
-	// hand may move or pause it.
-	ErrHeld = errors.New("timer is held")
+	// ErrByHand: the running timer was set by hand, so an agent may not
+	// move or pause it; only an act by hand or the user's focus may.
+	ErrByHand = errors.New("was set by hand")
 	// ErrTooShort: a worklog under one minute is never sent.
 	ErrTooShort = errors.New("under one minute")
 	// ErrNotTracked: the key is not on the list.

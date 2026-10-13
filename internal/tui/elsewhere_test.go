@@ -22,7 +22,7 @@ func row(t *testing.T, hs *harness, key string) string {
 	return ""
 }
 
-// elsewhere is AA-1 started from a prompt at 08:00 (so not held) with
+// elsewhere is AA-1 started from a prompt at 08:00 (so not by hand) with
 // BB-2 and CC-3 idle, then before, open at 09:00 with Jira configured.
 func elsewhere(t *testing.T, before ...core.Command) *harness {
 	hs := newHarness(t)

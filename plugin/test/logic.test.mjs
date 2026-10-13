@@ -134,7 +134,7 @@ const timer = (over) => ({
   unverified: false,
   entryId: 'E1',
   state: 'running',
-  held: false,
+  byHand: false,
   origin: 'prompt',
   recovered: false,
   elapsedSeconds: 72 * 60,
@@ -159,12 +159,12 @@ describe('bandFrom', () => {
       { tone: 'subtle', text: 'DEF-9 not running · /punch start' }],
     ['running', status({ running: timer({ summary: 'Fix login' }) }), '',
       { tone: 'success', text: '▶ ABC-123 1:12 · Fix login' }],
-    ['running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), '',
-      { tone: 'success', text: '▶ ABC-123 1:12 · held · Fix login' }],
+    ['running and set by hand', status({ running: timer({ byHand: true, summary: 'Fix login' }) }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · by hand · Fix login' }],
     ['another ticket running: grey, says where the time goes and what this session is for', status({ running: timer() }), 'DEF-9',
       { tone: 'subtle', text: 'timer on ABC-123 1:12 · here: DEF-9' }],
-    ['another ticket running and held', status({ running: timer({ held: true, summary: 'Fix login' }) }), 'DEF-9',
-      { tone: 'subtle', text: 'timer on ABC-123 1:12 · held · Fix login · here: DEF-9' }],
+    ['another ticket running and set by hand', status({ running: timer({ byHand: true, summary: 'Fix login' }) }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on ABC-123 1:12 · by hand · Fix login · here: DEF-9' }],
     ['another ticket running, worklogs owed: the debt still warns', status({ running: timer(), unsent: { count: 1, seconds: 60 } }), 'DEF-9',
       { tone: 'warning', text: 'timer on ABC-123 1:12 · 1 unsent · here: DEF-9' }],
     ['another ticket recovered: still red here', status({ running: timer({ recovered: true }) }), 'DEF-9',
@@ -249,6 +249,7 @@ describe('hereKey', () => {
 test('eventText', () => {
   assert.equal(eventText({ kind: 'started', key: 'A-1' }), '▶ A-1 started')
   assert.equal(eventText({ kind: 'paused', key: 'A-1' }), '⏸ A-1 paused')
+  assert.equal(eventText({ kind: 'byHand', key: 'A-1' }), "A-1 set by hand: agents can't move it")
   assert.equal(eventText({ kind: 'syncFailed', key: 'A-1', message: '500' }), 'A-1 worklog not sent: 500')
   assert.equal(eventText({ kind: 'novel', key: 'A-1' }), 'novel A-1')
 })
@@ -438,7 +439,7 @@ describe('replyText', () => {
   })
   test('no JSON', () => assert.equal(replyText('pause', null, 1), 'punchcard pause exited 1 without a JSON answer.'))
   test('a timer command answers with the band', () => {
-    assert.equal(replyText('start', status({ running: timer({ held: true }) }).envelope, 0), '▶ ABC-123 1:12 · held')
+    assert.equal(replyText('start', status({ running: timer({ byHand: true }) }).envelope, 0), '▶ ABC-123 1:12 · by hand')
     assert.equal(replyText('pause', status({}).envelope, 0), 'Nothing running.')
   })
   test('stop: synced, pending, local, owed', () => {

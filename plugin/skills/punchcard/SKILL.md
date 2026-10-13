@@ -32,12 +32,12 @@ Run the bare `punchcard` through Bash and always pass `--json`; read the envelop
 3. **A recovered entry** (`data.preview.recovered: true`, exit 6 even with `--yes`) needs a duration from the user. Ask how long they actually worked.
 4. **Exit 7 means the stop happened** but the worklog is not sent to the tracker yet (`ok: true`). Run `punchcard sync --json` later. **Never run `stop` again** after exit 7: that would stop a different timer.
 5. **Unattended** (no one to approve, the `--yes` call was denied): leave the gate as it is and leave the timer running. Tell the user: "run `/punch stop` when you're back".
-6. Start, pause and resume need no approval. They move only a timer the user has not set by hand; if `start` reports the timer is held, say so and leave it held.
+6. **Start a timer only when the user asks.** Start, pause and resume need no approval, but they move only a timer the user has not set by hand. If `start` reports a timer set by hand (exit 4, `error.code` `by_hand`), say so and leave it.
 7. **Reporting a period** ("what did I work on this week", a timesheet): run `punchcard log --json` with the range, and answer from `data.rows` (each: `date`, `started`, `key`, `summary`, `minutes`, `comment`, `state`), `data.open` (a running or paused timer, not yet logged, or null) and `data.range` (`from`, `to`). The default range is Monday through today; `--month` is the 1st through today; `--from`/`--to` are inclusive `YYYY-MM-DD`. For a table to paste, `punchcard log --md` (no `--json`) prints Markdown.
 
 ## Exit codes
 
-0 ok · 4 nothing to act on, or several candidates (`data.candidates`: ask which) · 6 needs confirmation (`data.preview`) · 64 usage (read `error.hint`) · 75 busy (retry once after a moment).
+0 ok · 4 nothing to act on, a timer set by hand (`by_hand`), or several candidates (`data.candidates`: ask which) · 6 needs confirmation (`data.preview`) · 64 usage (read `error.hint`) · 75 busy (retry once after a moment).
 
 These come only from a tracker, so read `data.tracker` before acting on them:
 

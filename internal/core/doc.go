@@ -6,5 +6,5 @@
 // with the current time to Apply, and writes back what it returns.
 //
 // Vocabulary follows CONTEXT.md: TrackedTicket, TimeEntry, Segment,
-// Worklog, presence, focus, held, origin, lastSeen, stale.
+// Worklog, presence, focus, origin, lastSeen, stale.
 package core

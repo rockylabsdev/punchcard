@@ -98,7 +98,7 @@ func TestLogJSONOfAWeek(t *testing.T) {
 			row("2026-08-05", "2026-08-05T09:00:00.000-0500", "AA-2", "Other thing", 60, "Tried", "failed", "", "ID-7", false),
 		},
 		"open": map[string]any{"key": "AA-1", "summary": "Fix the thing", "unverified": false, "entryId": "ID-8",
-			"state": "paused", "held": true, "origin": "hand", "recovered": false, "elapsedSeconds": 2700.0},
+			"state": "paused", "byHand": true, "origin": "hand", "recovered": false, "elapsedSeconds": 2700.0},
 		"range": map[string]any{"from": "2026-08-03", "to": "2026-08-05"},
 	}
 	if d := cmp.Diff(want, decode(t, r.stdout)["data"]); d != "" {

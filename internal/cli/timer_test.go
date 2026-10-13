@@ -157,7 +157,7 @@ func TestRefusals(t *testing.T) {
 		{"start without a key", nil, []string{"start"}, 64},
 		{"extra arguments", nil, []string{"pause", "AA-1"}, 64},
 		{"resume with nothing paused", nil, []string{"resume"}, 4},
-		{"agent cannot pause a held timer", func(m *machine) {
+		{"agent cannot pause a timer set by hand", func(m *machine) {
 			m.ok("start", "AA-1")
 			m.env["CLAUDECODE"] = "1"
 		}, []string{"pause"}, 4},

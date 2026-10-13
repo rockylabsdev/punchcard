@@ -9,7 +9,7 @@ import (
 // build writes. A file with a higher version is refused, never reset.
 const SchemaVersion = 1
 
-// Origin is who caused a change. Only OriginHand holds a timer;
+// Origin is who caused a change. Only OriginHand sets a timer by hand;
 // hand and prompt are presence, agent is not.
 type Origin string
 
@@ -57,10 +57,10 @@ type TimeEntry struct {
 	// ID is a UUID and the idempotency key for the worklog POST.
 	ID       string    `json:"id"`
 	Segments []Segment `json:"segments"`
-	// Held describes the entry's current (or last) running stretch; only
+	// ByHand describes the entry's current (or last) running stretch; only
 	// OriginHand sets it. Origin is who made the entry's last change:
 	// opened its stretch, paused it or stopped it (recovery keeps it).
-	Held   bool   `json:"held"`
+	ByHand bool   `json:"byHand"`
 	Origin Origin `json:"origin"`
 	// Recovered is set by recovery and cleared only by stop.
 	Recovered bool `json:"recovered"`

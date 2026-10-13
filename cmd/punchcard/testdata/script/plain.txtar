@@ -5,7 +5,7 @@ cmp stdout start.txt
 ! stderr .
 
 exec punchcard status
-stdout '^▶ AA-1 running  0:00:0[0-9]  held$'
+stdout '^▶ AA-1 running  0:00:0[0-9]  by hand$'
 
 exec punchcard status --short
 stdout '^▶ AA-1 0:00$'
@@ -31,6 +31,6 @@ stdout '^punchcard \S+ \(contract v1, go1\.\d+'
 
 -- start.txt --
 + AA-1 added (not verified with Jira yet)
-▶ AA-1 running  0:00:00  held
+▶ AA-1 running  0:00:00  by hand
 -- config/punchcard/config.json --
 {"schemaVersion": 1, "tracker": "jira"}

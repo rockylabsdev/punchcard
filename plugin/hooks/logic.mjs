@@ -232,10 +232,10 @@ function timerParts(t, elsewhere = false) {
     parts.push(`⏸ ${t.key} ${clock(t.elapsedSeconds)}`)
   } else if (elsewhere) {
     parts.push(`timer on ${t.key} ${clock(t.elapsedSeconds)}`)
-    if (t.held) parts.push('held')
+    if (t.byHand) parts.push('by hand')
   } else {
     parts.push(`▶ ${t.key} ${clock(t.elapsedSeconds)}`)
-    if (t.held) parts.push('held')
+    if (t.byHand) parts.push('by hand')
   }
   if (t.summary) parts.push(t.summary)
   const tone = t.state === 'paused' ? 'warning' : elsewhere ? 'subtle' : 'success'
@@ -252,8 +252,8 @@ export function eventText(e) {
       return `+ ${e.key} added`
     case 'paused':
       return `⏸ ${e.key} paused`
-    case 'held':
-      return `${e.key} is now held: only you can move it`
+    case 'byHand':
+      return `${e.key} set by hand: agents can't move it`
     case 'started':
       return `▶ ${e.key} started`
     case 'recovered':

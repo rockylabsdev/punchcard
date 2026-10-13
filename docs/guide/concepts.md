@@ -36,13 +36,13 @@ At most one ticket runs at a time. Starting another pauses the running one and s
 
 In the TUI, `space` on the running row pauses it, `p` pauses from any row, and `x` opens the stop dialog. The two are different keys on purpose.
 
-## Held
+## By hand
 
-A timer you start **by hand** (the CLI in your own shell, the TUI, or `/punch` in Claude Code) is **held**. A held timer never moves on its own: your prompts in Claude Code and an agent's `start` leave it alone. Only another act by hand moves it. A timer started by an agent, or moved by one of your prompts, is not held and follows your focus from session to session.
+A timer you start **by hand** (the CLI in your own shell, the TUI, or `/punch` in Claude Code) is **set by hand**. That means one thing: an agent can't move it. An agent's `start`, `pause` and `resume` refuse it. Your own focus still can: the timer runs on the ticket of the session you last prompted in, and when you prompt in a session on a different ticket, it moves there, whoever set it. A timer started by an agent, or moved by one of your prompts, is not set by hand, and an agent may move it too.
 
-*Scenario:* An agent started `PUN-142` for you, so it is not held. You switch to a Claude Code session on branch `feature/OPS-77-certs` (or in a directory whose `.punchcard` names `OPS-77`) and send a prompt: the timer moves to `OPS-77`. Later you run `punchcard start PUN-142` yourself. Now it is held, and prompting in the `OPS-77` session no longer moves it. `punchcard status` shows the word `held` on the running line.
+*Scenario:* You are in a Claude Code session on branch `feature/OPS-77-certs` (or in a directory whose `.punchcard` names `OPS-77`), and you run `punchcard start PUN-142` yourself. `punchcard status` shows the words `by hand` on the running line. Further prompts in the `OPS-77` session leave `PUN-142` running: your focus has not changed. Then you switch to a session on `PUN-150` and send a prompt: the timer moves to `PUN-150`, and is no longer set by hand.
 
-An agent that tries to move a held timer gets exit 4 with error code `held`: "the user started it by hand; only they can move or pause it".
+An agent that tries to move a timer set by hand gets exit 4 with error code `by_hand`: "the user set it by hand; only they can move or pause it".
 
 ## Presence, lastSeen, stale and recovered
 
@@ -98,7 +98,7 @@ A 401 is different: Jira rejected your credentials. The worklog stays pending, t
 
 ## Origin
 
-Every change records who caused it: **hand** (you, in a shell or the TUI), **prompt** (your own prompt in a Claude Code session, relayed by the plugin) or **agent** (an agent acting on its own). Only hand holds a timer. Hand and prompt are presence; agent is not. The CLI assumes agent when it runs inside Claude Code (the `CLAUDECODE` or `AI_AGENT` variable is set) and hand otherwise. A command you type with `!` inside Claude Code inherits the agent's environment and counts as agent.
+Every change records who caused it: **hand** (you, in a shell or the TUI), **prompt** (your own prompt in a Claude Code session, relayed by the plugin) or **agent** (an agent acting on its own). Only hand sets a timer by hand, which an agent cannot move. Hand and prompt are presence; agent is not. The CLI assumes agent when it runs inside Claude Code (the `CLAUDECODE` or `AI_AGENT` variable is set) and hand otherwise. A command you type with `!` inside Claude Code inherits the agent's environment and counts as agent.
 
 *Scenario:* The TUI is open while an agent starts `OPS-77` from a Claude Code session. Within a second the row reads `started by agent` and the status line says `agent started OPS-77`.
 
