@@ -174,22 +174,22 @@ func (a *app) change(name string, own core.EventKind, c core.Command) {
 	d := snapshot(res.World, res.Now)
 	// A change at a named time reports itself as an event with At; its
 	// line is the timer line, which then says when.
-	var self *core.Event
+	var dated *core.Event
 	var others []core.Event
 	for i, e := range res.Events {
-		if e.Kind == own && !e.At.IsZero() && self == nil {
-			self = &res.Events[i]
+		if e.Kind == own && !e.At.IsZero() && dated == nil {
+			dated = &res.Events[i]
 			continue
 		}
 		others = append(others, e)
 	}
 	human := a.describeAll(others, res)
 	loc := res.Now.Location()
-	// lineOf is tm's line, saying when when it is self's ticket.
+	// lineOf is tm's line, saying when for the ticket dated is on.
 	lineOf := func(tm Timer) string {
 		var at core.Timestamp
-		if self != nil && self.Key == tm.Key {
-			at = self.At
+		if dated != nil && dated.Key == tm.Key {
+			at = dated.At
 		}
 		return a.out.timerLineAt(tm, loc, res.Now, at)
 	}
@@ -198,16 +198,16 @@ func (a *app) change(name string, own core.EventKind, c core.Command) {
 	case d.Running != nil:
 		line = lineOf(*d.Running)
 	case own == core.EventPaused:
-		if self != nil {
-			if tm, ok := timerFor(res, self.Key); ok {
+		if dated != nil {
+			if tm, ok := timerFor(res, dated.Key); ok {
 				line = lineOf(tm)
 			}
 		} else if tm, ok := lastPaused(res); ok {
 			line = lineOf(tm)
 		}
 	}
-	if self != nil && self.Message != "" {
-		line += "  " + self.Message + "\n"
+	if dated != nil && dated.Message != "" {
+		line += "  " + dated.Message + "\n"
 	}
 	a.done(name, res, d, human+line)
 }
