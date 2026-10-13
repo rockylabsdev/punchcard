@@ -169,8 +169,7 @@ func (d awayDialog) body(m Model, w int) []string {
 	}
 	c, before, after, err := d.preview(m)
 	if err != nil {
-		msg := strings.TrimPrefix(err.Error(), core.ErrUsage.Error()+": ")
-		return append(lines, wrap(sFail.Render(gFailed+" "+msg), w)...)
+		return append(lines, wrap(sFail.Render(gFailed+" "+core.Reason(err)), w)...)
 	}
 	if !asks(c) {
 		return append(lines, wrap(sDim.Render("change From to move the pause, or set To to resume"), w)...)
