@@ -202,7 +202,7 @@ func (a *app) change(name string, c core.Command) {
 		}
 	}
 	if self != nil {
-		hhmm := self.At.In(loc).Format("15:04")
+		hhmm := core.Clock(self.At.Time, loc)
 		line = strings.Replace(line, " running  ", " running since "+hhmm+"  ", 1)
 		line = strings.Replace(line, " paused  ", " paused at "+hhmm+"  ", 1)
 		if self.Message != "" {

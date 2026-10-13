@@ -42,9 +42,9 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 		case m.stateOf(t) == core.TimerRunning:
 			head(gRunning+" RUNNING", m.pal.running, clock(el))
 		case recoveredPause(t):
-			head(gRecovered+" RECOVERED", sRecov, hm(el))
+			head(gRecovered+" RECOVERED", sRecov, core.FormatDuration(el))
 		default:
-			head(gPaused+" PAUSED", sPaused, hm(el))
+			head(gPaused+" PAUSED", sPaused, core.FormatDuration(el))
 		}
 		if e.Recovered && e.Running() {
 			lines = append(lines, indent(sRecov, "recovered earlier — check the duration at stop", w)...)
@@ -64,7 +64,7 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 			continue
 		}
 		d := time.Duration(wl.TimeSpentSeconds) * time.Second
-		lines = append(lines, "  "+rfit(hm(d), 6)+"  "+outcome(*wl, m.now))
+		lines = append(lines, "  "+rfit(core.FormatDuration(d), 6)+"  "+outcome(*wl, m.now))
 		n++
 	}
 	if n == 0 {
@@ -103,11 +103,11 @@ func leftOut(e core.TimeEntry) string {
 // the number column sums by eye to the headline.
 func (m Model) stretches(e core.TimeEntry, w int) []string {
 	var lines []string
-	hhmm := func(ts core.Timestamp) string { return ts.In(m.now.Location()).Format("15:04") }
+	hhmm := func(ts core.Timestamp) string { return core.Clock(ts.Time, m.now.Location()) }
 	n := len(e.Segments)
 	if e.Recovered && e.Paused() {
 		end := e.Segments[n-1].EndedAt
-		lines = append(lines, gapLine(hhmm(end), "now", sRecov, gRecovered+" away "+hm(m.now.Sub(end.Time)), w))
+		lines = append(lines, gapLine(hhmm(end), "now", sRecov, gRecovered+" away "+core.FormatDuration(m.now.Sub(end.Time)), w))
 	}
 	for i := n - 1; i >= 0; i-- {
 		s := e.Segments[i]
@@ -125,7 +125,7 @@ func (m Model) stretches(e core.TimeEntry, w int) []string {
 			if prev.Cut {
 				why = " away " // the user cut it out: pause or start at a time
 			}
-			lines = append(lines, gapLine(hhmm(prev.EndedAt), hhmm(s.StartedAt), sDim, gPaused+why+hm(s.StartedAt.Sub(prev.EndedAt.Time)), w))
+			lines = append(lines, gapLine(hhmm(prev.EndedAt), hhmm(s.StartedAt), sDim, gPaused+why+core.FormatDuration(s.StartedAt.Sub(prev.EndedAt.Time)), w))
 		}
 	}
 	return lines
@@ -144,7 +144,7 @@ func stretchHM(d time.Duration) string {
 	if d < time.Minute {
 		return "<1m"
 	}
-	return hm(d)
+	return core.FormatDuration(d)
 }
 
 // indent wraps text to w under a two-space indent.
@@ -187,7 +187,7 @@ func outcome(wl core.Worklog, now time.Time) string {
 	case core.WorklogLocal:
 		return sDim.Render(gSynced + " logged")
 	}
-	return sDim.Render(gSynced + " logged " + wl.SyncedAt.In(now.Location()).Format("15:04"))
+	return sDim.Render(gSynced + " logged " + core.Clock(wl.SyncedAt.Time, now.Location()))
 }
 
 // retry is the r key after an owed worklog; the key is sync blue.

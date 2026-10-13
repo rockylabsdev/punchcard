@@ -273,7 +273,7 @@ func (a *applier) overlaps(from, to Timestamp, skip *Segment) error {
 }
 
 // hhmm is a time as the user named it, in now's zone.
-func (a *applier) hhmm(ts Timestamp) string { return ts.In(a.now.Location()).Format("15:04") }
+func (a *applier) hhmm(ts Timestamp) string { return Clock(ts.Time, a.now.Location()) }
 
 func (a *applier) pause(c Pause) error {
 	if _, e := a.running(); e == nil {

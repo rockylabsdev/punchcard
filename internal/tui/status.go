@@ -130,7 +130,7 @@ func (m Model) statusLine(w int) string {
 	if m.last.text == "" {
 		return ""
 	}
-	return fit(" "+sDim.Render(m.last.at.In(m.now.Location()).Format("15:04"))+" "+
+	return fit(" "+sDim.Render(core.Clock(m.last.at, m.now.Location()))+" "+
 		originTag(m.last.origin)+" "+m.last.text, w)
 }
 

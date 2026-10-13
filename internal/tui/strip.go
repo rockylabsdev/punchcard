@@ -94,7 +94,7 @@ func (m Model) stripRows(items []stripItem) []string {
 			key = sDim.Render(key)
 		}
 		d := time.Duration(it.wl.TimeSpentSeconds) * time.Second
-		out = append(out, " "+fit(outcome(it.wl, m.now), stripStatusW)+fit(key, stripKeyW)+rfit(hm(d), 7)+
+		out = append(out, " "+fit(outcome(it.wl, m.now), stripStatusW)+fit(key, stripKeyW)+rfit(core.FormatDuration(d), 7)+
 			sDim.Render("   "+m.when(it.stopped)))
 	}
 	return out
@@ -106,7 +106,7 @@ func (m Model) when(t time.Time) string {
 		return ""
 	}
 	if sameDay(t, m.now) {
-		return t.In(m.now.Location()).Format("15:04")
+		return core.Clock(t, m.now.Location())
 	}
 	return t.In(m.now.Location()).Format("Jan 2 15:04")
 }
@@ -152,12 +152,12 @@ func (m Model) dayLogTitle() string {
 			}
 		}
 	}
-	title := "[3] Today " + sDim.Render("· logged "+hm(logged))
+	title := "[3] Today " + sDim.Render("· logged "+core.FormatDuration(logged))
 	if m.noTracker {
 		return title
 	}
 	_, owed := core.Owed(st)
-	title += sDim.Render(" · owed " + hm(owed))
+	title += sDim.Render(" · owed " + core.FormatDuration(owed))
 	switch {
 	case !st.AuthFailedAt.IsZero():
 		title += sDim.Render(" · ") + sFail.Render("token rejected")

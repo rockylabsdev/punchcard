@@ -23,7 +23,7 @@ func (m Model) ticketsPane(w, h int) []string {
 	for _, t := range rows {
 		keyW = max(keyW, len(t.Key)+1)
 	}
-	title := "[1] Tickets " + sDim.Render("· today "+hm(core.TodayTotal(m.world, m.now)))
+	title := "[1] Tickets " + sDim.Render("· today "+core.FormatDuration(core.TodayTotal(m.world, m.now)))
 
 	var body []string
 	for i, t := range rows {
@@ -56,7 +56,7 @@ func (m Model) ticketRow(t core.TrackedTicket, w, keyW int, selected bool) strin
 		cur = m.pal.brand.Render(gCursor)
 	}
 	d := core.TimeToday(t, m.now)
-	num := sDim.Render(hm(d))
+	num := sDim.Render(core.FormatDuration(d))
 	if d == 0 {
 		num = sFaint.Render("—")
 	}

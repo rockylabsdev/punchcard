@@ -38,7 +38,7 @@ func (m Model) openAway() Model {
 		m = m.notify("nothing to cut on " + t.Key + " — space starts it")
 		return m
 	}
-	hhmm := func(ts core.Timestamp) string { return ts.In(m.now.Location()).Format("15:04") }
+	hhmm := func(ts core.Timestamp) string { return core.Clock(ts.Time, m.now.Location()) }
 	last := e.Segments[len(e.Segments)-1]
 	d := awayDialog{ticket: t.Key, entryID: e.ID, summary: t.Summary,
 		from: newInput("10:00 or -45m"), to: newInput("now")}
@@ -180,5 +180,5 @@ func (d awayDialog) body(m Model, w int) []string {
 		verb, diff = "adds", -diff
 	}
 	becomes := fmt.Sprintf("%d:%02d", int(after.Hours()), int(after.Minutes())%60)
-	return append(lines, wrap("→ "+verb+" "+sPaused.Bold(true).Render(hm(diff))+" · entry becomes "+becomes, w)...)
+	return append(lines, wrap("→ "+verb+" "+sPaused.Bold(true).Render(core.FormatDuration(diff))+" · entry becomes "+becomes, w)...)
 }

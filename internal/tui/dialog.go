@@ -103,7 +103,7 @@ func (d stopDialog) follow(m Model) stopDialog {
 	_, el := d.measured(m)
 	v := ""
 	if el >= time.Minute {
-		v = hm(el.Truncate(time.Minute))
+		v = core.FormatDuration(el.Truncate(time.Minute))
 	}
 	if v != d.dur.Value() {
 		d.dur.SetValue(v)
@@ -149,9 +149,9 @@ func (d stopDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 		m.dlg = nil
 		if m.noTracker {
-			m = m.notify("logging " + hm(dur) + " for " + d.ticket + "…")
+			m = m.notify("logging " + core.FormatDuration(dur) + " for " + d.ticket + "…")
 		} else {
-			m = m.notify("sending " + hm(dur) + " for " + d.ticket + " to Jira…")
+			m = m.notify("sending " + core.FormatDuration(dur) + " for " + d.ticket + " to Jira…")
 		}
 		return m.enqueue(intent{kind: intentStop, stop: core.Stop{
 			Key: d.ticket, EntryID: d.entryID, Duration: dur,
@@ -179,7 +179,7 @@ func (d stopDialog) body(m Model, w int) []string {
 	if d.recovered {
 		capped := ""
 		if n > 0 {
-			capped = " at " + e.Segments[n-1].EndedAt.In(m.now.Location()).Format("15:04")
+			capped = " at " + core.Clock(e.Segments[n-1].EndedAt.Time, m.now.Location())
 		}
 		lines = append(lines, wrap(sRecov.Render(gRecovered+" recovered — capped"+capped+", your last presence; how long did you work?"), w)...)
 	}
@@ -191,9 +191,9 @@ func (d stopDialog) body(m Model, w int) []string {
 	switch {
 	case err == nil:
 		if m.noTracker {
-			lines = append(lines, wrap("→ logs "+sSync.Bold(true).Render(hm(dur))+" as one worklog", w)...)
+			lines = append(lines, wrap("→ logs "+sSync.Bold(true).Render(core.FormatDuration(dur))+" as one worklog", w)...)
 		} else {
-			lines = append(lines, wrap("→ sends "+sSync.Bold(true).Render(hm(dur))+" to Jira as one worklog", w)...)
+			lines = append(lines, wrap("→ sends "+sSync.Bold(true).Render(core.FormatDuration(dur))+" to Jira as one worklog", w)...)
 		}
 	case d.recovered && strings.TrimSpace(d.dur.Value()) == "":
 		lines = append(lines, wrap(sRecov.Render("type the time you actually worked"), w)...)
@@ -273,9 +273,9 @@ func (d removeDialog) body(m Model, w int) []string {
 	}
 	lines = append(lines, "")
 	if d.owes {
-		lost := " its unsent " + hm(d.unsent) + " would be lost: it never reaches Jira"
+		lost := " its unsent " + core.FormatDuration(d.unsent) + " would be lost: it never reaches Jira"
 		if m.noTracker {
-			lost = " its unlogged " + hm(d.unsent) + " would be lost: it is never logged"
+			lost = " its unlogged " + core.FormatDuration(d.unsent) + " would be lost: it is never logged"
 		}
 		lines = append(lines, wrap(sFail.Render(gFailed+lost), w)...)
 		lines = append(lines, "")
