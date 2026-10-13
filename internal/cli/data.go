@@ -265,10 +265,20 @@ func (o output) describe(e core.Event, w core.World, loc *time.Location) string 
 	case core.EventRestored:
 		return fmt.Sprintf("+ %s restored\n", e.Key)
 	case core.EventPaused:
+		if !e.At.IsZero() {
+			s := fmt.Sprintf("%s %s paused at %s\n", o.paint(yellow, "⏸"), e.Key, e.At.In(loc).Format("15:04"))
+			if e.Message != "" {
+				s += "  " + e.Message + "\n"
+			}
+			return s
+		}
 		return fmt.Sprintf("%s %s paused\n", o.paint(yellow, "⏸"), e.Key)
 	case core.EventByHand:
 		return fmt.Sprintf("%s set by hand: agents can't move it\n", e.Key)
 	case core.EventStarted:
+		if !e.At.IsZero() {
+			return fmt.Sprintf("%s %s started at %s\n", o.paint(green, "▶"), e.Key, e.At.In(loc).Format("15:04"))
+		}
 		return fmt.Sprintf("%s %s started\n", o.paint(green, "▶"), e.Key)
 	case core.EventRecovered:
 		return fmt.Sprintf("%s %s recovered: no presence since %s, so it was capped there; fix the duration at stop\n",
