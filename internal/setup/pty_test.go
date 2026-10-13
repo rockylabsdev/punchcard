@@ -57,12 +57,7 @@ func newScreen(t *testing.T, r *rig) (*screen, <-chan int) {
 	done := make(chan int, 1)
 	go func() {
 		ui.Begin()
-		d := Deps{
-			UI: ui, Getenv: r.getenv, Connect: r.jira.connect, Claude: r.claude,
-			Keychain: r.kc, Store: r.store, Version: "v0.1.0",
-			Now: func() time.Time { return r.now },
-		}
-		code := Run(d)
+		code := Run(r.deps(ui))
 		ui.End()
 		done <- code
 	}()
@@ -108,9 +103,15 @@ func (s *screen) closed(next, title, answer string) {
 	if !strings.Contains(text, "◇  "+title+"\n│  "+answer) {
 		s.t.Errorf("no summary %q / %q above %q; screen:\n%s", title, answer, next, s.String())
 	}
-	for _, l := range above {
+	s.noForm(above, "above "+next)
+}
+
+// noForm fails if any of lines is a form's (Huh's ┃ border).
+func (s *screen) noForm(lines []string, where string) {
+	s.t.Helper()
+	for _, l := range lines {
 		if strings.HasPrefix(l, "┃") {
-			s.t.Errorf("a closed form's line %q is left above %q; screen:\n%s", l, next, s.String())
+			s.t.Errorf("a closed form's line %q is left %s; screen:\n%s", l, where, s.String())
 			return
 		}
 	}
@@ -148,11 +149,5 @@ func TestTerminalStepLeavesOnlyItsSummary(t *testing.T) {
 		t.Fatalf("setup did not finish; screen:\n%s", s.String())
 	}
 	s.waitFor("│  Done.")
-	text := s.String()
-	for _, l := range s.lines() {
-		if strings.HasPrefix(l, "┃") {
-			t.Errorf("a closed form's line %q is left; screen:\n%s", l, text)
-			break
-		}
-	}
+	s.noForm(s.lines(), "on screen")
 }
