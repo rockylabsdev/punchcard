@@ -3,14 +3,14 @@
 │ ‖ PUN-138       Stop dialog: duration parsing and the live p…     12m  ││                                            │
 │ · OPS-77        Rotate staging certs                              15m ○││‖ PAUSED                                 22m│
 │ · PUN-120       Spike: Bubble Tea v2 layout                       40m ✗││  stop sends this as one worklog — x        │
-│ · DATA-9        ? unverified — Jira not reached yet                 —  ││                                            │
-│ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││ 08:20–08:41     21m counted                │
-│                                                                        ││ 08:15–08:20 ‖ paused 5m, not counted       │
-│                                                                        ││ 08:14–08:15      1m counted                │
+│ · DATA-9        ? unverified — Jira not reached yet                 —  ││  pauses are left out                       │
+│ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││                                            │
+│                                                                        ││ 08:20–08:41     21m                        │
+│                                                                        ││ 08:15–08:20 ‖ paused 5m                    │
+│                                                                        ││ 08:14–08:15      1m                        │
 │                                                                        ││                                            │
 │                                                                        ││WORKLOGS TODAY                              │
 │                                                                        ││  nothing yet                               │
-│                                                                        ││                                            │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
