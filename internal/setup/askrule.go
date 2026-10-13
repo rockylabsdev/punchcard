@@ -52,6 +52,17 @@ type askPlan struct {
 	mode   fs.FileMode
 }
 
+// CheckAskRule is the ask rule's state in the settings file at path:
+// "present", "missing" (no file is missing too) or "unparseable". A
+// read failure other than "no file" is an error. It never writes.
+func CheckAskRule(path string) (string, error) {
+	p, err := readAskRule(path)
+	if err != nil {
+		return "", err
+	}
+	return p.state.String(), nil
+}
+
 // readAskRule reads the settings file (none is fine) and plans the
 // edit. Only a read failure other than "no file" is an error.
 func readAskRule(path string) (askPlan, error) {

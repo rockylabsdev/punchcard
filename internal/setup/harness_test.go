@@ -213,7 +213,12 @@ type fakeClaude struct {
 	calls []string
 }
 
-func (c *fakeClaude) Found() bool { return c.found }
+func (c *fakeClaude) Path() string {
+	if !c.found {
+		return ""
+	}
+	return "/usr/local/bin/claude"
+}
 
 func (c *fakeClaude) Run(_ context.Context, out io.Writer, args ...string) error {
 	cmd := strings.Join(args, " ")

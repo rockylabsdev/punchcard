@@ -31,8 +31,8 @@ const pluginBudget = 3 * time.Minute
 // Claude is the `claude` CLI on PATH. Tests use a fake: setup never
 // runs the real one outside a terminal session.
 type Claude interface {
-	// Found: `claude` is on PATH.
-	Found() bool
+	// Path is where `claude` is on PATH; "" when it is not.
+	Path() string
 	// Run runs claude with args, its output going to out.
 	Run(ctx context.Context, out io.Writer, args ...string) error
 	// Output runs claude with args and returns its stdout.
@@ -42,7 +42,7 @@ type Claude interface {
 // SystemClaude is the real `claude` on PATH.
 type SystemClaude struct{}
 
-func (SystemClaude) Found() bool { _, err := exec.LookPath("claude"); return err == nil }
+func (SystemClaude) Path() string { p, _ := exec.LookPath("claude"); return p }
 
 func (SystemClaude) Run(ctx context.Context, out io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, "claude", args...)
@@ -120,27 +120,56 @@ func comparable(v string) bool {
 // forms (-TIMESTAMP-HASH, -pre.0.TIMESTAMP-HASH, -0.TIMESTAMP-HASH).
 var pseudoVersion = regexp.MustCompile(`[-.][0-9]{14}-[0-9a-f]{12}(\+|$)`)
 
+// PluginState is the punchcard plugin as Claude Code reports it: what
+// setup's plugin step decides from, and what doctor prints.
+type PluginState struct {
+	Found     bool   // `claude` is on PATH
+	Installed bool   // the plugin is in `claude plugin list`
+	Version   string // the installed plugin's version
+	// Err is why Claude Code could not say (Found, but the list failed).
+	Err error
+}
+
+// InspectPlugin asks c which plugins are installed. A nil c, or one
+// not on PATH, is not found and is never run.
+func InspectPlugin(c Claude) PluginState {
+	if c == nil || c.Path() == "" {
+		return PluginState{}
+	}
+	p := PluginState{Found: true}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	out, err := c.Output(ctx, pluginList...)
+	cancel()
+	if err == nil {
+		p.Version, p.Installed, err = installedVersion(out)
+	}
+	p.Err = err
+	return p
+}
+
+// Comparable reports whether the plugin and binary can be compared:
+// both are installed releases (comparable). Only then is Skewed meaningful.
+func (p PluginState) Comparable(binary string) bool {
+	return p.Installed && comparable(binary) && comparable(p.Version)
+}
+
+// Skewed reports whether the installed plugin is a different release
+// from binary, which setup offers to update.
+func (p PluginState) Skewed(binary string) bool {
+	return decidePlugin(p.Found, p.Installed, p.Version, binary) == pluginOutdated
+}
+
 func command(args []string) string { return "claude " + strings.Join(args, " ") }
 
 // plugin is the Claude Code plugin step. A failure is reported and the
 // wizard goes on: it never undoes saved credentials.
 func (w wizard) plugin() error {
-	c := w.Claude
-	found := c != nil && c.Found()
-	var have string
-	var installed bool
-	if found {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		out, err := c.Output(ctx, pluginList...)
-		cancel()
-		if err == nil {
-			have, installed, err = installedVersion(out)
-		}
-		if err != nil {
-			w.UI.Say("⚠ Could not ask Claude Code which plugins are installed: " + err.Error())
-		}
+	p := InspectPlugin(w.Claude)
+	if p.Err != nil {
+		w.UI.Say("⚠ Could not ask Claude Code which plugins are installed: " + p.Err.Error())
 	}
-	switch decidePlugin(found, installed, have, w.Version) {
+	have := p.Version
+	switch decidePlugin(p.Found, p.Installed, have, w.Version) {
 	case pluginNoClaude:
 		w.UI.Say("Claude Code (claude) is not on PATH. To add the punchcard plugin later, run:",
 			"  "+command(marketplaceAdd), "  "+command(pluginInstall))
