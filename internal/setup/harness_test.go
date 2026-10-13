@@ -207,17 +207,24 @@ func (j *fakeJira) connect(_ context.Context, site, email, token string) (tracke
 // fakeClaude is `claude` on PATH, or not.
 type fakeClaude struct {
 	found bool
-	list  string           // `plugin list --json` output
-	fail  map[string]error // by the joined args
+	list  string            // `plugin list --json` output
+	fail  map[string]error  // by the joined args
+	said  map[string]string // more output, by the joined args
 	calls []string
 }
 
-func (c *fakeClaude) Found() bool { return c.found }
+func (c *fakeClaude) Path() string {
+	if !c.found {
+		return ""
+	}
+	return "/usr/local/bin/claude"
+}
 
 func (c *fakeClaude) Run(_ context.Context, out io.Writer, args ...string) error {
 	cmd := strings.Join(args, " ")
 	c.calls = append(c.calls, cmd)
 	fmt.Fprintf(out, "ran %s\n", cmd)
+	fmt.Fprint(out, c.said[cmd])
 	return c.fail[cmd]
 }
 
