@@ -42,8 +42,9 @@ type Start struct {
 // At, when set, closes it at that time instead of now and marks it Cut:
 // the user was away from then. With nothing running it moves the pause
 // of Key's paused entry, or with no Key the most recently paused one. At
-// may not be in the future, before the segment started, or over other
-// time already measured (ErrUsage). A cut that would leave a segment
+// may not be in the future, before the segment started, over other time
+// already measured, or, moving a recovered entry's pause later, past
+// lastSeen (ErrUsage). A cut that would leave a segment
 // under a minute drops it, and its EventPaused says so in Message. Key
 // is read only with At.
 type Pause struct {
@@ -66,6 +67,18 @@ type Resume struct {
 	// Grammar is the key grammar in effect (the tracker's); the zero
 	// value is the slug, for no tracker.
 	Grammar tracker.Grammar
+}
+
+// Away cuts time the user was away out of Key's open entry, in one
+// transition: a Pause at From (Key's, as pause --at), then, when To is
+// set, a resume of Key's paused entry at To, as resume --at does, which
+// refuses while any timer runs. From zero leaves a paused entry's pause
+// where it is. Either half refused refuses the whole cut: nothing
+// changes. It is the TUI's Away dialog.
+type Away struct {
+	Key      string
+	From, To time.Time
+	Origin   Origin
 }
 
 // Stop ends an entry and produces its Worklog: pending, or local when
@@ -190,6 +203,7 @@ type Verify struct {
 func (Start) command()             {}
 func (Pause) command()             {}
 func (Resume) command()            {}
+func (Away) command()              {}
 func (Stop) command()              {}
 func (Add) command()               {}
 func (Remove) command()            {}

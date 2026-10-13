@@ -62,10 +62,10 @@ func TestTodayTotal(t *testing.T) {
 		{"a stale timer counts capped at lastSeen",
 			world("09:40", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "")))),
 			"12:00", 40 * time.Minute},
-		{"a removed ticket is off the list and out of the total",
+		{"a removed ticket's time today still counts: the total answers for the day",
 			world("", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "10:00"))),
 				removed(ticket("AA-2", entry("E2", core.OriginHand, seg("10:00", "10:30"))))),
-			"12:00", time.Hour},
+			"12:00", 90 * time.Minute},
 		{"nothing tracked is zero", world(""), "12:00", 0},
 	}
 	for _, tc := range cases {

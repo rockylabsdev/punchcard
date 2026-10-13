@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -171,7 +172,7 @@ func (a *app) doctor(redact bool) DoctorData {
 func (a *app) doctorState(r redactor, d *DoctorData) DoctorState {
 	st := a.env.Store
 	if err := st.Err(); err != nil {
-		return DoctorState{State: "error", Problem: err.Error()}
+		return DoctorState{State: "error", Problem: r.text(err.Error())}
 	}
 	now := a.env.Now()
 	s := DoctorState{Dir: r.path(st.Dir()), Locked: st.Locked(), today: now.Format(time.DateOnly)}
@@ -253,7 +254,9 @@ func doctorClaude(c setup.Claude, binary string, r redactor) (DoctorClaude, Doct
 	if f := strings.Fields(string(out)); err == nil && len(f) > 0 {
 		dc.Version = f[0]
 	}
-	p := setup.InspectPlugin(c)
+	ctx, cancel = context.WithTimeout(context.Background(), doctorBudget)
+	p := setup.InspectPlugin(ctx, c)
+	cancel()
 	dp.Installed, dp.Version = p.Installed, p.Version
 	if p.Err != nil {
 		dp.Problem = r.text(p.Err.Error())
@@ -282,7 +285,7 @@ func (o output) doctorText(d DoctorData) string {
 	}
 	v := d.Punchcard
 	fmt.Fprintf(&b, "punchcard %s (contract v%d, %s %s)\n", v.Version, v.Contract, v.Go, v.Platform)
-	row("binary", "%s", or(d.Binary, "unknown"))
+	row("binary", "%s", cmp.Or(d.Binary, "unknown"))
 	row("data", "%s", d.Data.text())
 	row("config", "%s", d.Config.text())
 	row("token", "%s", tokenText(d.Token, d.Config.Tracker))
@@ -300,7 +303,7 @@ func (o output) doctorText(d DoctorData) string {
 	}
 	row("unsent", "%s", unsent)
 	if d.Claude.Found {
-		row("claude", "%s at %s", or(d.Claude.Version, "unknown version"), d.Claude.Path)
+		row("claude", "%s at %s", cmp.Or(d.Claude.Version, "unknown version"), d.Claude.Path)
 	} else {
 		row("claude", "not found on PATH")
 	}
@@ -308,7 +311,7 @@ func (o output) doctorText(d DoctorData) string {
 	row("ask rule", "%s", d.AskRule.text())
 	t := d.Terminal
 	term := fmt.Sprintf("TERM=%s  TERM_PROGRAM=%s  COLORTERM=%s  NO_COLOR %s",
-		or(t.Term, "unset"), or(t.TermProgram, "unset"), or(t.ColorTerm, "unset"), map[bool]string{true: "set", false: "unset"}[t.NoColor])
+		cmp.Or(t.Term, "unset"), cmp.Or(t.TermProgram, "unset"), cmp.Or(t.ColorTerm, "unset"), map[bool]string{true: "set", false: "unset"}[t.NoColor])
 	if t.Width > 0 {
 		term += fmt.Sprintf("  %dx%d", t.Width, t.Height)
 	}
@@ -360,9 +363,9 @@ func (c DoctorConfig) text() string {
 	if c.Problem != "" && c.Exists {
 		parts = append(parts, "problem: "+c.Problem)
 	}
-	parts = append(parts, "tracker "+or(string(c.Tracker), "unknown"))
+	parts = append(parts, "tracker "+cmp.Or(string(c.Tracker), "unknown"))
 	if c.Tracker == config.TrackerJira {
-		parts = append(parts, "site "+or(c.Site, "unset"), "email "+or(c.Email, "unset"))
+		parts = append(parts, "site "+cmp.Or(c.Site, "unset"), "email "+cmp.Or(c.Email, "unset"))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -409,13 +412,6 @@ func (a DoctorAskRule) text() string {
 		return a.Path + " unreadable"
 	}
 	return "unknown: neither CLAUDE_CONFIG_DIR nor HOME is set"
-}
-
-func or(s, otherwise string) string {
-	if s == "" {
-		return otherwise
-	}
-	return s
 }
 
 // redactor hides what a pasted report should not carry: the site, the

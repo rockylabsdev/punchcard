@@ -39,3 +39,18 @@ func (e *AmbiguousError) Error() string {
 }
 
 func (e *AmbiguousError) Is(target error) bool { return target == ErrNoTimer }
+
+// Reason is a refusal in the user's words: err's message without the
+// sentinel it wraps ("usage: 10:45 is before 10:00" reads "10:45 is
+// before 10:00"). Any other error is its message.
+func Reason(err error) string {
+	msg := err.Error()
+	for _, s := range []error{ErrUsage, ErrNoTimer} {
+		if errors.Is(err, s) {
+			if r, ok := strings.CutPrefix(msg, s.Error()+": "); ok {
+				return r
+			}
+		}
+	}
+	return msg
+}

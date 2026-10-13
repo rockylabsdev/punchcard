@@ -25,6 +25,8 @@ import (
 // plugin list. Run is never called.
 type fakeClaude struct {
 	path, list string
+	// budgets is how long each command was given, by its args.
+	budgets map[string]time.Duration
 }
 
 func (c *fakeClaude) Path() string { return c.path }
@@ -33,7 +35,13 @@ func (c *fakeClaude) Run(context.Context, io.Writer, ...string) error {
 	panic("doctor never runs a claude command that changes anything")
 }
 
-func (c *fakeClaude) Output(_ context.Context, args ...string) ([]byte, error) {
+func (c *fakeClaude) Output(ctx context.Context, args ...string) ([]byte, error) {
+	if d, ok := ctx.Deadline(); ok {
+		if c.budgets == nil {
+			c.budgets = map[string]time.Duration{}
+		}
+		c.budgets[strings.Join(args, " ")] = time.Until(d)
+	}
 	switch strings.Join(args, " ") {
 	case "--version":
 		return []byte("2.1.291 (Claude Code)\n"), nil
@@ -189,6 +197,19 @@ func TestDoctorClaudeAndPlugin(t *testing.T) {
 				t.Errorf("plugin line %q, want %q", l, c.wantPl)
 			}
 		})
+	}
+}
+
+func TestDoctorBoundsEveryClaudeCommandByItsBudget(t *testing.T) {
+	r := newDoctorRig(t)
+	if got := r.run(); got.code != 0 {
+		t.Fatalf("exit %d", got.code)
+	}
+	for _, args := range []string{"--version", "plugin list --json"} {
+		d, ok := r.claude.budgets[args]
+		if !ok || d > 10*time.Second {
+			t.Errorf("claude %s ran with budget %v (bounded %v), want at most 10s", args, d, ok)
+		}
 	}
 }
 

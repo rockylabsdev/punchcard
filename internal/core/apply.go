@@ -33,6 +33,8 @@ func Apply(w World, cmd Command, now time.Time) (World, []Event, error) {
 	case Resume:
 		origin = c.Origin
 		err = a.resume(c)
+	case Away:
+		origin, err = c.Origin, a.away(c)
 	case Stop:
 		origin, err = c.Origin, a.stop(c)
 	case Add:
@@ -84,11 +86,10 @@ func (a *applier) start(c Start) error {
 	if !c.Grammar.Valid(c.Key) {
 		return fmt.Errorf("%w: %q is not a ticket key", ErrUsage, c.Key)
 	}
-	named := !c.At.IsZero()
-	when := a.now
+	named, when := !c.At.IsZero(), a.now
 	if named {
-		when = At(c.At)
-		if err := a.notFuture(when); err != nil {
+		var err error
+		if when, err = a.namedAt(c.At); err != nil {
 			return err
 		}
 	}
@@ -164,8 +165,8 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string, when T
 // pauseAt is a Pause at a named time: it closes the running segment
 // then, or moves a paused entry's pause there (see Pause).
 func (a *applier) pauseAt(c Pause) error {
-	when := At(c.At)
-	if err := a.notFuture(when); err != nil {
+	when, err := a.namedAt(c.At)
+	if err != nil {
 		return err
 	}
 	t, e := a.running()
@@ -173,10 +174,7 @@ func (a *applier) pauseAt(c Pause) error {
 		t, e = nil, nil
 	}
 	switch {
-	case e != nil:
-		if err := a.guardByHand(c.Origin); err != nil {
-			return err
-		}
+	case e != nil: // the running entry
 	case c.Key != "":
 		t = a.listed(c.Key)
 		e = openEntry(t)
@@ -202,6 +200,10 @@ func (a *applier) pauseAt(c Pause) error {
 		return fmt.Errorf("%w: %s is before %s at %s", ErrUsage, a.hhmm(when), since, a.hhmm(s.StartedAt))
 	}
 	if !s.Open() && when.After(s.EndedAt.Time) {
+		// lastSeen bounds a recovered entry: time past it was never seen.
+		if seen := EffectiveLastSeen(a.w.Heartbeat, *e); e.Recovered && when.After(seen.Time) {
+			return fmt.Errorf("%w: %s is after %s, when you were last seen", ErrUsage, a.hhmm(when), a.hhmm(seen))
+		}
 		if err := a.overlaps(s.EndedAt, when, &e.Segments[last]); err != nil {
 			return err
 		}
@@ -213,14 +215,15 @@ func (a *applier) pauseAt(c Pause) error {
 }
 
 // closeAt closes e's last segment at when, a time the user named, marked
-// cut if cut. A segment that would be left under a minute is dropped,
-// or with no other segment closed at its own start; the returned note
-// says so ("" otherwise).
+// cut if cut. A segment that would be left under a minute, zero
+// included, is dropped, or with no other segment closed at its own
+// start; the returned note says so ("" otherwise). Callers have refused
+// a when before the segment started.
 func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
 	i := len(e.Segments) - 1
 	s := &e.Segments[i]
 	d := when.Sub(s.StartedAt.Time)
-	if d <= 0 || d >= time.Minute {
+	if d >= time.Minute {
 		s.EndedAt, s.Cut = when, cut
 		return ""
 	}
@@ -234,12 +237,13 @@ func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
 	return note
 }
 
-// notFuture refuses a named time after now.
-func (a *applier) notFuture(when Timestamp) error {
+// namedAt is a time the user named, refused when after now.
+func (a *applier) namedAt(t time.Time) (Timestamp, error) {
+	when := At(t)
 	if when.After(a.now.Time) {
-		return fmt.Errorf("%w: %s is in the future", ErrUsage, a.hhmm(when))
+		return when, fmt.Errorf("%w: %s is in the future", ErrUsage, a.hhmm(when))
 	}
-	return nil
+	return when, nil
 }
 
 // overlaps refuses measuring [from, to) when any segment but skip
@@ -266,7 +270,7 @@ func (a *applier) overlaps(from, to Timestamp, skip *Segment) error {
 }
 
 // hhmm is a time as the user named it, in now's zone.
-func (a *applier) hhmm(ts Timestamp) string { return ts.In(a.now.Location()).Format("15:04") }
+func (a *applier) hhmm(ts Timestamp) string { return Clock(ts.Time, a.now.Location()) }
 
 func (a *applier) pause(c Pause) error {
 	if _, e := a.running(); e == nil {
@@ -285,10 +289,9 @@ func (a *applier) resume(c Resume) error {
 	if c.Key != "" {
 		return a.start(Start{Key: c.Key, At: c.At, Origin: c.Origin, NewEntryID: c.NewEntryID, Grammar: c.Grammar})
 	}
-	named := !c.At.IsZero()
 	if t, e := a.running(); e != nil {
-		if named {
-			return fmt.Errorf("%w: %s is running; resume at a time reopens a paused entry", ErrUsage, t.Key)
+		if !c.At.IsZero() {
+			return a.refuseResumeAt(t)
 		}
 		return nil
 	}
@@ -296,13 +299,23 @@ func (a *applier) resume(c Resume) error {
 	if i < 0 {
 		return fmt.Errorf("%w: nothing is paused", ErrNoTimer)
 	}
-	t, e := &a.w.State.TrackedTickets[i], &a.w.State.TrackedTickets[i].Entries[j]
-	if !named {
-		a.openAt(e, c.Origin, a.now)
+	t := &a.w.State.TrackedTickets[i]
+	if c.At.IsZero() {
+		a.openAt(&t.Entries[j], c.Origin, a.now)
 		return nil
 	}
-	when := At(c.At)
-	if err := a.notFuture(when); err != nil {
+	return a.resumeAt(t, &t.Entries[j], c.At, c.Origin)
+}
+
+// refuseResumeAt is resume --at's refusal while t runs.
+func (a *applier) refuseResumeAt(t *TrackedTicket) error {
+	return fmt.Errorf("%w: %s is running; resume at a time reopens a paused entry", ErrUsage, t.Key)
+}
+
+// resumeAt reopens t's paused entry e at when, a time the user named.
+func (a *applier) resumeAt(t *TrackedTicket, e *TimeEntry, at time.Time, origin Origin) error {
+	when, err := a.namedAt(at)
+	if err != nil {
 		return err
 	}
 	if end := lastEnd(*e); when.Before(end.Time) {
@@ -311,9 +324,30 @@ func (a *applier) resume(c Resume) error {
 	if err := a.overlaps(when, a.now, nil); err != nil {
 		return err
 	}
-	a.openAt(e, c.Origin, when)
+	a.openAt(e, origin, when)
 	a.events = append(a.events, Event{Kind: EventStarted, Key: t.Key, At: when})
 	return nil
+}
+
+// away is Away: pauseAt From, then resumeAt To, in this one transition.
+func (a *applier) away(c Away) error {
+	if !c.From.IsZero() {
+		if err := a.pauseAt(Pause{Key: c.Key, At: c.From, Origin: c.Origin}); err != nil {
+			return err
+		}
+	}
+	if c.To.IsZero() {
+		return nil
+	}
+	if t, e := a.running(); e != nil {
+		return a.refuseResumeAt(t)
+	}
+	t := a.listed(c.Key)
+	e := openEntry(t)
+	if e == nil || len(e.Segments) == 0 {
+		return fmt.Errorf("%w: %s has nothing paused", ErrNoTimer, c.Key)
+	}
+	return a.resumeAt(t, e, c.To, c.Origin)
 }
 
 func (a *applier) stop(c Stop) error {

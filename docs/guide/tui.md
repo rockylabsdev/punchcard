@@ -302,7 +302,7 @@ A timer left running through a meeting is corrected here: `-` on a row with an o
 
 Key bar: `enter cut  tab field  esc cancel`.
 
-`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`. The last line previews the cut and what the entry becomes, or says why it cannot be made, as the CLI would refuse it (`✗ 10:00 is before 10:45`, `✗ 08:30 is before the entry started at 08:58`); enter does nothing then.
+`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`, made as one change: if either half is refused, nothing changes. `To` resumes this entry, so it is refused while another ticket runs, as `resume --at` is. The last line previews the cut and what the entry becomes, or says why it cannot be made, as the CLI would refuse it (`✗ 10:00 is before 10:45`, `✗ 08:30 is before the entry started at 08:58`); enter does nothing then.
 
 On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause: change it to move the pause, or set `To` to resume. The cut shows in the Ticket pane as `10:00–10:45 ‖ away 45m`.
 

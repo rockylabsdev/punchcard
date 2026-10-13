@@ -62,8 +62,7 @@ func TestAwayDialogCutsAMeetingOutOfARunningEntry(t *testing.T) {
 	hs.key("enter")
 
 	want := []core.Command{
-		core.Pause{Key: "PUN-1", Origin: core.OriginHand, At: at("10:00:00")},
-		core.Start{Key: "PUN-1", Summary: "Summary of PUN-1", Origin: core.OriginHand, At: at("10:45:00"), NewEntryID: "ID-1"},
+		core.Away{Key: "PUN-1", From: at("10:00:00"), To: at("10:45:00"), Origin: core.OriginHand},
 	}
 	if d := cmp.Diff(want, hs.st.commands(), anyGrammar); d != "" {
 		t.Fatalf("commands (-want +got)\n%s", d)
@@ -82,7 +81,7 @@ func TestAwayDialogWithNoToIsABackdatedPause(t *testing.T) {
 	frameHas(t, hs, "→ cuts 20m · entry becomes 1:32")
 	hs.st.commands()
 	hs.key("enter")
-	want := []core.Command{core.Pause{Key: "PUN-1", Origin: core.OriginHand, At: at("10:30:00")}}
+	want := []core.Command{core.Away{Key: "PUN-1", From: at("10:30:00"), Origin: core.OriginHand}}
 	if d := cmp.Diff(want, hs.st.commands(), anyGrammar); d != "" {
 		t.Fatalf("commands (-want +got)\n%s", d)
 	}
@@ -104,6 +103,29 @@ func TestAwayDialogOnAPausedEntryMovesThePause(t *testing.T) {
 	}
 	hs.typeText("10:00")
 	frameHas(t, hs, "→ cuts 30m · entry becomes 1:02")
+}
+
+func TestAwayDialogToIsAResumeNotASwitch(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("08:58:00", add("PUN-1"), add("PUN-2"), start("PUN-1", "E1"))
+	hs.setup("10:00:00", start("PUN-2", "E2"))
+	hs.open("10:50:00", 120, 32)
+
+	hs.key("down", "-") // PUN-1, paused at 10:00 while PUN-2 runs
+	frameHas(t, hs, "Away from PUN-1", "paused at 10:00")
+	hs.key("tab")
+	hs.typeText("10:30")
+	frameHas(t, hs, "✗ PUN-2 is running; resume at a time reopens")
+	hs.st.commands()
+	hs.key("enter")
+	for _, c := range hs.st.commands() {
+		if _, ok := c.(core.Touch); !ok {
+			t.Errorf("a refused cut applied %#v", c)
+		}
+	}
+	if hs.running() != "PUN-2" {
+		t.Errorf("running %q, want PUN-2", hs.running())
+	}
 }
 
 func TestAwayDialogSaysWhyItCannotCut(t *testing.T) {

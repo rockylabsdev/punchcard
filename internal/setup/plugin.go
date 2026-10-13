@@ -28,6 +28,9 @@ var (
 // GitHub).
 const pluginBudget = 3 * time.Minute
 
+// inspectBudget bounds setup's `claude plugin list`.
+const inspectBudget = time.Minute
+
 // Claude is the `claude` CLI on PATH. Tests use a fake: setup never
 // runs the real one outside a terminal session.
 type Claude interface {
@@ -130,16 +133,15 @@ type PluginState struct {
 	Err error
 }
 
-// InspectPlugin asks c which plugins are installed. A nil c, or one
-// not on PATH, is not found and is never run.
-func InspectPlugin(c Claude) PluginState {
+// InspectPlugin asks c which plugins are installed, within ctx: the
+// caller sets the budget. A nil c, or one not on PATH, is not found and
+// is never run.
+func InspectPlugin(ctx context.Context, c Claude) PluginState {
 	if c == nil || c.Path() == "" {
 		return PluginState{}
 	}
 	p := PluginState{Found: true}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	out, err := c.Output(ctx, pluginList...)
-	cancel()
 	if err == nil {
 		p.Version, p.Installed, err = installedVersion(out)
 	}
@@ -164,7 +166,9 @@ func command(args []string) string { return "claude " + strings.Join(args, " ") 
 // plugin is the Claude Code plugin step. A failure is reported and the
 // wizard goes on: it never undoes saved credentials.
 func (w wizard) plugin() error {
-	p := InspectPlugin(w.Claude)
+	ctx, cancel := context.WithTimeout(context.Background(), inspectBudget)
+	p := InspectPlugin(ctx, w.Claude)
+	cancel()
 	if p.Err != nil {
 		w.UI.Say("⚠ Could not ask Claude Code which plugins are installed: " + p.Err.Error())
 	}

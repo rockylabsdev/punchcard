@@ -329,7 +329,7 @@ func sendStop(s Sender, c core.Stop) tea.Cmd {
 		if err != nil {
 			return resultMsg{notices: r.Notices, err: err}
 		}
-		d := hm(time.Duration(r.Worklog.TimeSpentSeconds) * time.Second)
+		d := core.FormatDuration(time.Duration(r.Worklog.TimeSpentSeconds) * time.Second)
 		say := "stopped " + r.Key + " · logged " + d
 		if r.SyncErr != nil {
 			say = "stopped " + r.Key + " · " + d + " not sent: " + sendProblem(r.SyncErr) + " · nothing is lost"

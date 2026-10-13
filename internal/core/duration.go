@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,4 +67,17 @@ func atoi(s string) int {
 		return int(MaxDuration/time.Minute) + 1
 	}
 	return n
+}
+
+// FormatDuration is d as the user reads it everywhere: 45m, 2h, 1h 05m.
+// Seconds are dropped.
+func FormatDuration(d time.Duration) string {
+	h, m := int(d.Hours()), int(d.Minutes())%60
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%dm", m)
+	case m == 0:
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dh %02dm", h, m)
 }

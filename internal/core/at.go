@@ -47,3 +47,6 @@ func ParseAt(s string, now time.Time) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// Clock is t as HH:MM in loc, the form ParseAt reads.
+func Clock(t time.Time, loc *time.Location) string { return t.In(loc).Format("15:04") }
