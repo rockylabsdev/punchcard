@@ -22,7 +22,7 @@ An **entry** is one start-to-stop stretch of work on a ticket. Pausing does not 
 
 *Scenario:* You start `PUN-142` at 08:14, pause at 08:15, resume at 08:20 and stop at 08:41. That is one entry with two segments and 22 minutes measured. `punchcard log` shows one row of 22 minutes, not two, and with Jira, Jira gets one worklog.
 
-The TUI shows the arithmetic: segments as `counted`, the gaps between them as `‖ paused 5m, not counted`.
+The TUI shows the arithmetic: each segment as its range and length, the gaps between them as `‖ paused 5m`, and once, above them, `pauses are left out`.
 
 ## One timer that follows your attention
 
@@ -70,7 +70,7 @@ $ punchcard pause
 
 The `!` marker means recovered. It shows in `status`, `ls`, `status --short` (`! DEMO-1 stale` while still stale), the TUI row and headline (`! RECOVERED`), and the Claude Code band (`! DEMO-1 recovered · fix at stop`). A recovered entry's measured time is only a guess, so stopping it in a script or from an agent needs an explicit `--duration`; the TUI dialog and the terminal prompt ask you to type one.
 
-The TUI shows the cut-off stretch as `! away 2h 22m, not counted`.
+The TUI shows the cut-off stretch as `! away 2h 22m`, and says `time away is left out`.
 
 Why 2 hours and not a daemon watching you: [ADR 0001](../adr/0001-no-daemon-presence-based-lastseen.md).
 

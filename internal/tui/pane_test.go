@@ -56,9 +56,10 @@ func TestTicketPaneSpellsOutAPausedEntry(t *testing.T) {
 		"Summary of PUN-1",
 		"‖ PAUSED                                   22m",
 		"stop sends this as one worklog — x",
-		"08:20–08:41     21m counted",
-		"08:15–08:20 ‖ paused 5m, not counted",
-		"08:14–08:15      1m counted",
+		"pauses are left out",
+		"08:20–08:41     21m",
+		"08:15–08:20 ‖ paused 5m",
+		"08:14–08:15      1m",
 		"WORKLOGS TODAY",
 		"nothing yet",
 	)
@@ -72,8 +73,12 @@ func TestTicketPaneRunningHeadlineTicks(t *testing.T) {
 
 	wantLines(t, paneText(t, hs.frame(), 120),
 		"▶ RUNNING                              1:12:34",
-		"08:00–now   1:12:34 counted",
+		"08:00–now   1:12:34",
 	)
+	noCounted(t, hs.frame())
+	if containsLine(paneText(t, hs.frame(), 120), "pauses are left out") {
+		t.Errorf("a single running segment says what is left out")
+	}
 }
 
 func TestTicketPaneRecoveredEntryShowsTimeAway(t *testing.T) {
@@ -85,12 +90,83 @@ func TestTicketPaneRecoveredEntryShowsTimeAway(t *testing.T) {
 	lines := paneText(t, hs.frame(), 120)
 	wantLines(t, lines,
 		"! RECOVERED                                50m",
-		"06:50–now   ! away 2h 22m, not counted",
-		"06:00–06:50     50m counted",
+		"time away is left out",
+		"06:50–now   ! away 2h 22m",
+		"06:00–06:50     50m",
 	)
+	noCounted(t, hs.frame())
 	if !strings.Contains(hs.frame(), "!") {
 		t.Errorf("no recovered marker")
 	}
+}
+
+// noCounted fails if a frame still labels stretches: only gaps are
+// marked, by their reason.
+func noCounted(t *testing.T, frame string) {
+	t.Helper()
+	if strings.Contains(frame, "counted") {
+		t.Errorf("frame labels a stretch counted:\n%s", frame)
+	}
+}
+
+func TestTicketPaneSubMinuteSegmentIsUnderAMinute(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("08:14:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("08:14:40", pause)
+	hs.setup("08:20:00", start("PUN-1", "E1"))
+	hs.open("09:00:00", 120, 32)
+
+	lines := paneText(t, hs.frame(), 120)
+	wantLines(t, lines, "08:14–08:14     <1m", "08:20–now   0:40:00")
+	if containsLine(lines, "08:14–08:14      0m") {
+		t.Errorf("a sub-minute segment reads 0m")
+	}
+}
+
+func TestTicketPaneSaysPausesAndTimeAwayAreLeftOut(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("06:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("06:20:00", pause)
+	hs.setup("06:30:00", start("PUN-1", "E1"))
+	hs.setup("06:50:00", core.Touch{Origin: core.OriginHand})
+	hs.open("09:12:00", 120, 32)
+
+	wantLines(t, paneText(t, hs.frame(), 120),
+		"stop sends this as one worklog — x",
+		"pauses and time away are left out",
+		"06:50–now   ! away 2h 22m",
+		"06:20–06:30 ‖ paused 10m",
+	)
+}
+
+func TestTicketPaneWithNoTrackerLogs(t *testing.T) {
+	hs := newHarness(t)
+	hs.noTracker = true
+	hs.setup("08:00:00", add("payroll"), start("payroll", "E1"))
+	hs.open("09:00:00", 120, 32)
+
+	wantLines(t, paneText(t, hs.frame(), 120), "stop logs this as one worklog — x")
+}
+
+// At 80 columns a gap still takes one line.
+func TestTicketPaneGapsTakeOneLineWhenNarrow(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("06:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("06:20:00", pause)
+	hs.setup("06:30:00", start("PUN-1", "E1"))
+	hs.setup("06:50:00", core.Touch{Origin: core.OriginHand})
+	hs.open("09:12:00", 80, 24)
+
+	lines := paneText(t, hs.frame(), 80)
+	for i, l := range lines {
+		if strings.Contains(l, "away") || strings.Contains(l, "paused") {
+			if i+1 < len(lines) && strings.HasPrefix(lines[i+1], "             ") && strings.TrimSpace(lines[i+1]) != "" {
+				t.Errorf("gap %q spills onto %q", l, lines[i+1])
+			}
+		}
+	}
+	wantLines(t, lines, "06:50–now   ! away 2h 22m", "06:20–06:30 ‖ paused 10m")
+	noCounted(t, hs.frame())
 }
 
 func TestTicketPaneIdleTicket(t *testing.T) {
