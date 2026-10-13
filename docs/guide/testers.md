@@ -7,8 +7,9 @@ Read the [Getting started](getting-started.md) page first if you like, but every
 ## What you need
 
 - **macOS** (Apple Silicon or Intel) or Linux. On Linux the token goes in a file instead of the Keychain; everything else is the same.
-- **Access to the repository.** It is private. I will add you as a collaborator; you need an SSH key on your GitHub account (`ssh -T git@github.com` should greet you), because Claude Code fetches the plugin with git.
+- **Access to the repository.** It is private. I will add you as a collaborator.
 - **The GitHub CLI**, signed in: `brew install gh`, then `gh auth login`. It downloads the build from the private repository.
+- **git using the GitHub CLI's sign-in**: `gh auth setup-git`, once. Claude Code fetches the plugin with git over HTTPS, and this is what lets it into the private repository. No SSH key is needed.
 - **Claude Code** 2.1.29x or newer for the plugin part (`claude --version`), and a git checkout whose branch name contains a ticket key, such as `feature/ABC-123-try-punchcard`.
 
 Only for the optional Jira part (scenarios 4 to 14):
@@ -38,7 +39,7 @@ The binary is not signed. Downloaded with `gh` it runs as is. If you downloaded 
 To try an unreleased change, build from a clone instead (needs Go 1.26 or newer, `brew install go`):
 
 ```sh
-git clone git@github.com:j-dsmith/punchcard.git
+git clone https://github.com/j-dsmith/punchcard.git
 cd punchcard
 go install ./cmd/punchcard
 ```
@@ -246,12 +247,10 @@ See [Resetting completely](files-and-troubleshooting.md#resetting-completely) if
 
 ## What to send me when something breaks
 
-For each problem, as much of this as you can:
+For each problem:
 
-1. The exact command you ran, and everything it printed, including the exit code. In a shell: `punchcard …; echo "exit $?"`. For the TUI, a screenshot and the window size (`tput cols; tput lines`).
-2. The output of `punchcard version` and `punchcard status --json`.
-3. Your terminal app (Terminal, iTerm2, Ghostty, Warp, the VS Code terminal…), your OS version, and for plugin problems `claude --version` and the exact `claude …` command you launched with.
-4. If you are willing, `~/.local/share/punchcard/state.json`.
-5. What you expected instead, in one line.
+1. The output of `punchcard doctor`. It prints the version, where the files are and whether `state.json` reads, the tracker, where the token comes from, the timer, the Claude Code version and plugin, the ask rule, your terminal and your OS, with your Jira site, your email and your home directory replaced by `<redacted>` and `~`. It never reads the token itself, never calls Jira, and changes nothing.
+2. The exact command you ran, and everything it printed, including the exit code. In a shell: `punchcard …; echo "exit $?"`. For a plugin problem, also the exact `claude …` command you launched with. For the TUI, a screenshot.
+3. What you expected instead, in one line.
 
-**If you set up Jira, remove your Jira site URL and your email before you send anything.** They appear in `status --json` (as `notConfigured` messages), in `config.json`, in error messages that quote paths, and ticket summaries may name things you cannot share. Your API token never appears in any of these, but do not send `~/.config/punchcard/token` or anything from the Keychain.
+Ticket summaries and comments in a command's output may name things you cannot share; read it before you send it. Do not send `~/.config/punchcard/token` or anything from the Keychain.

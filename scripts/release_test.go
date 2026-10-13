@@ -25,7 +25,7 @@ const marketJSON = `{
   "plugins": [
     {
       "name": "punchcard",
-      "source": { "source": "git-subdir", "url": "j-dsmith/punchcard", "path": "plugin", "ref": "v0.1.0" }
+      "source": { "source": "git-subdir", "url": "https://github.com/j-dsmith/punchcard.git", "path": "plugin", "ref": "v0.1.0" }
     }
   ]
 }
@@ -160,6 +160,7 @@ func TestRepoManifestsAgree(t *testing.T) {
 		Plugins []struct {
 			Name   string `json:"name"`
 			Source struct {
+				URL string `json:"url"`
 				Ref string `json:"ref"`
 			} `json:"source"`
 		} `json:"plugins"`
@@ -178,6 +179,12 @@ func TestRepoManifestsAgree(t *testing.T) {
 	}
 	if got, want := market.Plugins[0].Source.Ref, "v"+plugin.Version; got != want {
 		t.Errorf("marketplace ref %q, plugin.json version %q: want ref %q", got, plugin.Version, want)
+	}
+	// Over HTTPS a private clone uses the credential helper that
+	// `gh auth setup-git` installs; the owner/repo shorthand cloned over
+	// SSH (#58, ADR 0007).
+	if u := market.Plugins[0].Source.URL; !strings.HasPrefix(u, "https://") {
+		t.Errorf("marketplace url %q, want an https:// URL", u)
 	}
 }
 

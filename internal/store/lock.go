@@ -73,3 +73,17 @@ func (s *Store) LockSync() (release func(), err error) {
 	}
 	return l.unlock, nil
 }
+
+// Locked reports whether another punchcard holds state.lock right now.
+// It never creates the lock file and never waits: a doctor's probe.
+func (s *Store) Locked() bool {
+	if s.err != nil {
+		return false
+	}
+	f, err := os.OpenFile(filepath.Join(s.dir, LockFile), os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return errors.Is(unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB), unix.EWOULDBLOCK)
+}

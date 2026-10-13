@@ -123,6 +123,8 @@ A mistake is not fatal: an unreadable file is moved aside, see below.
 
 ## Problems
 
+`punchcard doctor` prints most of what follows in one place, redacted for pasting into a bug report: whether `state.json` reads, the lock, the tracker and where the token comes from, the plugin and the ask rule. See [`doctor`](cli.md#doctor).
+
 ### "is unreadable … moved it to … and started fresh"
 
 The state file was not valid JSON. A read says so and changes nothing; the next change moves the file aside and starts with an empty list:

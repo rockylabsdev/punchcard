@@ -117,6 +117,31 @@ func TestPluginStep(t *testing.T) {
 			}
 		}
 	})
+	t.Run("a failed install says why, from claude's output", func(t *testing.T) {
+		install := "plugin install punchcard@punchcard -s user"
+		cases := []struct{ name, said, want, notWant string }{
+			{"no SSH key", "Failed to clone repository for git-subdir source: …\ngit@github.com: Permission denied (publickey).\n",
+				"Claude Code could not clone the repository. It is private: run `gh auth login` and `gh auth setup-git`, then `punchcard setup` again.",
+				"no release with that tag"},
+			{"no HTTPS credentials", "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n",
+				"Claude Code could not clone the repository. It is private", "no release with that tag"},
+			{"no release for this tag", "fatal: Remote branch v0.1.0 not found in upstream origin\n",
+				"This build is `v0.1.0` and no release with that tag exists yet. The plugin can be loaded from a clone for one session: `claude --plugin-dir /path/to/punchcard/plugin`.",
+				"gh auth setup-git"},
+			{"anything else keeps the generic message", "network is down\n",
+				"run it again by hand when you are ready", "gh auth setup-git"},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				r := pluginRig(t)
+				r.claude.fail = map[string]error{install: errors.New("exit status 1")}
+				r.claude.said = map[string]string{install: c.said}
+				r.run("", "n", "", "n")
+				r.has("✗ claude "+install+" failed: exit status 1", "Your Jira credentials are unaffected", c.want)
+				r.lacks(c.notWant)
+			})
+		}
+	})
 	t.Run("no claude prints the commands", func(t *testing.T) {
 		r := pluginRig(t)
 		r.claude.found = false

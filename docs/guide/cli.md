@@ -21,6 +21,7 @@ All output below was produced by running the binary in throwaway directories, mo
 | `sync [KEY]` | With a tracker: send every pending and failed worklog, or only KEY's. Without one: exit 3, nothing to send. | yes |
 | `setup` | The wizard: choose a tracker (none or Jira), then the Claude Code plugin. Needs a terminal. | Test Connection |
 | `version` | Version, contract version, platform. | no call |
+| `doctor [--no-redact]` | What a bug report needs, in one paste: files, tracker, timer, Claude Code, plugin, ask rule, terminal, OS. Redacted; always exit 0. | no call (names the token's source) |
 | `help [command]` | Help text. `--help` on any command does the same. | no call |
 
 Without a tracker no command calls anything; the third column is what changes once Jira is set up.
@@ -520,6 +521,28 @@ $ punchcard version --json
 
 `contract` is the `--json` envelope's version; `schemaVersion` is the state file's.
 
+### `doctor`
+
+Everything a bug report needs, in one paste. It only reads: it never changes a file (an unreadable `state.json` is reported in `status`'s words and left where it is), never calls the tracker, never reads the token itself (only says where it would come from, as `status` does), and always exits 0.
+
+```
+$ punchcard doctor
+punchcard v0.2.0 (contract v1, go1.26.9 darwin/arm64)
+binary      /opt/homebrew/bin/punchcard
+data        ~/.local/share/punchcard  state.json ok (schema 1, 6 tickets)  heartbeat 08:12
+config      ~/.config/punchcard/config.json  tracker jira  site <redacted>  email <redacted>
+token       Keychain
+timer       ▶ PUN-142 1:12 by hand
+unsent      0
+claude      2.1.291 at /opt/homebrew/bin/claude
+plugin      punchcard@punchcard 0.2.0  ✓ matches binary
+ask rule    present in ~/.claude/settings.json
+terminal    TERM=xterm-ghostty  TERM_PROGRAM=ghostty  COLORTERM=truecolor  NO_COLOR unset  120x32
+os          darwin 15.1 arm64
+```
+
+The Jira site, the email and the home directory (as `~`) are redacted by default; `--no-redact` shows them, for your own eyes. `token` is `Keychain`, `file`, `PUNCHCARD_TOKEN`, `none`, or `none (no tracker)`. `plugin` says `≠ X.Y.Z → run punchcard setup` when the plugin is another release, `not installed → run punchcard setup`, or `claude not found`; a build that is not a release is never compared. `ask rule` is `present`, `absent → punchcard setup adds it`, or the settings file `unparseable`. `data` adds `state is locked by another punchcard` while another punchcard holds the lock, and a heartbeat from another day carries its date.
+
 ### `touch [KEY] [--cwd DIR]` (hidden)
 
 The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: a running timer on another ticket moves to that key, whoever set it, but only if the key differs from the last focus, the key of the previous touch from a prompt or by hand that had one. Every such touch records it, even when it moves nothing. It never starts a timer when nothing runs (a paused timer counts as nothing running), never sets the moved timer by hand, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
@@ -609,6 +632,7 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 | `sync` | `{sent: [...], remaining: [...]}`, each `{key, entryId, worklog}`. With no tracker `sent` is empty and `remaining` lists any old pending worklogs. |
 | `log` | `{rows: [{date, started, key, summary, minutes, comment, state, remoteId, entryId, recovered}], open, range: {from, to}}`. `date` is `YYYY-MM-DD`, `started` a timestamp; absent values are `""`. `open` is the running entry, else the most recently paused one, as a timer, or `null`. |
 | `version` | `{version, contract, schemaVersion, go, platform}`. |
+| `doctor` | `{punchcard, binary, data, config, token, timer, unsent, claude, plugin, askRule, terminal, os}`, the human output's fields, redacted the same way. `punchcard` is `version`'s data. `data` is `{dir, state, problem?, schemaVersion?, tickets, heartbeat, locked}` with `state` `ok`, `none`, `unreadable`, `newer` or `error`. `config` is `{path, exists, tracker, site?, email?, problem?}`. `token` is `env`, `keychain`, `file` or `none`. `timer` is a timer or `null`. `claude` is `{found, version?, path?}`; `plugin` is `{installed, version?, matches, skewed, problem?}`; `askRule` is `{path?, state}` with `state` `present`, `missing`, `unparseable`, `unreadable` or `unknown`. `terminal` is `{TERM, TERM_PROGRAM, COLORTERM, NO_COLOR, width?, height?}`; `os` is `{goos, version?, arch}`. |
 | exit 4, ambiguous | `{candidates: ["KEY", ...]}`. |
 
 A timer: `{key, summary?, unverified, entryId, state, byHand, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
