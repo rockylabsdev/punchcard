@@ -6,7 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp")
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/j-dsmith/punchcard/internal/config"
+)
 
 func TestDecidePlugin(t *testing.T) {
 	cases := []struct {
@@ -142,6 +145,28 @@ func TestPluginStep(t *testing.T) {
 				r.run("", "n", "", "n")
 				r.has("✗ claude "+install+" failed: exit status 1", "Your Jira credentials are unaffected", c.want)
 				r.lacks(c.notWant)
+			})
+		}
+	})
+	t.Run("with no tracker a failure does not mention Jira", func(t *testing.T) {
+		install := "plugin install punchcard@punchcard -s user"
+		cases := []struct{ name, said, want string }{
+			{"generic", "network is down\n", "Run it again by hand when you are ready."},
+			{"with a remedy", "fatal: unable to get password from user\n", "`gh auth setup-git`"},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				r := newRig(t)
+				if err := config.Save(r.getenv, config.Config{Tracker: config.TrackerNone}); err != nil {
+					t.Fatal(err)
+				}
+				r.claude.found = true
+				r.claude.list = "[]"
+				r.claude.fail = map[string]error{install: errors.New("exit status 1")}
+				r.claude.said = map[string]string{install: c.said}
+				r.run("none", "", "n")
+				r.has("✗ claude "+install+" failed: exit status 1", c.want)
+				r.lacks("Jira credentials")
 			})
 		}
 	})
