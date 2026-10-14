@@ -39,8 +39,8 @@ type Start struct {
 
 // Pause closes the running segment. The entry stays open.
 //
-// At, when set, closes it at that time instead of now and marks it Cut:
-// the user was away from then. With nothing running it moves the pause
+// At, when set, closes it at that time instead of now: the user was
+// away from then, and the gap reads as a pause like any other. With nothing running it moves the pause
 // of Key's paused entry, or with no Key the most recently paused one. At
 // may not be in the future, before the segment started, over other time
 // already measured, or, moving a recovered entry's pause later, past

@@ -8,9 +8,6 @@ import (
 	"github.com/j-dsmith/punchcard/internal/core"
 )
 
-// cut is a segment the user closed at a named time (pause --at).
-func cut(start, end string) core.Segment { s := seg(start, end); s.Cut = true; return s }
-
 // pausedBy is e after o paused it: its stretch's ByHand stays as it was.
 func pausedBy(o core.Origin, e core.TimeEntry) core.TimeEntry { e.Origin = o; return e }
 
@@ -20,11 +17,11 @@ func TestPauseAt(t *testing.T) {
 	}
 	runApply(t, []applyCase{
 		{
-			name:   "pause --at closes the open segment at that time, marked cut",
+			name:   "pause --at closes the open segment at that time",
 			w:      running(),
 			cmd:    core.Pause{Origin: hand, At: at("10:00").Time},
 			now:    "10:50",
-			want:   state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
+			want:   state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:00")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:00")}},
 		},
 		{
@@ -45,17 +42,17 @@ func TestPauseAt(t *testing.T) {
 				seg("08:00", "08:30"), seg("09:59:30", "")))),
 			cmd:  core.Pause{Origin: hand, At: at("10:00").Time},
 			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, cut("08:00", "08:30")))),
+			want: state(ticket("AA-1", entry("EA", hand, seg("08:00", "08:30")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:00"),
 				Message: "the 30s from 09:59 was under a minute, so it was dropped"}},
 		},
 		{
 			name: "a cut at the segment's own start drops it like any stub",
 			w: world("10:50", ticket("AA-1", entry("EA", hand,
-				cut("08:58", "10:00"), seg("10:45", "")))),
+				seg("08:58", "10:00"), seg("10:45", "")))),
 			cmd:  core.Pause{Origin: hand, At: at("10:45").Time},
 			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
+			want: state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:00")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:45"),
 				Message: "the 0s from 10:45 was under a minute, so it was dropped"}},
 		},
@@ -64,7 +61,7 @@ func TestPauseAt(t *testing.T) {
 			w:    world("10:50", ticket("AA-1", entry("EA", hand, seg("09:59:30", "")))),
 			cmd:  core.Pause{Origin: hand, At: at("10:00").Time},
 			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, cut("09:59:30", "09:59:30")))),
+			want: state(ticket("AA-1", entry("EA", hand, seg("09:59:30", "09:59:30")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:00"),
 				Message: "the 30s from 09:59 was under a minute, so it was dropped"}},
 		},
@@ -73,7 +70,7 @@ func TestPauseAt(t *testing.T) {
 			w:      world("10:50", ticket("AA-1", entry("EA", hand, seg("08:58", "10:30")))),
 			cmd:    core.Pause{Origin: hand, At: at("10:00").Time},
 			now:    "10:50",
-			want:   state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00")))),
+			want:   state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:00")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:00")}},
 		},
 		{
@@ -84,7 +81,7 @@ func TestPauseAt(t *testing.T) {
 			cmd: core.Pause{Key: "AA-1", Origin: hand, At: at("08:40").Time},
 			now: "10:50",
 			want: state(
-				ticket("AA-1", entry("EA", hand, cut("08:00", "08:40"))),
+				ticket("AA-1", entry("EA", hand, seg("08:00", "08:40"))),
 				ticket("BB-2", entry("EB", hand, seg("09:00", "10:30")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("08:40")}},
 		},
@@ -102,7 +99,7 @@ func TestPauseAt(t *testing.T) {
 			w:    world("09:30", ticket("AA-1", entry("EA", hand, seg("08:58", "")))),
 			cmd:  core.Pause{Origin: hand, At: at("09:10").Time},
 			now:  "12:00",
-			want: state(ticket("AA-1", recovered(entry("EA", hand, cut("08:58", "09:10"))))),
+			want: state(ticket("AA-1", recovered(entry("EA", hand, seg("08:58", "09:10"))))),
 			events: []core.Event{
 				{Kind: core.EventRecovered, Key: "AA-1", At: at("09:30")},
 				{Kind: core.EventPaused, Key: "AA-1", At: at("09:10")},
@@ -127,7 +124,7 @@ func TestPauseAt(t *testing.T) {
 			w:      world("09:40", ticket("AA-1", recovered(entry("EA", hand, seg("08:58", "09:30"))))),
 			cmd:    core.Pause{Origin: hand, At: at("09:40").Time},
 			now:    "12:00",
-			want:   state(ticket("AA-1", recovered(entry("EA", hand, cut("08:58", "09:40"))))),
+			want:   state(ticket("AA-1", recovered(entry("EA", hand, seg("08:58", "09:40"))))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("09:40")}},
 		},
 		{
@@ -139,7 +136,7 @@ func TestPauseAt(t *testing.T) {
 
 func TestResumeAt(t *testing.T) {
 	paused := func() core.World {
-		return world("10:50", ticket("AA-1", entry("EA", hand, cut("08:58", "10:00"))))
+		return world("10:50", ticket("AA-1", entry("EA", hand, seg("08:58", "10:00"))))
 	}
 	runApply(t, []applyCase{
 		{
@@ -147,7 +144,7 @@ func TestResumeAt(t *testing.T) {
 			w:      paused(),
 			cmd:    core.Resume{Origin: hand, At: at("10:45").Time},
 			now:    "10:50",
-			want:   state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00"), seg("10:45", "")))),
+			want:   state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:00"), seg("10:45", "")))),
 			events: []core.Event{{Kind: core.EventStarted, Key: "AA-1", At: at("10:45")}},
 		},
 		{
@@ -259,9 +256,16 @@ func TestBackdatedRefusalsSayWhy(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "before the entry started at 08:58") {
 		t.Errorf("err = %v", err)
 	}
-	p := world("10:50", ticket("AA-1", entry("EA", hand, cut("08:58", "10:00"))))
+	p := world("10:50", ticket("AA-1", entry("EA", hand, seg("08:58", "10:00"))))
 	_, _, err = core.Apply(p, core.Resume{Origin: hand, At: at("09:45").Time}, at("10:50").Time)
 	if err == nil || !strings.Contains(err.Error(), "09:45 is before 10:00") {
+		t.Errorf("err = %v", err)
+	}
+	o := world("10:50",
+		ticket("AA-1", entry("EA", hand, seg("08:00", "09:00"))),
+		ticket("BB-2", entry("EB", hand, seg("09:00", "10:30"))))
+	_, _, err = core.Apply(o, core.Pause{Key: "AA-1", Origin: hand, At: at("09:10").Time}, at("10:50").Time)
+	if err == nil || !strings.Contains(err.Error(), "that overlaps BB-2's time from 09:00 to 10:30; fix the length at stop instead") {
 		t.Errorf("err = %v", err)
 	}
 }

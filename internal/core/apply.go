@@ -142,7 +142,7 @@ func (a *applier) switchTo(n NewTicket, origin Origin, newEntryID string, when T
 		ev := Event{Kind: EventPaused, Key: t.Key}
 		if named {
 			ev.At = when
-			ev.Message = a.closeAt(e, when, false)
+			ev.Message = a.closeAt(e, when)
 		} else {
 			e.Segments[len(e.Segments)-1].EndedAt = when
 		}
@@ -208,32 +208,30 @@ func (a *applier) pauseAt(c Pause) error {
 			return err
 		}
 	}
-	msg := a.closeAt(e, when, true)
+	msg := a.closeAt(e, when)
 	e.Origin = c.Origin
 	a.events = append(a.events, Event{Kind: EventPaused, Key: t.Key, At: when, Message: msg})
 	return nil
 }
 
-// closeAt closes e's last segment at when, a time the user named, marked
-// cut if cut. A segment that would be left under a minute, zero
-// included, is dropped, or with no other segment closed at its own
-// start; the returned note says so ("" otherwise). Callers have refused
+// closeAt closes e's last segment at when, a time the user named. A
+// segment that would be left under a minute, zero included, is dropped,
+// or with no other segment closed at its own start; the returned note says so ("" otherwise). Callers have refused
 // a when before the segment started.
-func (a *applier) closeAt(e *TimeEntry, when Timestamp, cut bool) string {
+func (a *applier) closeAt(e *TimeEntry, when Timestamp) string {
 	i := len(e.Segments) - 1
 	s := &e.Segments[i]
 	d := when.Sub(s.StartedAt.Time)
 	if d >= time.Minute {
-		s.EndedAt, s.Cut = when, cut
+		s.EndedAt = when
 		return ""
 	}
 	note := fmt.Sprintf("the %s from %s was under a minute, so it was dropped", d.Round(time.Second), a.hhmm(s.StartedAt))
 	if i > 0 {
 		e.Segments = e.Segments[:i]
-		e.Segments[i-1].Cut = e.Segments[i-1].Cut || cut
 		return note
 	}
-	s.EndedAt, s.Cut = s.StartedAt, cut
+	s.EndedAt = s.StartedAt
 	return note
 }
 
@@ -261,7 +259,7 @@ func (a *applier) overlaps(from, to Timestamp, skip *Segment) error {
 				if s == skip || !s.StartedAt.Before(to.Time) || !end.After(from.Time) {
 					continue
 				}
-				return fmt.Errorf("%w: that overlaps %s's time from %s to %s", ErrUsage,
+				return fmt.Errorf("%w: that overlaps %s's time from %s to %s; fix the length at stop instead", ErrUsage,
 					t.Key, a.hhmm(s.StartedAt), a.hhmm(end))
 			}
 		}

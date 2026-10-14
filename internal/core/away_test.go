@@ -16,7 +16,7 @@ func TestAway(t *testing.T) {
 			w:    running(),
 			cmd:  core.Away{Key: "AA-1", From: at("10:00").Time, To: at("10:45").Time, Origin: hand},
 			now:  "10:50",
-			want: state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:00"), seg("10:45", "")))),
+			want: state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:00"), seg("10:45", "")))),
 			events: []core.Event{
 				{Kind: core.EventPaused, Key: "AA-1", At: at("10:00")},
 				{Kind: core.EventStarted, Key: "AA-1", At: at("10:45")},
@@ -27,7 +27,7 @@ func TestAway(t *testing.T) {
 			w:      running(),
 			cmd:    core.Away{Key: "AA-1", From: at("10:30").Time, Origin: hand},
 			now:    "10:50",
-			want:   state(ticket("AA-1", entry("EA", hand, cut("08:58", "10:30")))),
+			want:   state(ticket("AA-1", entry("EA", hand, seg("08:58", "10:30")))),
 			events: []core.Event{{Kind: core.EventPaused, Key: "AA-1", At: at("10:30")}},
 		},
 		{

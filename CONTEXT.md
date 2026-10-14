@@ -42,9 +42,9 @@ A pause does **not** end a `TimeEntry` — it closes the current **segment**. An
 
 One uninterrupted stretch of accrual inside a `TimeEntry`. A segment with no end time is the running one; there is at most one such segment across every writer: the TUI, the CLI, and any agent session. Every change to the state is one indivisible transition that closes any open segment before it opens another, so starting one ticket while another runs pauses the first.
 
-A segment may be closed or opened at a time the user names (`pause --at`, `resume --at`, `start --at`) instead of now. That corrects measured time within the day; it never touches a stopped entry or `lastSeen`, it never overlaps time already measured, and it never moves a recovered entry's pause past `lastSeen`, the upper bound recovery capped it at. A segment the user closed at a named time is **cut**: the gap after it is time away they cut out, not a pause.
+A segment may be closed or opened at a time the user names (`pause --at`, `resume --at`, `start --at`) instead of now. That corrects measured time within the day; it never touches a stopped entry or `lastSeen`, it never overlaps time already measured, and it never moves a recovered entry's pause past `lastSeen`, the upper bound recovery capped it at. A gap the user made this way is a pause like any other.
 
-On screen, segments are listed without a label: a segment is just its range and length. Only the gaps are marked, by their reason: the gap between two segments is a pause (`‖ paused 5m`), or time away the user cut (`‖ away 45m`), and time cut off by recovery after `lastSeen` is time away (`! away 2h 22m`). The header states once that gaps are left out of the worklog.
+On screen, segments are listed without a label: a segment is just its range and length. Only the gaps are marked, by their reason: every gap the user made between two segments is a pause (`‖ paused 5m`), however they made it, and time cut off by recovery after `lastSeen` is time away (`! away 2h 22m`). The header states once that gaps are left out of the worklog.
 
 ### Worklog
 

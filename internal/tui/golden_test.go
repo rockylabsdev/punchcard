@@ -77,8 +77,7 @@ var scenarios = []struct {
 	{"away_paused", pausedDay, []string{"-"}},
 	// - with a To before From: the preview says why it cannot cut.
 	{"away_invalid", runningDay, []string{"-", "type:09:05", "tab", "type:09:00"}},
-	// A cut made earlier: its gap reads ‖ away, and the hint counts it
-	// as time away.
+	// A cut made earlier: its gap reads ‖ paused like any pause.
 	{"cut", cutDay, nil},
 }
 

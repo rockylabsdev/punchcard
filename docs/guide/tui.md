@@ -121,7 +121,7 @@ What happened on the selected ticket. The full summary, then a headline that is 
 | `! RECOVERED 45m` | Recovery capped and paused it. |
 | `· NOT RUNNING` with `space starts it` | No open entry. |
 
-Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then, when the entry has a gap, what is left out of the worklog: `pauses are left out`, `time away is left out`, or `pauses and time away are left out`. Then the entry's stretches newest first. A segment is bare: its range, and its length in the number column (`<1m` under a minute). Only a gap is marked, by its reason, and it carries its length in its label, so the number column sums by eye to the headline:
+Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then, when the entry has a gap, what is left out of the worklog: `pauses are left out`, `time away is left out` (recovery cut it off), or `pauses and time away are left out`. Then the entry's stretches newest first. A segment is bare: its range, and its length in the number column (`<1m` under a minute). Only a gap is marked, by its reason, and it carries its length in its label, so the number column sums by eye to the headline:
 
 ```
  06:50–now   ! away 2h 22m
@@ -130,13 +130,7 @@ Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as 
  06:00–06:15     15m
 ```
 
-`! away` is time cut off by recovery. `‖ away` is time you cut out yourself, with the [Away dialog](#away--) or `pause --at` on the CLI; it is dimmed like a pause and counts as time away in the line above:
-
-```
- 10:45–now   0:15:00
- 10:00–10:45 ‖ away 45m
- 08:58–10:00      1h 02m
-```
+`! away` is time cut off by recovery. Every gap you made reads `‖ paused`, however you made it: a plain pause, a pause moved with `pause --at`, or a cut with the [Away dialog](#away--).
 
 A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
 
@@ -284,7 +278,10 @@ A recovered entry is never prefilled:
 
 ### Away (`-`)
 
-A timer left running through a meeting is corrected here: `-` on a row with an open entry cuts the time you were away out of it.
+`-` on a row with an open entry corrects its pauses after the fact. The two common fixes:
+
+- **A meeting you forgot to pause for:** `From` 10:00, `To` 10:45. The meeting becomes a pause.
+- **A lunch you paused for late:** on the paused entry, set `From` back to when you left, and `To` to when you got back (or leave `To` empty to stay paused).
 
 ```
 ╭─Away from PUN-142───────────╮
@@ -302,9 +299,14 @@ A timer left running through a meeting is corrected here: `-` on a row with an o
 
 Key bar: `enter cut  tab field  esc cancel`.
 
-`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`, made as one change: if either half is refused, nothing changes. `To` resumes this entry, so it is refused while another ticket runs, as `resume --at` is. The last line previews the cut and what the entry becomes, or says why it cannot be made, as the CLI would refuse it (`✗ 10:00 is before 10:45`, `✗ 08:30 is before the entry started at 08:58`); enter does nothing then.
+`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`, made as one change: if either half is refused, nothing changes. On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause. The cut shows in the Ticket pane as a pause, `10:00–10:45 ‖ paused 45m`.
 
-On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause: change it to move the pause, or set `To` to resume. The cut shows in the Ticket pane as `10:00–10:45 ‖ away 45m`.
+The last line previews the cut and what the entry becomes, or says why it cannot be made; enter does nothing then. It refuses as the CLI does:
+
+- a time in the future, or `To` before `From` (`✗ 10:00 is before 10:45`);
+- `From` before the entry started (`✗ 08:30 is before the entry started at 08:58`);
+- `To` while another ticket runs (it resumes this entry, as `resume --at` would);
+- a time over another ticket's time (`✗ that overlaps PUN-7's time from 09:00 to 10:00; fix the length at stop instead`).
 
 ### Add (`a`)
 

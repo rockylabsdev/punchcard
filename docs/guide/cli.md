@@ -148,7 +148,9 @@ Nothing paused is exit 4: `no timer: nothing is paused`.
 
 ### `--at TIME`: pause, resume or start at an earlier time
 
-A timer left running through a meeting, or started late, is corrected with `--at` on `pause`, `resume` or `start`: the change happens at TIME instead of now. Two commands cut a meeting out of a running entry:
+`--at` on `pause`, `resume` or `start` makes the change at TIME instead of now. The two common fixes:
+
+**A meeting you forgot to pause for.** Pause at when it started, resume at when it ended (or `-` in the [TUI](tui.md#away--)):
 
 ```
 $ punchcard pause --at 10:00
@@ -157,7 +159,14 @@ $ punchcard resume --at 10:45
 ▶ DEMO-2 running since 10:45  1:07:00  by hand
 ```
 
-The entry keeps both stretches, and the gap between them is time away, left out of the worklog (the TUI's Ticket pane shows it as `10:00–10:45 ‖ away 45m`). `start KEY --at 09:00` starts KEY at 09:00, and a ticket it pauses is paused at 09:00 too. With nothing running, `pause --at` moves the last pause.
+**A lunch you paused for late.** You left at 12:00 but paused at 12:40. With nothing running, `pause --at` moves the last pause, so move it back, then resume when you got back:
+
+```
+$ punchcard pause --at 12:00
+$ punchcard resume --at 13:00
+```
+
+Either way the entry keeps both stretches, and the gap between them is a pause like any other, left out of the worklog (the TUI's Ticket pane shows it as `10:00–10:45 ‖ paused 45m`). `start KEY --at 09:00` starts KEY at 09:00, and a ticket it pauses is paused at 09:00 too.
 
 TIME is one of:
 
@@ -166,16 +175,13 @@ TIME is one of:
 
 Nothing else, and no dates: a correction is within the day, and `stop --duration` covers the rest.
 
-Refused with exit 64, nothing changed:
+It refuses, with exit 64 and nothing changed, when:
 
-- a TIME that is not one of those forms;
-- a time in the future;
-- `pause --at` before the open segment started;
-- `pause --at` moving a recovered entry's pause past `lastSeen`, the last time you were seen (recovery capped it there);
-- `resume --at` before the pause (the gap cannot be negative);
-- `resume --at` with no KEY while any timer runs: it reopens a paused entry (`resume KEY --at` is `start KEY --at`);
-- `start --at` before the running ticket's open segment started, or on the running ticket itself (to cut time out of it, `pause --at` then `resume --at`);
-- any time that would overlap time already measured on any ticket, not only this one: the ticket's last stopped entry, or another ticket's stretch (`that overlaps PUN-7's time from 09:00 to 10:00`).
+- TIME is not one of those forms, or is in the future;
+- `pause --at` is before the open segment started, or moves a recovered entry's pause past `lastSeen`, the last time you were seen (recovery capped it there);
+- `resume --at` is before the pause (the gap cannot be negative), or has no KEY while any timer runs (`resume KEY --at` is `start KEY --at`);
+- `start --at` is before the running ticket's open segment started, or names the running ticket itself (use `pause --at` then `resume --at`);
+- the time would overlap time already measured on any ticket: the ticket's last stopped entry, or another ticket's stretch. The message points at the way out: `that overlaps PUN-7's time from 09:00 to 10:00; fix the length at stop instead`.
 
 A cut that would leave a stretch under a minute drops it instead, and says so: `the 30s from 09:59 was under a minute, so it was dropped`.
 
