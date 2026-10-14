@@ -74,18 +74,11 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 }
 
 // leftOut says once what the stretch list leaves out of the worklog:
-// the pauses between segments, the time away (cut by the user, or after
-// a recovered entry's last segment), or both. A single segment with
-// nothing away leaves nothing out.
+// the pauses between segments, however the user made them, the time
+// away after a recovered entry's last segment, or both. A single
+// segment with nothing away leaves nothing out.
 func leftOut(e core.TimeEntry) string {
-	paused, away := false, e.Recovered && e.Paused()
-	for i := 1; i < len(e.Segments); i++ {
-		if e.Segments[i-1].Cut {
-			away = true
-		} else {
-			paused = true
-		}
-	}
+	paused, away := len(e.Segments) > 1, e.Recovered && e.Paused()
 	switch {
 	case paused && away:
 		return "pauses and time away are left out"
@@ -121,11 +114,7 @@ func (m Model) stretches(e core.TimeEntry, w int) []string {
 		}
 		if i > 0 {
 			prev := e.Segments[i-1]
-			why := " paused "
-			if prev.Cut {
-				why = " away " // the user cut it out: pause or start at a time
-			}
-			lines = append(lines, gapLine(hhmm(prev.EndedAt), hhmm(s.StartedAt), sDim, gPaused+why+core.FormatDuration(s.StartedAt.Sub(prev.EndedAt.Time)), w))
+			lines = append(lines, gapLine(hhmm(prev.EndedAt), hhmm(s.StartedAt), sDim, gPaused+" paused "+core.FormatDuration(s.StartedAt.Sub(prev.EndedAt.Time)), w))
 		}
 	}
 	return lines

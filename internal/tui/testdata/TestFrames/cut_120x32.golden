@@ -3,10 +3,10 @@
 │ ‖ PUN-138       Stop dialog: duration parsing and the live p…     12m  ││                                            │
 │ · OPS-77        Rotate staging certs                              15m ○││▶ RUNNING                            0:09:34│
 │ · PUN-120       Spike: Bubble Tea v2 layout                       40m ✗││  stop sends this as one worklog — x        │
-│ · DATA-9        ? unverified — Jira not reached yet                 —  ││  pauses and time away are left out         │
+│ · DATA-9        ? unverified — Jira not reached yet                 —  ││  pauses are left out                       │
 │ · PLATFORM-4410 Investigate intermittent CI timeouts                —  ││                                            │
 │                                                                        ││ 09:05–now   0:07:34                        │
-│                                                                        ││ 08:59–09:05 ‖ away 6m                      │
+│                                                                        ││ 08:59–09:05 ‖ paused 6m                    │
 │                                                                        ││ 08:58–08:59      1m                        │
 │                                                                        ││ 08:15–08:58 ‖ paused 43m                   │
 │                                                                        ││ 08:14–08:15      1m                        │

@@ -36,7 +36,7 @@ At most one ticket runs at a time. Starting another pauses the running one and s
 
 *Scenario:* You go for coffee: `punchcard pause`, then `punchcard resume` when you are back. The 22 minutes you were away are not counted and the entry is still one entry. At the end of the task: `punchcard stop`, and the worklog is logged.
 
-*Scenario:* You forgot to pause for a meeting from 10:00 to 10:45. `punchcard pause --at 10:00`, then `punchcard resume --at 10:45` (or `-` in the TUI) cuts it out after the fact; the TUI shows the gap as `‖ away 45m`. See [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time).
+*Scenario:* You forgot to pause for a meeting from 10:00 to 10:45. `punchcard pause --at 10:00`, then `punchcard resume --at 10:45` (or `-` in the TUI) turns it into a pause after the fact; the TUI shows the gap as `‖ paused 45m`, like any pause. Paused for lunch late? `punchcard pause --at 12:00` moves the pause back. See [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time).
 
 In the TUI, `space` on the running row pauses it, `p` pauses from any row, and `x` opens the stop dialog. The two are different keys on purpose.
 

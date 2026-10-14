@@ -5,15 +5,15 @@
 │ · PUN-120       Spike: Bubble Tea v…     40m ✗││▶ RUNNING             0:09:34│
 │ · DATA-9        ? unverified — Jira…       —  ││  stop sends this as one     │
 │ · PLATFORM-4410 Investigate intermi…       —  ││  worklog — x                │
-│                                               ││  pauses and time away are   │
-│                                               ││  left out                   │
+│                                               ││  pauses are left out        │
 │                                               ││                             │
 │                                               ││ 09:05–now   0:07:34         │
-│                                               ││ 08:59–09:05 ‖ away 6m       │
+│                                               ││ 08:59–09:05 ‖ paused 6m     │
 │                                               ││ 08:58–08:59      1m         │
 │                                               ││ 08:15–08:58 ‖ paused 43m    │
 │                                               ││ 08:14–08:15      1m         │
 │                                               ││                             │
+│                                               ││WORKLOGS TODAY               │
 ╰───────────────────────────────────────────────╯╰─────────────────────────────╯
 ╭─[3] Today · logged 0m · owed 55m─────────────────────────────────────────────╮
 │ STATUS                        TICKET       TIME   STOPPED                    │

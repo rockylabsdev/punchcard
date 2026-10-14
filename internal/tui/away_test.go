@@ -15,25 +15,25 @@ func meetingCut(hs *harness) {
 		core.Start{Key: "PUN-1", Origin: core.OriginHand, At: at("10:45:00")})
 }
 
-func TestTicketPaneShowsACutAsTimeAway(t *testing.T) {
+func TestTicketPaneShowsACutAsAPause(t *testing.T) {
 	hs := newHarness(t)
 	meetingCut(hs)
 	hs.open("11:00:00", 120, 32)
 
 	lines := paneText(t, hs.frame(), 120)
 	wantLines(t, lines,
-		"time away is left out",
+		"pauses are left out",
 		"10:45–now   0:15:00",
-		"10:00–10:45 ‖ away 45m",
+		"10:00–10:45 ‖ paused 45m",
 		"08:58–10:00      1h 02m",
 	)
 	noCounted(t, hs.frame())
-	if containsLine(lines, "pauses are left out") || containsLine(lines, "pauses and time away are left out") {
-		t.Errorf("a cut is time away, not a pause:\n%s", hs.frame())
+	if containsLine(lines, "time away is left out") || containsLine(lines, "pauses and time away are left out") {
+		t.Errorf("a gap the user made is a pause, not time away:\n%s", hs.frame())
 	}
 }
 
-func TestTicketPaneSaysPausesAndACutAreLeftOut(t *testing.T) {
+func TestTicketPaneSaysPausesForACutAndAPlainPause(t *testing.T) {
 	hs := newHarness(t)
 	meetingCut(hs)
 	hs.setup("10:55:00", pause)
@@ -41,9 +41,9 @@ func TestTicketPaneSaysPausesAndACutAreLeftOut(t *testing.T) {
 	hs.open("11:05:00", 120, 32)
 
 	wantLines(t, paneText(t, hs.frame(), 120),
-		"pauses and time away are left out",
+		"pauses are left out",
 		"10:55–11:00 ‖ paused 5m",
-		"10:00–10:45 ‖ away 45m",
+		"10:00–10:45 ‖ paused 45m",
 	)
 }
 
@@ -68,7 +68,7 @@ func TestAwayDialogCutsAMeetingOutOfARunningEntry(t *testing.T) {
 		t.Fatalf("commands (-want +got)\n%s", d)
 	}
 	frameLacks(t, hs, "Away from PUN-1")
-	wantLines(t, paneText(t, hs.frame(), 120), "10:00–10:45 ‖ away 45m")
+	wantLines(t, paneText(t, hs.frame(), 120), "10:00–10:45 ‖ paused 45m")
 }
 
 func TestAwayDialogWithNoToIsABackdatedPause(t *testing.T) {

@@ -95,9 +95,6 @@ func (e TimeEntry) Stopped() bool { return e.Worklog != nil }
 type Segment struct {
 	StartedAt Timestamp `json:"startedAt"`
 	EndedAt   Timestamp `json:"endedAt,omitzero"`
-	// Cut: the user closed this segment at a time they named (pause
-	// --at), so the gap after it is time away they cut out, not a pause.
-	Cut bool `json:"cut,omitempty"`
 }
 
 // Open reports whether the segment is still running.
