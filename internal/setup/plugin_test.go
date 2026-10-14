@@ -6,8 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-)
+	"github.com/google/go-cmp/cmp")
 
 func TestDecidePlugin(t *testing.T) {
 	cases := []struct {
@@ -124,6 +123,10 @@ func TestPluginStep(t *testing.T) {
 				"Claude Code could not clone the repository. It is private: run `gh auth login` and `gh auth setup-git`, then `punchcard setup` again.",
 				"no release with that tag"},
 			{"no HTTPS credentials", "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n",
+				"Claude Code could not clone the repository. It is private", "no release with that tag"},
+			{"no way to ask for a password", "fatal: unable to get password from user\n",
+				"Claude Code could not clone the repository. It is private", "no release with that tag"},
+			{"terminal prompts disabled alone", "error: terminal prompts disabled\n",
 				"Claude Code could not clone the repository. It is private", "no release with that tag"},
 			{"no release for this tag", "fatal: Remote branch v0.1.0 not found in upstream origin\n",
 				"This build is `v0.1.0` and no release with that tag exists yet. The plugin can be loaded from a clone for one session: `claude --plugin-dir /path/to/punchcard/plugin`.",

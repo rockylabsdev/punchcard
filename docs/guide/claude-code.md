@@ -20,7 +20,7 @@ claude plugin install punchcard@punchcard -s user
 
 The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. A pre-release (`vX.Y.Z-rc.N`) is pinned the same way, so a tester's install matches their pre-release binary. The marketplace fetches the plugin with git over HTTPS (`https://github.com/j-dsmith/punchcard.git`). If the install fails, setup leaves your credentials alone and, for these two failures, says what to do:
 
-- **`Permission denied (publickey)` or `could not read Username`**: Claude Code could not clone the repository. It is private for now: run `gh auth login` and `gh auth setup-git` (git then signs in to GitHub through the GitHub CLI), then `punchcard setup` again.
+- **`Permission denied (publickey)`, `could not read Username`, `unable to get password from user` or `terminal prompts disabled`**: Claude Code could not clone the repository. It is private for now: run `gh auth login` and `gh auth setup-git` (git then signs in to GitHub through the GitHub CLI), then `punchcard setup` again.
 - **`Remote branch vX.Y.Z not found`**: this build is `vX.Y.Z` and no release with that tag exists yet (`main` between releases, for one). Load the plugin from a clone for one session, as below.
 
 To run the plugin from a clone instead, load it for one session at a time:

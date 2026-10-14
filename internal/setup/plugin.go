@@ -280,7 +280,8 @@ var missingTag = regexp.MustCompile(`Remote branch (\S+) not found`)
 // output, for the two failures a tester can fix; "" for anything else.
 func pluginFailure(said string) string {
 	switch {
-	case strings.Contains(said, "Permission denied (publickey)"), strings.Contains(said, "could not read Username"):
+	case strings.Contains(said, "Permission denied (publickey)"), strings.Contains(said, "could not read Username"),
+		strings.Contains(said, "unable to get password from user"), strings.Contains(said, "terminal prompts disabled"):
 		return "Claude Code could not clone the repository. It is private: run `gh auth login` and `gh auth setup-git`, then `punchcard setup` again."
 	}
 	if m := missingTag.FindStringSubmatch(said); m != nil {
