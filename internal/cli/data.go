@@ -44,7 +44,8 @@ type StatusData struct {
 	Paused  []Timer `json:"paused"`
 	Unsent  Owed    `json:"unsent"`
 	// TodaySeconds is the day's total over every ticket, removed ones
-	// included, with a stale timer capped (core.TodayTotal).
+	// included: a stopped entry's worklog duration on its day, open time
+	// up to now, a stale timer capped (core.TodayTotal).
 	TodaySeconds int            `json:"todaySeconds"`
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }

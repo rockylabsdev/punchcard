@@ -39,6 +39,47 @@ func TestTimeToday(t *testing.T) {
 	}
 }
 
+// A stopped entry counts what was logged, not what was measured: the
+// day's total agrees with the worklogs.
+func TestTimeTodayCountsAStoppedEntrysWorklog(t *testing.T) {
+	stopped := func(minutes int, segs ...core.Segment) core.TimeEntry {
+		return core.TimeEntry{ID: "E", Segments: segs,
+			Worklog: &core.Worklog{State: core.WorklogLocal, StartedAt: segs[0].StartedAt, TimeSpentSeconds: minutes * 60}}
+	}
+	cases := []struct {
+		name    string
+		entries []core.TimeEntry
+		now     core.Timestamp
+		want    time.Duration
+	}{
+		{"a stop that logged more than was measured counts the worklog",
+			[]core.TimeEntry{stopped(90, core.Segment{StartedAt: day(9, "22:24"), EndedAt: day(9, "22:27")})},
+			day(9, "22:30"), 90 * time.Minute},
+		{"a stop that logged less than was measured counts the worklog",
+			[]core.TimeEntry{stopped(30, core.Segment{StartedAt: day(9, "09:00"), EndedAt: day(9, "11:00")})},
+			day(9, "12:00"), 30 * time.Minute},
+		{"a stopped entry over midnight counts whole on its worklog's day",
+			[]core.TimeEntry{stopped(120, core.Segment{StartedAt: day(8, "23:00"), EndedAt: day(9, "01:00")})},
+			day(8, "23:59"), 2 * time.Hour},
+		{"and nothing the day after",
+			[]core.TimeEntry{stopped(120, core.Segment{StartedAt: day(8, "23:00"), EndedAt: day(9, "01:00")})},
+			day(9, "12:00"), 0},
+		{"a stopped entry and an open one sum",
+			[]core.TimeEntry{
+				stopped(90, core.Segment{StartedAt: day(9, "09:00"), EndedAt: day(9, "09:03")}),
+				{ID: "E2", Segments: []core.Segment{{StartedAt: day(9, "10:00")}}},
+			},
+			day(9, "10:15"), 105 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := core.TimeToday(ticket("AA-1", tc.entries...), tc.now.Time); got != tc.want {
+				t.Errorf("TimeToday = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTodayTotal(t *testing.T) {
 	removed := func(tk core.TrackedTicket) core.TrackedTicket { tk.RemovedAt = at("11:00"); return tk }
 	overnight := core.Segment{StartedAt: day(8, "23:00"), EndedAt: day(9, "01:00")}

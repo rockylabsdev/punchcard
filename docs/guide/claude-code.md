@@ -93,7 +93,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `▶ ABC-123 1:12 · by hand · Fix the login form` | Running, for 1 h 12 min, set by hand, with its summary. An agent can't move it; your prompts in another session can. |
 | `▶ ABC-123 1:12 · Fix the login form` | Running and not set by hand: your prompts can move it, and so can an agent. |
 | `⏸ ABC-123 0:40 · Fix the login form` | Paused. `+1 paused` follows when more are paused. |
-| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket, removed ones included, as the TUI's Tickets title reads it. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
+| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket, removed ones included, as the TUI's Tickets title reads it: what today's stops logged (the duration you gave at stop, not the time measured) plus the time still open. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
 | `! ABC-123 recovered · fix at stop` | Recovery capped it. Stop it with a duration you choose. |
 | `! ABC-123 stale 1:12` | Running with no presence for over 2 hours; the next change will cap it. |
 | `… · 2 unsent` | *Jira only.* Two worklogs are owed to Jira. |
