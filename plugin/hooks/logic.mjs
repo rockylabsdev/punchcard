@@ -567,5 +567,10 @@ export function replyText(verb, env, exitCode) {
     return logged ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
   }
   const band = bandFrom({ envelope: env }, '')
-  return band ? band.text : 'Nothing running.'
+  const text = band ? band.text : 'Nothing running.'
+  // At a named time (--at) the band's clock does not say when the change
+  // took effect; the command's own event does, with any stub dropped.
+  const kind = verb === 'pause' ? 'paused' : 'started'
+  const named = (env.events ?? []).find((/** @type {any} */ e) => e.kind === kind && e.at)
+  return named ? `${eventText(named)} · ${text}` : text
 }
