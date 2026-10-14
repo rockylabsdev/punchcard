@@ -40,9 +40,12 @@ type Owed struct {
 // StatusData is `data` for status, and for start, pause, resume and
 // touch (the world after the change).
 type StatusData struct {
-	Running      *Timer         `json:"running"`
-	Paused       []Timer        `json:"paused"`
-	Unsent       Owed           `json:"unsent"`
+	Running *Timer  `json:"running"`
+	Paused  []Timer `json:"paused"`
+	Unsent  Owed    `json:"unsent"`
+	// TodaySeconds is the day's total over every ticket, removed ones
+	// included, with a stale timer capped (core.TodayTotal).
+	TodaySeconds int            `json:"todaySeconds"`
 	AuthFailedAt core.Timestamp `json:"authFailedAt"` // null unless Jira last said 401
 }
 
@@ -179,6 +182,7 @@ func snapshot(w core.World, now time.Time) StatusData {
 	}
 	n, total := core.Owed(w.State)
 	d.Unsent = Owed{Count: n, Seconds: seconds(total)}
+	d.TodaySeconds = seconds(core.TodayTotal(w, now))
 	return d
 }
 
@@ -222,20 +226,32 @@ func seconds(d time.Duration) int { return int(d / time.Second) }
 
 // timerLine is the status line for one timer.
 func (o output) timerLine(tm Timer, loc *time.Location, now time.Time) string {
+	return o.timerLineAt(tm, loc, now, core.Timestamp{})
+}
+
+// timerLineAt is timerLine for a change made at a named time at: the
+// line says when (running since 10:45, paused at 10:00).
+func (o output) timerLineAt(tm Timer, loc *time.Location, now time.Time, at core.Timestamp) string {
+	when := func(prep string) string {
+		if at.IsZero() {
+			return ""
+		}
+		return " " + prep + " " + core.Clock(at.Time, loc)
+	}
 	var b strings.Builder
 	switch tm.State {
 	case core.TimerRunning:
-		fmt.Fprintf(&b, "%s %s running  %s", o.paint(green, "▶"), tm.Key, clock(secs(tm.ElapsedSeconds)))
+		fmt.Fprintf(&b, "%s %s running%s  %s", o.paint(green, "▶"), tm.Key, when("since"), clock(secs(tm.ElapsedSeconds)))
 		if tm.ByHand {
 			b.WriteString("  by hand")
 		}
 	case core.TimerPaused:
-		fmt.Fprintf(&b, "%s %s paused  %s", o.paint(yellow, "⏸"), tm.Key, clock(secs(tm.ElapsedSeconds)))
+		fmt.Fprintf(&b, "%s %s paused%s  %s", o.paint(yellow, "⏸"), tm.Key, when("at"), clock(secs(tm.ElapsedSeconds)))
 	case core.TimerStale:
 		fmt.Fprintf(&b, "%s %s stale  %s (capped; %s uncapped)\n", o.paint(red, "!"), tm.Key,
 			clock(secs(tm.ElapsedSeconds)), clock(secs(tm.UncappedSeconds)))
 		fmt.Fprintf(&b, "  last seen %s (%s ago); the next action will recover it",
-			tm.LastSeen.In(loc).Format("15:04"), age(now.Sub(tm.LastSeen.Time)))
+			core.Clock(tm.LastSeen.Time, loc), age(now.Sub(tm.LastSeen.Time)))
 	}
 	if tm.Recovered {
 		b.WriteString("  (recovered: check the duration at stop)")
@@ -261,14 +277,24 @@ func (o output) describe(e core.Event, w core.World, loc *time.Location) string 
 	case core.EventRestored:
 		return fmt.Sprintf("+ %s restored\n", e.Key)
 	case core.EventPaused:
+		if !e.At.IsZero() {
+			s := fmt.Sprintf("%s %s paused at %s\n", o.paint(yellow, "⏸"), e.Key, core.Clock(e.At.Time, loc))
+			if e.Message != "" {
+				s += "  " + e.Message + "\n"
+			}
+			return s
+		}
 		return fmt.Sprintf("%s %s paused\n", o.paint(yellow, "⏸"), e.Key)
 	case core.EventByHand:
 		return fmt.Sprintf("%s set by hand: agents can't move it\n", e.Key)
 	case core.EventStarted:
+		if !e.At.IsZero() {
+			return fmt.Sprintf("%s %s started at %s\n", o.paint(green, "▶"), e.Key, core.Clock(e.At.Time, loc))
+		}
 		return fmt.Sprintf("%s %s started\n", o.paint(green, "▶"), e.Key)
 	case core.EventRecovered:
 		return fmt.Sprintf("%s %s recovered: no presence since %s, so it was capped there; fix the duration at stop\n",
-			o.paint(red, "!"), e.Key, e.At.In(loc).Format("15:04"))
+			o.paint(red, "!"), e.Key, core.Clock(e.At.Time, loc))
 	default:
 		return fmt.Sprintf("%s %s\n", e.Kind, e.Key)
 	}

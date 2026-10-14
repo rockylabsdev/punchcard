@@ -13,8 +13,9 @@ import (
 
 // ticketPane is [2] Ticket: what happened on the selected ticket. The
 // full summary, a headline that is the work stop would send, the open
-// entry's stretches newest first (counted, and the not-counted pauses
-// and time away that explain the number), then WORKLOGS TODAY. An open
+// entry's stretches newest first (segments bare, and the pauses and time
+// away that explain the number marked by their reason), then WORKLOGS
+// TODAY. An open
 // dialog is laid over this pane by frame(); it never resizes it.
 func (m Model) ticketPane(w, h int) []string {
 	t, ok := m.selected()
@@ -41,14 +42,17 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 		case m.stateOf(t) == core.TimerRunning:
 			head(gRunning+" RUNNING", m.pal.running, clock(el))
 		case recoveredPause(t):
-			head(gRecovered+" RECOVERED", sRecov, hm(el))
+			head(gRecovered+" RECOVERED", sRecov, core.FormatDuration(el))
 		default:
-			head(gPaused+" PAUSED", sPaused, hm(el))
+			head(gPaused+" PAUSED", sPaused, core.FormatDuration(el))
 		}
 		if e.Recovered && e.Running() {
 			lines = append(lines, indent(sRecov, "recovered earlier — check the duration at stop", w)...)
 		}
 		lines = append(lines, indent(sDim, "stop "+m.sends()+" this as one worklog — x", w)...)
+		if out := leftOut(e); out != "" {
+			lines = append(lines, indent(sDim, out, w)...)
+		}
 		lines = append(lines, "")
 		lines = append(lines, m.stretches(e, w)...)
 	}
@@ -60,7 +64,7 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 			continue
 		}
 		d := time.Duration(wl.TimeSpentSeconds) * time.Second
-		lines = append(lines, "  "+rfit(hm(d), 6)+"  "+outcome(*wl, m.now))
+		lines = append(lines, "  "+rfit(core.FormatDuration(d), 6)+"  "+outcome(*wl, m.now))
 		n++
 	}
 	if n == 0 {
@@ -69,45 +73,67 @@ func (m Model) ticketDetail(t core.TrackedTicket, w int) []string {
 	return lines
 }
 
+// leftOut says once what the stretch list leaves out of the worklog:
+// the pauses between segments, however the user made them, the time
+// away after a recovered entry's last segment, or both. A single
+// segment with nothing away leaves nothing out.
+func leftOut(e core.TimeEntry) string {
+	paused, away := len(e.Segments) > 1, e.Recovered && e.Paused()
+	switch {
+	case paused && away:
+		return "pauses and time away are left out"
+	case paused:
+		return "pauses are left out"
+	case away:
+		return "time away is left out"
+	}
+	return ""
+}
+
 // stretches are the open entry's segments newest first, with the gaps
-// between them. Only counted stretches put a number in the number
-// column; a gap carries its length in its label, so it cannot be summed
-// by eye.
+// between them. A segment is bare: its length in the number column. A
+// gap is marked by its reason and carries its length in its label, so
+// the number column sums by eye to the headline.
 func (m Model) stretches(e core.TimeEntry, w int) []string {
 	var lines []string
-	hhmm := func(ts core.Timestamp) string { return ts.In(m.now.Location()).Format("15:04") }
+	hhmm := func(ts core.Timestamp) string { return core.Clock(ts.Time, m.now.Location()) }
 	n := len(e.Segments)
 	if e.Recovered && e.Paused() {
 		end := e.Segments[n-1].EndedAt
-		lines = append(lines, gapLine(hhmm(end), "now", sRecov, gRecovered+" away "+hm(m.now.Sub(end.Time)), w)...)
+		lines = append(lines, gapLine(hhmm(end), "now", sRecov, gRecovered+" away "+core.FormatDuration(m.now.Sub(end.Time)), w))
 	}
 	for i := n - 1; i >= 0; i-- {
 		s := e.Segments[i]
 		if s.Open() {
 			d := m.now.Sub(s.StartedAt.Time)
 			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+m.pal.running.Render("now"), 11)+" "+
-				rfit(m.pal.running.Render(clock(d)), 7)+" "+m.pal.running.Render("counted"))
+				rfit(m.pal.running.Render(clock(d)), 7))
 		} else {
 			d := s.EndedAt.Sub(s.StartedAt.Time)
-			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+hhmm(s.EndedAt), 11)+" "+rfit(hm(d), 7)+" counted")
+			lines = append(lines, " "+fit(hhmm(s.StartedAt)+"–"+hhmm(s.EndedAt), 11)+" "+rfit(stretchHM(d), 7))
 		}
 		if i > 0 {
-			prev := e.Segments[i-1].EndedAt
-			lines = append(lines, gapLine(hhmm(prev), hhmm(s.StartedAt), sDim, gPaused+" paused "+hm(s.StartedAt.Sub(prev.Time)), w)...)
+			prev := e.Segments[i-1]
+			lines = append(lines, gapLine(hhmm(prev.EndedAt), hhmm(s.StartedAt), sDim, gPaused+" paused "+core.FormatDuration(s.StartedAt.Sub(prev.EndedAt.Time)), w))
 		}
 	}
 	return lines
 }
 
-// gapLine is time that is not counted: a pause, or time away after
-// recovery capped a timer. ", not counted" drops to its own line when
-// the pane is narrow.
-func gapLine(from, to string, st lipgloss.Style, label string, w int) []string {
-	head := " " + fit(from+"–"+to, 11) + " " + label
-	if lipgloss.Width(head)+len(", not counted") <= w {
-		return []string{st.Render(head + ", not counted")}
+// gapLine is time left out of the worklog: a pause, or time away after
+// recovery capped a timer. It is always one line, cut with … when the
+// pane is narrow.
+func gapLine(from, to string, st lipgloss.Style, label string, w int) string {
+	return st.Render(ansi.Truncate(" "+fit(from+"–"+to, 11)+" "+label, w, "…"))
+}
+
+// stretchHM is a closed segment's length: hm, except that under a
+// minute is <1m, not 0m.
+func stretchHM(d time.Duration) string {
+	if d < time.Minute {
+		return "<1m"
 	}
-	return []string{st.Render(head), st.Render(strings.Repeat(" ", 13) + "not counted")}
+	return core.FormatDuration(d)
 }
 
 // indent wraps text to w under a two-space indent.
@@ -150,7 +176,7 @@ func outcome(wl core.Worklog, now time.Time) string {
 	case core.WorklogLocal:
 		return sDim.Render(gSynced + " logged")
 	}
-	return sDim.Render(gSynced + " logged " + wl.SyncedAt.In(now.Location()).Format("15:04"))
+	return sDim.Render(gSynced + " logged " + core.Clock(wl.SyncedAt.Time, now.Location()))
 }
 
 // retry is the r key after an owed worklog; the key is sync blue.

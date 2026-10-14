@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -50,7 +48,7 @@ func (a *app) stopCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&durationFlag, "duration", "", "time to log instead of the measured elapsed: 1h30m, 1h, 90m or minutes (1m to 24h)")
+	c.Flags().StringVar(&durationFlag, "duration", "", "time to log instead of the measured elapsed: 1h30m, 1h 30m, 1:30, 90m or minutes (1m to 24h)")
 	c.Flags().StringVarP(&message, "message", "m", "", "worklog comment")
 	c.Flags().BoolVar(&f.noSync, "no-sync", false, "record the worklog without sending it to the tracker (pending)")
 	c.Flags().BoolVar(&f.yes, "yes", false, "stop without prompting (an agent's stop needs it)")
@@ -265,23 +263,14 @@ func sendProblem(err error) (code, msg string) {
 	return string(p), err.Error()
 }
 
-var durationPattern = regexp.MustCompile(`^(?:([0-9]+)h)?(?:([0-9]+)m)?$`)
-
-// parseDuration accepts 1h30m, 1h, 90m or bare minutes, from 1m to 24h.
-// h:mm, seconds and fractions are refused.
+// parseDuration is core.ParseDuration as a usage error naming the forms.
 func parseDuration(s string) (time.Duration, error) {
-	var d time.Duration
-	if n, err := strconv.Atoi(s); err == nil {
-		d = time.Duration(n) * time.Minute
-	} else if m := durationPattern.FindStringSubmatch(s); m != nil && s != "" {
-		h, _ := strconv.Atoi(m[1])
-		mins, _ := strconv.Atoi(m[2])
-		d = time.Duration(h)*time.Hour + time.Duration(mins)*time.Minute
-	} else {
-		return 0, usageError(fmt.Sprintf("--duration %q: use 1h30m, 1h, 90m or minutes", s))
-	}
-	if d < time.Minute || d > 24*time.Hour {
+	d, err := core.ParseDuration(s)
+	switch {
+	case errors.Is(err, core.ErrDurationRange):
 		return 0, usageError(fmt.Sprintf("--duration %q: must be from 1m to 24h", s))
+	case err != nil:
+		return 0, usageError(fmt.Sprintf("--duration %q: use %s", s, core.DurationForms))
 	}
 	return d, nil
 }

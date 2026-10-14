@@ -126,6 +126,25 @@ func TestStatusIdle(t *testing.T) {
 	}
 }
 
+func TestStatusEndsWithTheDaysTotal(t *testing.T) {
+	m := newMachine(t)
+	if out := m.ok("status"); strings.Contains(out, "Today:") {
+		t.Errorf("an empty day has no Today line:\n%s", out)
+	}
+	m.ok("start", "AA-1")
+	m.now = m.now.Add(2 * time.Hour)
+	m.ok("start", "AA-2")
+	m.now = m.now.Add(10*time.Minute + 30*time.Second)
+	out := m.ok("status")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if last := lines[len(lines)-1]; last != "Today: 2h 10m" {
+		t.Errorf("last line %q, want %q:\n%s", last, "Today: 2h 10m", out)
+	}
+	if short := m.ok("status", "--short"); strings.Contains(short, "oday") {
+		t.Errorf("status --short stays short: %q", short)
+	}
+}
+
 func TestStatusOnAStaleTimerReportsItAndWritesNothing(t *testing.T) {
 	m := newMachine(t)
 	m.ok("start", "AA-1") // 09:00

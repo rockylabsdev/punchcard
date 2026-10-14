@@ -3,15 +3,15 @@
 │ · PUN-120  Spike: Bubble Tea v2 layout                            40m  ││                                            │
 │ · DATA-9   ? unverified — Jira not reached yet                      —  ││! RECOVERED                              45m│
 │                                                                        ││  stop sends this as one worklog — x        │
+│                                                                        ││  pauses and time away are left out         │
 │                                                                        ││                                            │
-│                                                                        ││ 06:50–now   ! away 2h 22m, not counted     │
-│                                                                        ││ 06:20–06:50     30m counted                │
-│                                                                        ││ 06:15–06:20 ‖ paused 5m, not counted       │
-│                                                                        ││ 06:00–06:15     15m counted                │
+│                                                                        ││ 06:50–now   ! away 2h 22m                  │
+│                                                                        ││ 06:20–06:50     30m                        │
+│                                                                        ││ 06:15–06:20 ‖ paused 5m                    │
+│                                                                        ││ 06:00–06:15     15m                        │
 │                                                                        ││                                            │
 │                                                                        ││WORKLOGS TODAY                              │
 │                                                                        ││  nothing yet                               │
-│                                                                        ││                                            │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
 │                                                                        ││                                            │
@@ -29,4 +29,4 @@
 │ ✓ logged 05:46                PUN-120       40m   05:45                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
                                                                                                                         
- space resume  x stop…  a add  d remove  S setup  ? help  q quit                                                        
+ space resume  x stop…  - away…  a add  d remove  S setup  ? help  q quit                                               

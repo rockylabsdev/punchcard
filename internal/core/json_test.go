@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,5 +174,29 @@ func TestRemovedAtIsAdditive(t *testing.T) {
 	}
 	if back.TrackedTickets[0].Listed() || !back.TrackedTickets[0].RemovedAt.Equal(at("11:00").Time) {
 		t.Errorf("removedAt did not round-trip: %s", b)
+	}
+}
+
+// #57: segments once carried "cut" for a gap the user made. A file
+// written then still loads; the field is ignored.
+func TestStateWithCutStillLoads(t *testing.T) {
+	old := `{"schemaVersion":1,"trackedTickets":[{"key":"PUNCH-12","summary":"","unverified":false,
+	  "addedAt":"2026-08-09T09:02:41.000-0500","entries":[{"id":"E1",
+	  "segments":[{"startedAt":"2026-08-09T09:02:41.000-0500","endedAt":"2026-08-09T10:00:00.000-0500","cut":true},{"startedAt":"2026-08-09T10:45:00.000-0500"}],
+	  "byHand":true,"origin":"hand","recovered":false}]}]}`
+	var s core.State
+	if err := json.Unmarshal([]byte(old), &s); err != nil {
+		t.Fatal(err)
+	}
+	segs := s.TrackedTickets[0].Entries[0].Segments
+	if len(segs) != 2 || !segs[1].Open() {
+		t.Fatalf("segments = %+v", segs)
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"cut"`) {
+		t.Errorf("cut written back: %s", b)
 	}
 }

@@ -22,7 +22,7 @@ An **entry** is one start-to-stop stretch of work on a ticket. Pausing does not 
 
 *Scenario:* You start `PUN-142` at 08:14, pause at 08:15, resume at 08:20 and stop at 08:41. That is one entry with two segments and 22 minutes measured. `punchcard log` shows one row of 22 minutes, not two, and with Jira, Jira gets one worklog.
 
-The TUI shows the arithmetic: segments as `counted`, the gaps between them as `‖ paused 5m, not counted`.
+The TUI shows the arithmetic: each segment as its range and length, the gaps between them as `‖ paused 5m`, and once, above them, `pauses are left out`.
 
 ## One timer that follows your attention
 
@@ -35,6 +35,8 @@ At most one ticket runs at a time. Starting another pauses the running one and s
 **Pause** suspends counting and keeps the entry open. Resuming continues the same entry. Nothing is logged. **Stop** ends the entry, asks you to confirm the duration, and logs the worklog (with Jira, sends it). Stop is the only path to a worklog, and so the only path to a tracker.
 
 *Scenario:* You go for coffee: `punchcard pause`, then `punchcard resume` when you are back. The 22 minutes you were away are not counted and the entry is still one entry. At the end of the task: `punchcard stop`, and the worklog is logged.
+
+*Scenario:* You forgot to pause for a meeting from 10:00 to 10:45. `punchcard pause --at 10:00`, then `punchcard resume --at 10:45` turns it into a pause after the fact; the TUI shows the gap as `‖ paused 45m`, like any pause. Paused for lunch late? `punchcard pause --at 12:00` moves the pause back. Each `--at` moves one boundary. In the TUI, `-` (Away) takes the window you were not working, 10:00 to 10:45, and removes it from the entry wherever it falls, across pauses too. See [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time).
 
 In the TUI, `space` on the running row pauses it, `p` pauses from any row, and `x` opens the stop dialog. The two are different keys on purpose.
 
@@ -70,7 +72,7 @@ $ punchcard pause
 
 The `!` marker means recovered. It shows in `status`, `ls`, `status --short` (`! DEMO-1 stale` while still stale), the TUI row and headline (`! RECOVERED`), and the Claude Code band (`! DEMO-1 recovered · fix at stop`). A recovered entry's measured time is only a guess, so stopping it in a script or from an agent needs an explicit `--duration`; the TUI dialog and the terminal prompt ask you to type one.
 
-The TUI shows the cut-off stretch as `! away 2h 22m, not counted`.
+The TUI shows the cut-off stretch as `! away 2h 22m`, and says `time away is left out`.
 
 Why 2 hours and not a daemon watching you: [ADR 0001](../adr/0001-no-daemon-presence-based-lastseen.md).
 

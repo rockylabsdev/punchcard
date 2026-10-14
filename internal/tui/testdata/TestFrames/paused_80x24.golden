@@ -5,11 +5,11 @@
 │ · PUN-120       Spike: Bubble Tea v…     40m ✗││‖ PAUSED                  22m│
 │ · DATA-9        ? unverified — Jira…       —  ││  stop sends this as one     │
 │ · PLATFORM-4410 Investigate intermi…       —  ││  worklog — x                │
+│                                               ││  pauses are left out        │
 │                                               ││                             │
-│                                               ││ 08:20–08:41     21m counted │
+│                                               ││ 08:20–08:41     21m         │
 │                                               ││ 08:15–08:20 ‖ paused 5m     │
-│                                               ││             not counted     │
-│                                               ││ 08:14–08:15      1m counted │
+│                                               ││ 08:14–08:15      1m         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
@@ -21,4 +21,4 @@
 │ ○ not sent yet · r            OPS-77        15m   08:01                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
  ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                
- space resume  x stop…  a add  d remove  r sync 2  S setup  ? help  q quit      
+ space resume  x stop…  - away…  a add  d remove  r sync 2  ? help  q quit      

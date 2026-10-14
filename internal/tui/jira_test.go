@@ -207,7 +207,7 @@ func TestKeyBarShowsWhatApplies(t *testing.T) {
 			hs := newHarness(t)
 			hs.setup("08:00:00", add("AA-1"), start("AA-1", "E"))
 			return hs
-		}, nil, "space pause x stop… a add d remove S setup ? help q quit"},
+		}, nil, "space pause x stop… - away… a add d remove S setup ? help q quit"},
 		{"another row runs", func(t *testing.T) *harness {
 			hs := owing(t)
 			hs.setup("08:30:00", start("AA-1", "E2"))

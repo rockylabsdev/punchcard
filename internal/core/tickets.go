@@ -114,7 +114,7 @@ func (a *applier) touch(c Touch) (bool, error) {
 	case rt.Key == c.Key:
 		return true, nil
 	}
-	e, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID)
+	e, err := a.switchTo(NewTicket{Key: c.Key, Summary: c.Summary, Unverified: c.Unverified}, c.Origin, c.NewEntryID, a.now, false)
 	if err != nil {
 		return false, err
 	}

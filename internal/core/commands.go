@@ -18,8 +18,16 @@ type Command interface{ command() }
 // created. Start on the running ticket is a no-op, except that by hand
 // it sets the timer by hand (EventByHand). Another origin may not move
 // or pause a timer set by hand (ErrByHand); only focus skips this (Touch).
+//
+// At, when set, is the time the start happened instead of now: the
+// segment opens then, and the ticket it pauses is paused then too
+// (EventPaused and EventStarted carry At). It may not be in the future,
+// before the running ticket's open segment started, or before other
+// time already measured ended (ErrUsage), and it refuses the running
+// ticket's own key.
 type Start struct {
 	Key        string
+	At         time.Time
 	Summary    string
 	Unverified bool
 	Origin     Origin
@@ -30,19 +38,56 @@ type Start struct {
 }
 
 // Pause closes the running segment. The entry stays open.
+//
+// At, when set, closes it at that time instead of now: the user was
+// away from then, and the gap reads as a pause like any other. With nothing running it moves the pause
+// of Key's paused entry, or with no Key the most recently paused one. At
+// may not be in the future, before the segment started, over other time
+// already measured, or, moving a recovered entry's pause later, past
+// lastSeen (ErrUsage). A cut that would leave a segment
+// under a minute drops it, and its EventPaused says so in Message. Key
+// is read only with At.
 type Pause struct {
+	Key    string
+	At     time.Time
 	Origin Origin
 }
 
 // Resume with a Key is Start with that Key. With no Key it resumes the
 // most recently paused entry, and is a no-op while a timer runs.
+//
+// At, when set, opens the segment at that time instead of now. It may
+// not be in the future, before the pause, or before other time already
+// measured ended; with no Key it refuses while a timer runs (ErrUsage).
 type Resume struct {
 	Key        string
+	At         time.Time
 	Origin     Origin
 	NewEntryID string
 	// Grammar is the key grammar in effect (the tracker's); the zero
 	// value is the slug, for no tracker.
 	Grammar tracker.Grammar
+}
+
+// Away removes the window [From, To) the user was away from Key's open
+// entry, wherever it falls, in one transition: a stretch inside it goes,
+// one over an edge is trimmed, one over the whole of it is split, and a
+// trimmed stretch left under a minute is dropped (EventPaused's Message
+// says so). To zero means now, so the entry ends paused at From. A
+// running entry with To set keeps running. A paused entry whose To is
+// after its pause also resumes at To, as resume --at does, with its
+// refusals: another ticket running, or another ticket's time after To.
+//
+// EventPaused (At From) reports a cut, and EventStarted (At To) an entry
+// running from To. Nothing counted in the window and no resume changes
+// nothing, with no events. Refused (ErrUsage): no From, From not before
+// To, either in the future, or From before the entry started. It never
+// touches another ticket, a stopped entry or lastSeen. It is the TUI's
+// Away dialog; pause --at and resume --at each move one boundary.
+type Away struct {
+	Key      string
+	From, To time.Time
+	Origin   Origin
 }
 
 // Stop ends an entry and produces its Worklog: pending, or local when
@@ -167,6 +212,7 @@ type Verify struct {
 func (Start) command()             {}
 func (Pause) command()             {}
 func (Resume) command()            {}
+func (Away) command()              {}
 func (Stop) command()              {}
 func (Add) command()               {}
 func (Remove) command()            {}
@@ -186,9 +232,13 @@ const (
 	// EventRestored: start, focus or add put a removed ticket back on the
 	// list, its history intact.
 	EventRestored EventKind = "restored"
-	EventPaused   EventKind = "paused"  // another ticket's start paused this one
-	EventByHand   EventKind = "byHand"  // a start by hand made the running timer one an agent can't move
-	EventStarted  EventKind = "started" // focus moved the timer to this ticket
+	// EventPaused: another ticket's start paused this one, or a pause at
+	// a named time (At) closed it.
+	EventPaused EventKind = "paused"
+	EventByHand EventKind = "byHand" // a start by hand made the running timer one an agent can't move
+	// EventStarted: focus moved the timer to this ticket, or a start or
+	// resume at a named time (At) opened it.
+	EventStarted EventKind = "started"
 	// EventRecovered: a stale timer was capped; At is where it was capped.
 	EventRecovered  EventKind = "recovered"
 	EventSynced     EventKind = "synced"

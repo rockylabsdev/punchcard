@@ -18,7 +18,12 @@ claude plugin marketplace add j-dsmith/punchcard
 claude plugin install punchcard@punchcard -s user
 ```
 
-The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. A pre-release (`vX.Y.Z-rc.N`) is pinned the same way, so a tester's install matches their pre-release binary. The marketplace needs git access to the repository, which is private for now. On a branch the marketplace does not point at yet, `main` between releases included, the install fails with `fatal: Remote branch vX.Y.Z not found in upstream origin`; setup reports it and leaves your credentials alone. To run the plugin from a clone instead, load it for one session at a time:
+The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. A pre-release (`vX.Y.Z-rc.N`) is pinned the same way, so a tester's install matches their pre-release binary. The marketplace fetches the plugin with git over HTTPS (`https://github.com/j-dsmith/punchcard.git`). If the install fails, setup leaves your credentials alone and, for these two failures, says what to do:
+
+- **`Permission denied (publickey)` or `could not read Username`**: Claude Code could not clone the repository. It is private for now: run `gh auth login` and `gh auth setup-git` (git then signs in to GitHub through the GitHub CLI), then `punchcard setup` again.
+- **`Remote branch vX.Y.Z not found`**: this build is `vX.Y.Z` and no release with that tag exists yet (`main` between releases, for one). Load the plugin from a clone for one session, as below.
+
+To run the plugin from a clone instead, load it for one session at a time:
 
 ```sh
 claude --plugin-dir /path/to/punchcard/plugin
@@ -48,7 +53,7 @@ $ cat .punchcard
 # this repository is billed to
 payroll
 $ punchcard status --json --cwd src
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
 ```
 
 That run was from `src/`, a subdirectory: the file at the repository's root answered. The key must be valid under the tracker in effect: any slug (letters, digits, `.`, `_`, `-`, starting with a letter or digit) with no tracker, the `ABC-123` shape with Jira. A line that is not a key is skipped with a notice, on stderr and in the envelope's `notices`, and the branch answers instead:
@@ -88,6 +93,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `▶ ABC-123 1:12 · by hand · Fix the login form` | Running, for 1 h 12 min, set by hand, with its summary. An agent can't move it; your prompts in another session can. |
 | `▶ ABC-123 1:12 · Fix the login form` | Running and not set by hand: your prompts can move it, and so can an agent. |
 | `⏸ ABC-123 0:40 · Fix the login form` | Paused. `+1 paused` follows when more are paused. |
+| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket, removed ones included, as the TUI's Tickets title reads it. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
 | `! ABC-123 recovered · fix at stop` | Recovery capped it. Stop it with a duration you choose. |
 | `! ABC-123 stale 1:12` | Running with no presence for over 2 hours; the next change will cap it. |
 | `… · 2 unsent` | *Jira only.* Two worklogs are owed to Jira. |
@@ -96,7 +102,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `… · Jira not connected` | *Jira only.* Jira is the tracker but has no credentials. Timers still work; worklogs wait. |
 | `timer on ABC-123 1:12 · … · here: DEF-9` | Grey. The timer is running, but on another ticket than this session's (DEF-9). Only the session whose ticket is running gets the green `▶` band. |
 | `⏸ ABC-123 0:40 · … · here: DEF-9` | Paused on another ticket than this session's. |
-| `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's directory names DEF-9. |
+| `DEF-9 not running · /punch start` | Nothing is running or paused, and this session's directory names DEF-9. With time counted today, the total comes before the action: `DEF-9 not running · today 3h 10m · /punch start`. |
 | `… · plugin 0.1.0 ≠ punchcard 0.2.0 · run punchcard setup` | The plugin and the binary come from different releases. |
 | `punchcard not found on PATH` | Claude Code cannot run `punchcard`. Presence does nothing until it can. |
 | `punchcard: status timed out` | A status call took over 5 seconds. |
@@ -110,10 +116,12 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 
 | Command | Does |
 | --- | --- |
-| `/punch start [KEY]` | Start KEY, or this session's ticket (`here`, asked fresh) when no key is given. With neither: `No ticket here (no .punchcard, and the branch names none): use /punch start KEY.` |
-| `/punch pause` | Pause the running timer. |
-| `/punch resume [KEY]` | Resume the last paused entry, or start KEY. |
+| `/punch start [KEY] [--at TIME]` | Start KEY, or this session's ticket (`here`, asked fresh) when no key is given. With neither: `No ticket here (no .punchcard, and the branch names none): use /punch start KEY.` |
+| `/punch pause [--at TIME]` | Pause the running timer. |
+| `/punch resume [KEY] [--at TIME]` | Resume the last paused entry, or start KEY. |
 | `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
+
+`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and the toasts say `⏸ ABC-123 paused at 10:00` and `▶ ABC-123 started at 10:45`. Being by hand, it works on a timer you set by hand.
 
 `/punch stop` runs a dry run first and shows a dialog with the exact worklog, for example `Log 1h30m to ABC-123 with "fixed the formatter"?`, and these answers:
 
@@ -150,7 +158,7 @@ Why an agent proposes and you dispose: [ADR 0005](../adr/0005-agent-stop-gated-b
 
 ## What the skill teaches the agent
 
-The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start a timer only when the user asks; start, pause and resume need no approval but a timer set by hand is the user's; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
+The skill is one page the agent loads when you talk about timers, logging time, worklogs or what you worked on. It says: run the bare `punchcard` with `--json` and read the envelope; report the `events` to the user because they are side effects; take the ticket key from what the user says, else from `here` in `punchcard status --json --cwd "$PWD"` (the same answer the band uses), and ask when `here` is null; a stop is two steps, preview then `--yes`, and the `--yes` call always asks the user; a recovered entry needs a duration the user gives; exit 7 means the stop happened and only the send to the tracker is owed, so run `sync` and never `stop` again; when unattended, leave the gate alone and tell the user to run `/punch stop` when they are back; start a timer only when the user asks; start, pause and resume need no approval but a timer set by hand is the user's; time away the user describes ("I was in a meeting from ten to quarter to eleven") is `pause --at` then `resume --at`, and an agent never backdates on its own; to report a day, week or month, run `punchcard log --json` and answer from its rows. It ends with the exit codes, and says that 3, 5, 7 and 8 come only from a tracker: on a machine with no tracker the only one is `sync`'s 3, which means there is nothing to send.
 
 ## Checking it is working
 

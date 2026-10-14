@@ -39,6 +39,44 @@ func TestTimeToday(t *testing.T) {
 	}
 }
 
+func TestTodayTotal(t *testing.T) {
+	removed := func(tk core.TrackedTicket) core.TrackedTicket { tk.RemovedAt = at("11:00"); return tk }
+	overnight := core.Segment{StartedAt: day(8, "23:00"), EndedAt: day(9, "01:00")}
+	cases := []struct {
+		name string
+		w    core.World
+		now  string
+		want time.Duration
+	}{
+		{"every ticket's time today sums",
+			world("", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "10:00"))),
+				ticket("AA-2", entry("E2", core.OriginHand, seg("10:30", "11:00")))),
+			"12:00", 90 * time.Minute},
+		{"an open segment counts up to now",
+			world("11:59", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "10:00"))),
+				ticket("AA-2", entry("E2", core.OriginHand, seg("11:00", "")))),
+			"12:00", 2 * time.Hour},
+		{"a segment over midnight counts from midnight",
+			world("", ticket("AA-1", entry("E1", core.OriginHand, overnight))),
+			"12:00", time.Hour},
+		{"a stale timer counts capped at lastSeen",
+			world("09:40", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "")))),
+			"12:00", 40 * time.Minute},
+		{"a removed ticket's time today still counts: the total answers for the day",
+			world("", ticket("AA-1", entry("E1", core.OriginHand, seg("09:00", "10:00"))),
+				removed(ticket("AA-2", entry("E2", core.OriginHand, seg("10:00", "10:30"))))),
+			"12:00", 90 * time.Minute},
+		{"nothing tracked is zero", world(""), "12:00", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := core.TodayTotal(tc.w, at(tc.now).Time); got != tc.want {
+				t.Errorf("TodayTotal = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestElapsed(t *testing.T) {
 	e := entry("EA", hand, seg("09:00", "09:20"), seg("09:40", ""))
 	if got, want := core.Elapsed(e, at("10:00").Time), 40*time.Minute; got != want {

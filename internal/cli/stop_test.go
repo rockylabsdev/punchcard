@@ -249,7 +249,7 @@ func TestStopPromptsOnATTY(t *testing.T) {
 		{"enter accepts the measured time", "\n\n", []string{"stop"}, "09:30", false, 0, 1800, "", "Duration [30m]"},
 		{"a typed duration and comment", "1h\nfixed it\n", []string{"stop"}, "09:30", false, 0, 3600, "fixed it", "Duration [30m]"},
 		{"flags prefill the prompt", "\n\n", []string{"stop", "--duration", "45m", "-m", "pre"}, "09:30", false, 0, 2700, "pre", "Duration [45m]"},
-		{"a bad duration asks again", "1:30\n90m\n\n", []string{"stop"}, "09:30", false, 0, 5400, "", "use 1h30m"},
+		{"a bad duration asks again", "30s\n1:30\n\n", []string{"stop"}, "09:30", false, 0, 5400, "", "use 1h30m, 1h 30m, 1:30, 90m or minutes"},
 		{"under a minute has no default", "\n5\n\n", []string{"stop"}, "09:00", false, 0, 300, "", "Duration: "},
 		{"a recovered entry is prompted, not refused", "\n\n", []string{"stop"}, "13:00", true, 0, 2700, "", "recovered"},
 		{"--yes skips the prompt", "", []string{"stop", "--yes"}, "09:30", false, 0, 1800, "", ""},

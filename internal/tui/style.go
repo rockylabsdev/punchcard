@@ -112,18 +112,6 @@ func clock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d:%02d", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
 }
 
-// hm is a still amount: 45m, 2h, 1h 12m.
-func hm(d time.Duration) string {
-	h, m := int(d.Hours()), int(d.Minutes())%60
-	switch {
-	case h == 0:
-		return fmt.Sprintf("%dm", m)
-	case m == 0:
-		return fmt.Sprintf("%dh", h)
-	}
-	return fmt.Sprintf("%dh %02dm", h, m)
-}
-
 // fit pads or truncates a styled string to exactly w cells.
 func fit(s string, w int) string {
 	if w <= 0 {

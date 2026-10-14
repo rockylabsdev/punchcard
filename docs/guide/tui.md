@@ -16,7 +16,7 @@ With no tracker, after a morning's work: one worklog logged, one timer running.
 │                                               ││  stop logs this as one      │
 │                                               ││  worklog — x                │
 │                                               ││                             │
-│                                               ││ 08:30–now   0:42:34 counted │
+│                                               ││ 08:30–now   0:42:34         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
@@ -32,7 +32,7 @@ With no tracker, after a morning's work: one worklog logged, one timer running.
 │ ✓ logged                      payroll       40m   07:45                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
                                                                                 
- space pause  x stop…  a add  d remove  S setup  ? help  q quit                 
+ space pause  x stop…  - away…  a add  d remove  S setup  ? help  q quit        
 ```
 
 With Jira as the tracker, the same frame also tracks what is owed to Jira and what failed to reach it:
@@ -45,11 +45,11 @@ With Jira as the tracker, the same frame also tracks what is owed to Jira and wh
 │ · PUN-120       Spike: Bubble Tea v…     40m ✗││▶ RUNNING             0:15:34│
 │ · DATA-9        ? unverified — Jira…       —  ││  stop sends this as one     │
 │ · PLATFORM-4410 Investigate intermi…       —  ││  worklog — x                │
+│                                               ││  pauses are left out        │
 │                                               ││                             │
-│                                               ││ 08:58–now   0:14:34 counted │
+│                                               ││ 08:58–now   0:14:34         │
 │                                               ││ 08:15–08:58 ‖ paused 43m    │
-│                                               ││             not counted     │
-│                                               ││ 08:14–08:15      1m counted │
+│                                               ││ 08:14–08:15      1m         │
 │                                               ││                             │
 │                                               ││WORKLOGS TODAY               │
 │                                               ││  nothing yet                │
@@ -61,7 +61,7 @@ With Jira as the tracker, the same frame also tracks what is owed to Jira and wh
 │ ○ not sent yet · r            OPS-77        15m   08:01                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
  ✗ 1 worklog failed to reach Jira · r to retry · nothing is lost                
- space pause  x stop…  a add  d remove  r sync 2  S setup  ? help  q quit       
+ space pause  x stop…  - away…  a add  d remove  r sync 2  ? help  q quit       
 ```
 
 Top to bottom: the Tickets pane and the Ticket pane side by side, the day's log, the status line, the key bar.
@@ -121,18 +121,18 @@ What happened on the selected ticket. The full summary, then a headline that is 
 | `! RECOVERED 45m` | Recovery capped and paused it. |
 | `· NOT RUNNING` with `space starts it` | No open entry. |
 
-Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then the entry's stretches newest first. A counted stretch puts its length in the number column. A gap carries its length in its label, so the column cannot be summed by eye:
+Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as one worklog — x`), then, when the entry has a gap, what is left out of the worklog: `pauses are left out`, `time away is left out` (recovery cut it off), or `pauses and time away are left out`. Then the entry's stretches newest first. A segment is bare: its range, and its length in the number column (`<1m` under a minute). Only a gap is marked, by its reason, and it carries its length in its label, so the number column sums by eye to the headline:
 
 ```
  06:50–now   ! away 2h 22m
-             not counted
- 06:20–06:50     30m counted
+ 06:20–06:50     30m
  06:15–06:20 ‖ paused 5m
-             not counted
- 06:00–06:15     15m counted
+ 06:00–06:15     15m
 ```
 
-`! away` is time cut off by recovery. A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
+`! away` is time cut off by recovery. Every gap you made reads `‖ paused`, however you made it: a plain pause, a pause moved with `pause --at`, or a window removed with the [Away dialog](#away--).
+
+A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
 
 Last, `WORKLOGS TODAY` for this ticket: owed worklogs from any day, logged ones from today, in the same words as the day's log, or `nothing yet`.
 
@@ -165,7 +165,7 @@ One slot, filled in this order:
 
 ### The key bar
 
-Only the keys that apply now. `space` reads `start`, `pause` or `resume` to match the selected row. `x stop…` appears when the row has an open entry. `p pause` appears when something runs and the cursor is on another row. `r sync 2` appears when 2 worklogs are owed. Inside a dialog the bar shows the dialog's keys.
+Only the keys that apply now. `space` reads `start`, `pause` or `resume` to match the selected row. `x stop…` and `- away…` appear when the row has an open entry. `p pause` appears when something runs and the cursor is on another row. `r sync 2` appears when 2 worklogs are owed. When the bar does not fit the width, `S setup` is left out first (help lists it). Inside a dialog the bar shows the dialog's keys.
 
 ## Keys
 
@@ -174,6 +174,7 @@ Only the keys that apply now. `space` reads `start`, `pause` or `resume` to matc
 | `space`, `enter` | Start, pause or resume the selected ticket. Starting one pauses whatever ran. With Jira, on an unverified ticket it also asks Jira for the summary. |
 | `p` | Pause whatever is running, from any row. |
 | `x` | Open the stop dialog for the selected ticket's open entry. On a row with none: `nothing to stop on OPS-77 — space starts it`. |
+| `-` | Open the Away dialog for the selected ticket's open entry: remove a window you were not working from it. On a row with none: `nothing to cut on OPS-77 — space starts it`. |
 | `a` | Open the add dialog. |
 | `d` | Open the remove dialog for the selected ticket. |
 | `r` | With Jira: send every pending and failed worklog. With nothing owed: `nothing to send: Jira has everything`. While a sync is already out, nothing. With no tracker: `no tracker · nothing is sent · S to set one up`. |
@@ -275,6 +276,43 @@ A recovered entry is never prefilled:
 │worked                       │
 ```
 
+### Away (`-`)
+
+`-` on a row with an open entry says "I wasn't working from `From` to `To`". The window comes out of the entry wherever it falls, and you never need to know where its stretches start or stop. The two common fixes:
+
+- **A meeting you forgot to pause for:** `From` 10:00, `To` 10:45. The meeting becomes a pause.
+- **A lunch you paused for late:** on the paused entry, set `From` back to when you left, and `To` to when you got back. The entry resumes at `To`; leave `To` empty to stay paused.
+
+```
+╭─Away from PUN-142───────────╮
+│PUN-142 Wire flock on the si…│
+│running since 08:58          │
+│                             │
+│From                         │
+│  10:00                      │
+│To                           │
+│  10:45                      │
+│                             │
+│→ cuts 45m · entry becomes   │
+│1:12                         │
+```
+
+Key bar: `enter cut  tab field  esc cancel`.
+
+`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. Enter removes the window `From`–`To` from the entry, as one change: a stretch inside it goes, a stretch over one edge is trimmed, and a stretch over the whole of it is split in two. The entry drops by exactly the counted time inside the window. A stretch left under a minute is dropped. It never touches another ticket's time or a stopped entry, and it never adds time, except for the resume below.
+
+- `To` empty means now: the entry ends paused at `From`. On a paused entry that removes `From` to the pause.
+- A running entry with `To` set keeps running.
+- A paused entry whose `To` is after its pause also resumes at `To` ("I came back at `To`"), as `resume --at` would.
+
+On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause. Every gap the cut leaves shows in the Ticket pane as a pause, `10:00–10:45 ‖ paused 45m`, and the toast says `paused PUN-142 10:00–10:45` (`paused PUN-142 at 10:00` with `To` empty).
+
+The last line previews the cut, `→ cuts 45m · entry becomes 1:12`, where 45m is the counted time removed. With nothing counted in the window it says `nothing counted between 09:10 and 09:50`, and enter just closes the dialog. When the cut cannot be made it says why, and enter does nothing. It refuses when:
+
+- `From` is not before `To` (`✗ 10:45 is not before 10:00`), or either is in the future;
+- `From` is before the entry started (`✗ 08:30 is before the entry started at 08:58`);
+- it would resume the entry at `To` while another ticket runs, or over another ticket's time after `To` (`✗ that overlaps PUN-7's time from 11:00 to 11:30; fix the length at stop instead`).
+
 ### Add (`a`)
 
 ```
@@ -317,6 +355,7 @@ Key bar: `y remove  any key keep it`. Under the key, a line says what is kept wh
 │  space / enter   start · pause · resume the selected ticket                  │
 │  p               pause whatever is running, from any row                     │
 │  x               stop the selected entry: review, then log it                │
+│  -               away: cut time you were away out of the selected entry      │
 │  a / d           add a ticket / remove the selected one                      │
 │  r               sync: send pending and failed worklogs                      │
 │  S               setup: a tracker, the Claude Code plugin                    │

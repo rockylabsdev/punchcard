@@ -217,6 +217,34 @@ describe('bandFrom', () => {
       status({ tracker: 'none', running: timer(), configured: false, notConfigured: 'x', keychainError: 'macOS Keychain: x',
         authFailedAt: '2026-10-09T09:00:00.000+0000', unsent: { count: 2, seconds: 600 } }), '',
       { tone: 'success', text: '▶ ABC-123 1:12' }],
+    ['the day\'s total follows the clock and by hand, before the summary',
+      status({ running: timer({ key: 'PUN-142', byHand: true, summary: 'Fix the login form' }), todaySeconds: 190 * 60 }), '',
+      { tone: 'success', text: '▶ PUN-142 1:12 · by hand · today 3h 10m · Fix the login form' }],
+    ['paused, with the day\'s total',
+      status({ paused: [timer({ key: 'PUN-142', state: 'paused', elapsedSeconds: 40 * 60, summary: 'Fix the login form' })], todaySeconds: 190 * 60 }), '',
+      { tone: 'warning', text: '⏸ PUN-142 0:40 · today 3h 10m · Fix the login form' }],
+    ['another ticket running, with the day\'s total',
+      status({ running: timer({ key: 'PUN-142' }), todaySeconds: 190 * 60 }), 'DEF-9',
+      { tone: 'subtle', text: 'timer on PUN-142 1:12 · today 3h 10m · here: DEF-9' }],
+    ['seconds are dropped from the total', status({ running: timer(), todaySeconds: 72 * 60 + 59 }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · today 1h 12m' }],
+    ['whole hours today', status({ running: timer(), todaySeconds: 2 * 3600 }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · today 2h' }],
+    ['minutes only today', status({ paused: [timer({ state: 'paused', elapsedSeconds: 600 })], todaySeconds: 600 }), '',
+      { tone: 'warning', text: '⏸ ABC-123 0:10 · today 10m' }],
+    ['an older binary without todaySeconds: the band as before', status({ running: timer({ byHand: true, summary: 'Fix login' }) }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12 · by hand · Fix login' }],
+    ['nothing today: no total',status({ running: timer(), todaySeconds: 0 }), '',
+      { tone: 'success', text: '▶ ABC-123 1:12' }],
+    ['recovered leads with the fix, not the total', status({ running: timer({ recovered: true }), todaySeconds: 3600 }), '',
+      { tone: 'error', text: '! ABC-123 recovered · fix at stop' }],
+    ['stale leads with the fix, not the total', status({ running: timer({ state: 'stale', elapsedSeconds: 3600 }), todaySeconds: 3600 }), '',
+      { tone: 'error', text: '! ABC-123 stale 1:00' }],
+    ['idle in a keyed directory with time logged today', status({ todaySeconds: 190 * 60 }), 'DEF-9',
+      { tone: 'subtle', text: 'DEF-9 not running · today 3h 10m · /punch start' }],
+    ['idle in a keyed directory with nothing today', status({ todaySeconds: 0 }), 'DEF-9',
+      { tone: 'subtle', text: 'DEF-9 not running · /punch start' }],
+    ['idle elsewhere with time today shows no band', status({ todaySeconds: 3600 }), '', null],
     ['binary missing', { missing: true }, 'ABC-123', { tone: 'error', text: 'punchcard not found on PATH' }],
     ['refusal', { envelope: { ok: false, outcome: 'state_unreadable', error: { message: 'state is newer' } } }, '',
       { tone: 'error', text: 'punchcard: state is newer' }],
@@ -249,6 +277,12 @@ describe('hereKey', () => {
 test('eventText', () => {
   assert.equal(eventText({ kind: 'started', key: 'A-1' }), '▶ A-1 started')
   assert.equal(eventText({ kind: 'paused', key: 'A-1' }), '⏸ A-1 paused')
+  assert.equal(eventText({ kind: 'paused', key: 'A-1', at: '2026-08-09T10:00:00.000-0500' }), '⏸ A-1 paused at 10:00')
+  assert.equal(eventText({ kind: 'started', key: 'A-1', at: '2026-08-09T10:45:00.000-0500' }), '▶ A-1 started at 10:45')
+  assert.equal(
+    eventText({ kind: 'paused', key: 'A-1', at: '2026-08-09T10:00:00.000-0500', message: 'the 30s from 09:59 was under a minute, so it was dropped' }),
+    '⏸ A-1 paused at 10:00 (the 30s from 09:59 was under a minute, so it was dropped)',
+  )
   assert.equal(eventText({ kind: 'byHand', key: 'A-1' }), "A-1 set by hand: agents can't move it")
   assert.equal(eventText({ kind: 'syncFailed', key: 'A-1', message: '500' }), 'A-1 worklog not sent: 500')
   assert.equal(eventText({ kind: 'novel', key: 'A-1' }), 'novel A-1')
@@ -397,11 +431,16 @@ describe('parsePunch', () => {
     ['stop -m fixed the login bug', '', { verb: 'stop', duration: '', message: 'fixed the login bug' }],
     ['stop 45m -m "fixed it"', '', { verb: 'stop', duration: '45m', message: 'fixed it' }],
     ['stop 45m --message fixed -m twice', '', { verb: 'stop', duration: '45m', message: 'fixed -m twice' }],
+    ['pause --at 10:00', '', { verb: 'pause', argv: ['pause', '--at', '10:00'] }],
+    ['resume --at -5m', '', { verb: 'resume', argv: ['resume', '--at', '-5m'] }],
+    ['resume DEF-2 --at=10:45', '', { verb: 'resume', argv: ['resume', 'DEF-2', '--at', '10:45'] }],
+    ['start --at 09:00', 'ABC-1', { verb: 'start', argv: ['start', 'ABC-1', '--at', '09:00'] }],
+    ['start DEF-2 --at 09:00', 'ABC-1', { verb: 'start', argv: ['start', 'DEF-2', '--at', '09:00'] }],
   ]
   for (const [args, here, want] of cases) {
     test(JSON.stringify(args), () => assert.deepEqual(parsePunch(args, here), want))
   }
-  for (const bad of ['', 'frobnicate', 'start A-1 B-2', 'pause now', 'stop 1h 2h']) {
+  for (const bad of ['', 'frobnicate', 'start A-1 B-2', 'pause now', 'stop 1h 2h', 'pause --at', 'pause --at 10:00 11:00']) {
     test(`usage: ${JSON.stringify(bad)}`, () => assert.match(parsePunch(bad, 'ABC-1').error, /^Usage: \/punch/))
   }
 })

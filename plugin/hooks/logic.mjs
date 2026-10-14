@@ -185,7 +185,7 @@ export function bandFrom(poll, skew = null) {
   // so only the session being billed is green.
   const elsewhere = Boolean(here && shown && shown.key !== here)
   if (shown) {
-    const t = timerParts(shown, elsewhere)
+    const t = timerParts(shown, elsewhere, d.todaySeconds)
     parts.push(...t.parts)
     tone = t.tone
     if (!d.running && paused.length > 1) parts.push(`+${paused.length - 1} paused`)
@@ -208,7 +208,7 @@ export function bandFrom(poll, skew = null) {
   }
   // This session's ticket, when it is not the one shown: idle, the next
   // action; otherwise a reminder of what this directory is for.
-  if (here && !shown) parts.push(`${here} not running`, '/punch start')
+  if (here && !shown) parts.push(`${here} not running`, ...todayParts(d.todaySeconds), '/punch start')
   else if (here && shown.key !== here) parts.push(`here: ${here}`)
   if (skew) {
     parts.push(`plugin ${skew.plugin} ≠ punchcard ${skew.binary}`, 'run punchcard setup')
@@ -222,9 +222,11 @@ export function bandFrom(poll, skew = null) {
  * @param {any} t a Timer from `status --json`
  * @param {boolean} [elsewhere] it runs on another ticket than this
  *   session's key: shown as "timer on KEY", in the subtle tone
+ * @param {number} [todaySeconds] the day's total, shown after the clock
+ *   and by hand (absent from an older binary)
  * @returns {{ tone: Band['tone'], parts: string[] }}
  */
-function timerParts(t, elsewhere = false) {
+function timerParts(t, elsewhere = false, todaySeconds = 0) {
   if (t.recovered) return { tone: 'error', parts: [`! ${t.key} recovered`, 'fix at stop'] }
   if (t.state === 'stale') return { tone: 'error', parts: [`! ${t.key} stale ${clock(t.elapsedSeconds)}`] }
   const parts = []
@@ -237,25 +239,48 @@ function timerParts(t, elsewhere = false) {
     parts.push(`▶ ${t.key} ${clock(t.elapsedSeconds)}`)
     if (t.byHand) parts.push('by hand')
   }
+  parts.push(...todayParts(todaySeconds))
   if (t.summary) parts.push(t.summary)
   const tone = t.state === 'paused' ? 'warning' : elsewhere ? 'subtle' : 'success'
   return { tone, parts }
 }
 
 /**
- * One event from a command's envelope as a toast line.
- * @param {{ kind: string, key: string, message?: string }} e
+ * The band's part for the day's total, `status --json`'s todaySeconds,
+ * as the TUI's Tickets title reads it: today 3h 10m, today 2h, today
+ * 40m. None when nothing is counted today, or from an older binary that
+ * does not report it.
+ * @param {unknown} todaySeconds
+ * @returns {string[]}
+ */
+function todayParts(todaySeconds) {
+  const mins = Math.floor(Number(todaySeconds) / 60)
+  if (!(mins > 0)) return []
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h === 0) return [`today ${m}m`]
+  if (m === 0) return [`today ${h}h`]
+  return [`today ${h}h ${String(m).padStart(2, '0')}m`]
+}
+
+/**
+ * One event from a command's envelope as a toast line. A pause or start
+ * at a named time (`--at`) carries `at`, and a note in `message` when a
+ * stub under a minute was dropped.
+ * @param {{ kind: string, key: string, at?: string, message?: string }} e
  */
 export function eventText(e) {
+  const when = /T(\d\d:\d\d)/.exec(e.at ?? '')?.[1]
+  const at = when ? ` at ${when}` : ''
   switch (e.kind) {
     case 'added':
       return `+ ${e.key} added`
     case 'paused':
-      return `⏸ ${e.key} paused`
+      return `⏸ ${e.key} paused${at}${e.message ? ` (${e.message})` : ''}`
     case 'byHand':
       return `${e.key} set by hand: agents can't move it`
     case 'started':
-      return `▶ ${e.key} started`
+      return `▶ ${e.key} started${at}`
     case 'recovered':
       return `! ${e.key} recovered: fix the duration at stop`
     case 'synced':
@@ -384,7 +409,34 @@ export function tokenize(args) {
   return out
 }
 
-export const PUNCH_USAGE = 'Usage: /punch start [KEY] | pause | resume [KEY] | stop [duration] [-m comment]'
+export const PUNCH_USAGE =
+  'Usage: /punch start [KEY] [--at TIME] | pause [--at TIME] | resume [KEY] [--at TIME] | stop [duration] [-m comment]'
+
+/**
+ * Takes `--at TIME` (or `--at=TIME`) out of a timer verb's words. TIME is
+ * passed through for punchcard to read (HH:MM or -D).
+ * @param {string[]} words
+ * @returns {{ rest: string[], at: string[] } | null} null: --at with no TIME, or twice
+ */
+function takeAt(words) {
+  /** @type {string[]} */
+  const rest = []
+  /** @type {string[]} */
+  let at = []
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]
+    let time
+    if (w === '--at') time = words[++i]
+    else if (w.startsWith('--at=')) time = w.slice(5)
+    else {
+      rest.push(w)
+      continue
+    }
+    if (!time || at.length) return null
+    at = ['--at', time]
+  }
+  return { rest, at }
+}
 
 /**
  * @typedef {{ verb: 'start' | 'pause' | 'resume', argv: string[] }} TimerAction
@@ -403,18 +455,21 @@ export const PUNCH_USAGE = 'Usage: /punch start [KEY] | pause | resume [KEY] | s
  */
 export function parsePunch(args, hereKey) {
   const raw = String(args ?? '').trim()
-  const [verb = '', ...rest] = tokenize(raw)
+  const [verb = '', ...words] = tokenize(raw)
+  const timer = verb === 'start' || verb === 'pause' || verb === 'resume' ? takeAt(words) : { rest: words, at: [] }
+  if (!timer) return { error: PUNCH_USAGE }
+  const { rest, at } = timer
   switch (verb) {
     case 'start': {
       if (rest.length > 1) return { error: PUNCH_USAGE }
       const key = rest[0] ?? hereKey
       if (!key) return { error: 'No ticket here (no .punchcard, and the branch names none): use /punch start KEY.' }
-      return { verb: 'start', argv: ['start', key] }
+      return { verb: 'start', argv: ['start', key, ...at] }
     }
     case 'pause':
-      return rest.length ? { error: PUNCH_USAGE } : { verb: 'pause', argv: ['pause'] }
+      return rest.length ? { error: PUNCH_USAGE } : { verb: 'pause', argv: ['pause', ...at] }
     case 'resume':
-      return rest.length > 1 ? { error: PUNCH_USAGE } : { verb: 'resume', argv: ['resume', ...rest] }
+      return rest.length > 1 ? { error: PUNCH_USAGE } : { verb: 'resume', argv: ['resume', ...rest, ...at] }
     case 'stop': {
       const after = raw.slice(raw.indexOf('stop') + 4).trim()
       const at = after.search(/(^|\s)(-m|--message)(\s|$)/)

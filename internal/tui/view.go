@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -151,7 +152,7 @@ func (m Model) bindings() []binding {
 		}
 		bs = append(bs, binding{"space", label})
 		if m.stateOf(sel) != core.TimerIdle {
-			bs = append(bs, binding{"x", "stop…"})
+			bs = append(bs, binding{"x", "stop…"}, binding{"-", "away…"})
 		}
 	}
 	// p pauses from any row; on the running row space already says so.
@@ -171,16 +172,26 @@ func (m Model) bindings() []binding {
 
 // keyBar shows the keys that apply now. r is sync blue, like every
 // other mention of sync.
+// When the bar is too narrow it leaves out S setup, which help lists,
+// before cutting anything short.
 func (m Model) keyBar(w int) string {
-	parts := make([]string, 0, 8)
-	for _, b := range m.bindings() {
-		k := sBold.Render(b.key)
-		if b.key == "r" {
-			k = sSyncKey.Render(b.key)
+	render := func(bs []binding) string {
+		parts := make([]string, 0, len(bs))
+		for _, b := range bs {
+			k := sBold.Render(b.key)
+			if b.key == "r" {
+				k = sSyncKey.Render(b.key)
+			}
+			parts = append(parts, k+" "+sDim.Render(b.label))
 		}
-		parts = append(parts, k+" "+sDim.Render(b.label))
+		return " " + strings.Join(parts, "  ")
 	}
-	return fit(" "+strings.Join(parts, "  "), w)
+	bs := m.bindings()
+	bar := render(bs)
+	if lipgloss.Width(bar) > w && m.dlg == nil {
+		bar = render(slices.DeleteFunc(bs, func(b binding) bool { return b.key == "S" }))
+	}
+	return fit(bar, w)
 }
 
 // wrap breaks s into lines of at most w cells.

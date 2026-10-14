@@ -3,6 +3,7 @@
 │  space / enter   start · pause · resume the selected ticket                  │
 │  p               pause whatever is running, from any row                     │
 │  x               stop the selected entry: review, then log it                │
+│  -               away: cut time you were away out of the selected entry      │
 │  a / d           add a ticket / remove the selected one                      │
 │  r               sync: send pending and failed worklogs                      │
 │  S               setup: a tracker, the Claude Code plugin                    │
@@ -13,7 +14,6 @@
 │  ▶ running   ‖ paused   ! recovered: check the duration at stop              │
 │  · idle   ? not confirmed by the tracker yet                                 │
 │  ○ waiting to be sent   ✗ failed   ✓ logged                                  │
-│                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─[3] Today · logged 0m · owed 55m─────────────────────────────────────────────╮
 │ STATUS                        TICKET       TIME   STOPPED                    │

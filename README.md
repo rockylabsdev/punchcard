@@ -26,10 +26,10 @@ macOS and Linux, on arm64 and amd64.
 
 ## Install
 
-**Before the first release** there is no tap. Testers install a pre-release (`vX.Y.Z-rc.N`, a GitHub pre-release with no Homebrew formula) from the [Releases](https://github.com/j-dsmith/punchcard/releases) page with `gh release download`, as the [testers' guide](docs/guide/testers.md#install) shows; `punchcard setup` then installs the plugin at the same version. The repository is private, so either way you need access. To build from a clone instead:
+**Before the first release** there is no tap. Testers install a pre-release (`vX.Y.Z-rc.N`, a GitHub pre-release with no Homebrew formula) from the [Releases](https://github.com/j-dsmith/punchcard/releases) page with `gh release download`, as the [testers' guide](docs/guide/testers.md#install) shows; `punchcard setup` then installs the plugin at the same version. The repository is private, so either way you need access, and Claude Code fetches the plugin with git over HTTPS: run `gh auth login` and `gh auth setup-git` first. If the plugin install fails with `Permission denied (publickey)` or `could not read Username`, those two commands are the fix; then run `punchcard setup` again. If it fails with `Remote branch vX.Y.Z not found`, no release with that tag exists yet: load the plugin from a clone for one session with `claude --plugin-dir /path/to/punchcard/plugin`. When something breaks, `punchcard doctor` prints what a bug report needs, redacted. To build from a clone instead:
 
 ```sh
-git clone git@github.com:j-dsmith/punchcard.git && cd punchcard
+git clone https://github.com/j-dsmith/punchcard.git && cd punchcard
 go install ./cmd/punchcard
 ```
 

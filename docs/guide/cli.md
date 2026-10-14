@@ -9,8 +9,8 @@ All output below was produced by running the binary in throwaway directories, mo
 | Command | Does | With Jira as the tracker |
 | --- | --- | --- |
 | `start [KEY]` | Start the timer on KEY, pausing whatever ran. No KEY: pick from recents on a terminal. | Fetches the summary for a ticket new to the list, or still unverified |
-| `pause` | Pause the running timer. The entry stays open. | no call |
-| `resume [KEY]` | Resume the most recently paused entry. `resume KEY` is `start KEY`. | as `start` |
+| `pause` | Pause the running timer. The entry stays open. `--at TIME`: pause then. | no call |
+| `resume [KEY]` | Resume the most recently paused entry. `resume KEY` is `start KEY`. `--at TIME`: resume then. | as `start` |
 | `stop [KEY]` | Stop an entry and log its worklog. No KEY: the running entry, else the single paused one. | Also sends the worklog, one POST |
 | `status` | The running ticket, paused tickets, the tracker; with Jira, unsent worklogs and the connection. | no call (reads the token) |
 | `status --short` | One line for a shell prompt. | no call |
@@ -21,6 +21,7 @@ All output below was produced by running the binary in throwaway directories, mo
 | `sync [KEY]` | With a tracker: send every pending and failed worklog, or only KEY's. Without one: exit 3, nothing to send. | yes |
 | `setup` | The wizard: choose a tracker (none or Jira), then the Claude Code plugin. Needs a terminal. | Test Connection |
 | `version` | Version, contract version, platform. | no call |
+| `doctor [--no-redact]` | What a bug report needs, in one paste: files, tracker, timer, Claude Code, plugin, ask rule, terminal, OS. Redacted; always exit 0. | no call (names the token's source) |
 | `help [command]` | Help text. `--help` on any command does the same. | no call |
 
 Without a tracker no command calls anything; the third column is what changes once Jira is set up.
@@ -145,11 +146,59 @@ $ punchcard resume DEMO-1
 
 Nothing paused is exit 4: `no timer: nothing is paused`.
 
+### `--at TIME`: pause, resume or start at an earlier time
+
+`--at` on `pause`, `resume` or `start` makes the change at TIME instead of now. The two common fixes:
+
+**A meeting you forgot to pause for.** Pause at when it started, resume at when it ended:
+
+```
+$ punchcard pause --at 10:00
+⏸ DEMO-2 paused at 10:00  1:02:00
+$ punchcard resume --at 10:45
+▶ DEMO-2 running since 10:45  1:07:00  by hand
+```
+
+**A lunch you paused for late.** You left at 12:00 but paused at 12:40. With nothing running, `pause --at` moves the last pause, so move it back, then resume when you got back:
+
+```
+$ punchcard pause --at 12:00
+$ punchcard resume --at 13:00
+```
+
+Either way the entry keeps both stretches, and the gap between them is a pause like any other, left out of the worklog (the TUI's Ticket pane shows it as `10:00–10:45 ‖ paused 45m`). `start KEY --at 09:00` starts KEY at 09:00, and a ticket it pauses is paused at 09:00 too.
+
+Each `--at` moves one boundary, so you need to know where the entry's stretches start and stop. The TUI's [Away dialog](tui.md#away--) (`-`) takes the window you were not working instead, `From` 10:00 `To` 10:45, and removes it from the entry wherever it falls, across pauses too.
+
+TIME is one of:
+
+- `HH:MM`: the most recent such local time at or before now, so `23:50` typed at 00:10 is last night.
+- `-D`: that long ago, D in the [duration](#stop-key) forms: `-45m`, `-1h30m`, `-1:30`.
+
+Nothing else, and no dates: a correction is within the day, and `stop --duration` covers the rest.
+
+It refuses, with exit 64 and nothing changed, when:
+
+- TIME is not one of those forms, or is in the future;
+- `pause --at` is before the open segment started, or moves a recovered entry's pause past `lastSeen`, the last time you were seen (recovery capped it there);
+- `resume --at` is before the pause (the gap cannot be negative), or has no KEY while any timer runs (`resume KEY --at` is `start KEY --at`);
+- `start --at` is before the running ticket's open segment started, or names the running ticket itself (use `pause --at` then `resume --at`);
+- the time would overlap time already measured on any ticket: the ticket's last stopped entry, or another ticket's stretch. The message points at the way out: `that overlaps PUN-7's time from 09:00 to 10:00; fix the length at stop instead`.
+
+A cut that would leave a stretch under a minute drops it instead, and says so: `the 30s from 09:59 was under a minute, so it was dropped`.
+
+`--at` changes measured time and never logs anything, so it needs no approval: an agent may use it under the same rules as the plain commands, so a timer set by hand refuses it (`by_hand`), and so does moving the pause of an entry paused while set by hand. It is presence like any command by hand. It never touches a stopped entry or `lastSeen`. In `--json`, `data` is the timer after the change as usual, and the `paused` and `started` events carry `at`:
+
+```
+$ punchcard pause --at 10:00 --json
+{"v":1,"ok":true,"outcome":"ok","command":"pause","data":{…},"events":[{"kind":"paused","key":"DEMO-2","at":"2026-10-13T10:00:00.000-0500"}],"error":null}
+```
+
 ### `stop [KEY]`
 
 | Flag | Does |
 | --- | --- |
-| `--duration D` | Log D instead of the measured time: `1h30m`, `1h`, `90m` or bare minutes, 1m to 24h. `1:30` and `30s` are refused with exit 64. |
+| `--duration D` | Log D instead of the measured time: `1h30m`, `1h 30m`, `1h`, `90m`, bare minutes or `1:30` (hours and minutes), 1m to 24h. Case and spaces are ignored. Seconds and fractions (`30s`, `1.5h`) are refused with exit 64. |
 | `-m`, `--message TEXT` | The worklog comment. |
 | `--no-sync` | With a tracker: record the worklog as pending without sending it. Without one it changes nothing; the worklog is logged. |
 | `--yes` | Log without prompting. An agent's stop needs it. |
@@ -161,8 +210,8 @@ With no KEY, stop targets the running entry, else the single paused one. Several
 
 ```
 $ punchcard stop
-DEMO-7 Duration [5m]: 1:30
-  "1:30": use 1h30m, 1h, 90m or minutes
+DEMO-7 Duration [5m]: 30s
+  "30s": use 1h30m, 1h 30m, 1:30, 90m or minutes
 DEMO-7 Duration [5m]: 25m
 Comment (optional): 
 ■ DEMO-7 stopped: 25m, worklog pending
@@ -283,7 +332,7 @@ Nothing running.
 Not connected to Jira: no API token (run punchcard setup, or set PUNCHCARD_TOKEN)
 ```
 
-The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line.
+The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line. Last, when anything is counted today, the day's total over every ticket (removed ones included), as the TUI's Tickets title reads it: `Today: 3h 10m` (a stale timer counts capped). `status --short` never shows it.
 
 A stale timer (running, no presence for over 2 hours) is shown capped, as the next change will record it:
 
@@ -303,7 +352,7 @@ Also reports DIR's key, the one the Claude Code plugin uses for the session. The
 
 ```
 $ punchcard status --cwd ~/src/app --json
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"payroll","source":"file"}},"events":[],"error":null}
 ```
 
 ### `.punchcard`: a directory's key
@@ -324,7 +373,7 @@ A `.punchcard` whose line is not a valid key under the current tracker (`pay rol
 ```
 $ punchcard status --cwd ~/src/app --json
 punchcard: /…/app/.punchcard: "pay roll" is not a key (like payroll); using the branch
-{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"authFailedAt":null,"tracker":"none","here":{"key":"DEMO-2","source":"branch"}},"events":[],"error":null,"notices":["/…/app/.punchcard: \"pay roll\" is not a key (like payroll); using the branch"]}
+{"v":1,"ok":true,"outcome":"ok","command":"status","data":{"running":null,"paused":[],"unsent":{"count":0,"seconds":0},"todaySeconds":0,"authFailedAt":null,"tracker":"none","here":{"key":"DEMO-2","source":"branch"}},"events":[],"error":null,"notices":["/…/app/.punchcard: \"pay roll\" is not a key (like payroll); using the branch"]}
 ```
 
 `status --cwd`, `touch --cwd` and the plugin's `/punch start` all use this rule. Commit the file to share it with everyone on the repository, or list it in `.gitignore` to keep it yours. It holds one key; a repository whose branches name tickets needs no file at all.
@@ -520,6 +569,28 @@ $ punchcard version --json
 
 `contract` is the `--json` envelope's version; `schemaVersion` is the state file's.
 
+### `doctor`
+
+Everything a bug report needs, in one paste. It only reads: it never changes a file (an unreadable `state.json` is reported in `status`'s words and left where it is), never calls the tracker, never reads the token itself (only says where it would come from, as `status` does), and always exits 0.
+
+```
+$ punchcard doctor
+punchcard v0.2.0 (contract v1, go1.26.9 darwin/arm64)
+binary      /opt/homebrew/bin/punchcard
+data        ~/.local/share/punchcard  state.json ok (schema 1, 6 tickets)  heartbeat 08:12
+config      ~/.config/punchcard/config.json  tracker jira  site <redacted>  email <redacted>
+token       Keychain
+timer       ▶ PUN-142 1:12 by hand
+unsent      0
+claude      2.1.291 at /opt/homebrew/bin/claude
+plugin      punchcard@punchcard 0.2.0  ✓ matches binary
+ask rule    present in ~/.claude/settings.json
+terminal    TERM=xterm-ghostty  TERM_PROGRAM=ghostty  COLORTERM=truecolor  NO_COLOR unset  120x32
+os          darwin 15.1 arm64
+```
+
+The Jira site, the email and the home directory (as `~`) are redacted by default; `--no-redact` shows them, for your own eyes. `token` is `Keychain`, `file`, `PUNCHCARD_TOKEN`, `none`, or `none (no tracker)`. `plugin` says `≠ X.Y.Z → run punchcard setup` when the plugin is another release, `not installed → run punchcard setup`, or `claude not found`; a build that is not a release is never compared. `ask rule` is `present`, `absent → punchcard setup adds it`, or the settings file `unparseable`. `data` adds `state is locked by another punchcard` while another punchcard holds the lock, and a heartbeat from another day carries its date.
+
 ### `touch [KEY] [--cwd DIR]` (hidden)
 
 The plugin's presence call. With no key, presence only. With a key, or with `--cwd` pointing at a directory that names one (its [`.punchcard`](#punchcard-a-directorys-key), else its git branch), it is also focus: a running timer on another ticket moves to that key, whoever set it, but only if the key differs from the last focus, the key of the previous touch from a prompt or by hand that had one. Every such touch records it, even when it moves nothing. It never starts a timer when nothing runs (a paused timer counts as nothing running), never sets the moved timer by hand, and tries the lock once rather than waiting (busy is a silent exit 0). From an agent it does nothing.
@@ -531,7 +602,7 @@ $ punchcard touch --cwd ~/src/app --origin prompt
 ▶ payroll started
 
 $ punchcard touch --cwd /path/to/checkout --origin prompt --json
-{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
+{"v":1,"ok":true,"outcome":"ok","command":"touch","data":{"running":{"key":"DEMO-2","unverified":true,"entryId":"C8B037EC-7C7B-4507-9830-271E88466168","state":"running","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0},"paused":[{"key":"DEMO-1","unverified":true,"entryId":"0936890C-2F84-4B16-A20B-DE31A42D5802","state":"paused","byHand":false,"origin":"prompt","recovered":false,"elapsedSeconds":0}],"unsent":{"count":1,"seconds":1800},"todaySeconds":1800,"authFailedAt":null},"events":[{"kind":"paused","key":"DEMO-1"},{"kind":"added","key":"DEMO-2"},{"kind":"started","key":"DEMO-2"}],"error":null}
 ```
 
 A prompt never starts a timer from idle, or resumes a paused one; it only moves one that is already running, whoever set it.
@@ -598,9 +669,9 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 
 | Command | `data` |
 | --- | --- |
-| `status` | `{running, paused, unsent, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
+| `status` | `{running, paused, unsent, todaySeconds, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `todaySeconds` is the day's total over every ticket, removed ones included, open entries counted up to now and a stale timer counted capped; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
 | `status --short` | The same without the Jira fields. |
-| `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, authFailedAt}` after the change. |
+| `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, todaySeconds, authFailedAt}` after the change. |
 | `ls` | `{tickets: [{key, summary?, unverified, addedAt, removedAt?, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. `removedAt` appears only on a removed ticket, which only `ls --all` lists. |
 | `add` | As `ls`, for the keys given. |
 | `rm` | `{key, keptWorklogs}`: `keptWorklogs` counts the logged worklogs that stay in the log. |
@@ -609,6 +680,7 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 | `sync` | `{sent: [...], remaining: [...]}`, each `{key, entryId, worklog}`. With no tracker `sent` is empty and `remaining` lists any old pending worklogs. |
 | `log` | `{rows: [{date, started, key, summary, minutes, comment, state, remoteId, entryId, recovered}], open, range: {from, to}}`. `date` is `YYYY-MM-DD`, `started` a timestamp; absent values are `""`. `open` is the running entry, else the most recently paused one, as a timer, or `null`. |
 | `version` | `{version, contract, schemaVersion, go, platform}`. |
+| `doctor` | `{punchcard, binary, data, config, token, timer, unsent, claude, plugin, askRule, terminal, os}`, the human output's fields, redacted the same way. `punchcard` is `version`'s data. `data` is `{dir, state, problem?, schemaVersion?, tickets, heartbeat, locked}` with `state` `ok`, `none`, `unreadable`, `newer` or `error`. `config` is `{path, exists, tracker, site?, email?, problem?}`. `token` is `env`, `keychain`, `file` or `none`. `timer` is a timer or `null`. `claude` is `{found, version?, path?}`; `plugin` is `{installed, version?, matches, skewed, problem?}`; `askRule` is `{path?, state}` with `state` `present`, `missing`, `unparseable`, `unreadable` or `unknown`. `terminal` is `{TERM, TERM_PROGRAM, COLORTERM, NO_COLOR, width?, height?}`; `os` is `{goos, version?, arch}`. |
 | exit 4, ambiguous | `{candidates: ["KEY", ...]}`. |
 
 A timer: `{key, summary?, unverified, entryId, state, byHand, origin, recovered, elapsedSeconds, uncappedSeconds?, lastSeen?}`. `state` is `running`, `paused` or `stale`. For a stale timer `elapsedSeconds` is the capped figure, `uncappedSeconds` the wall-clock one, and `lastSeen` the cap.
@@ -623,8 +695,8 @@ Timestamps are `2026-10-09T10:20:03.129-0500`: milliseconds, numeric offset, no 
 | --- | --- |
 | `added` | A start or a focus put an untracked ticket on the list. |
 | `restored` | A start, resume, add or focus put a removed ticket back on the list, its history intact. |
-| `paused` | Starting this ticket's rival paused it. |
-| `started` | Focus moved the timer to this ticket. |
+| `paused` | Starting this ticket's rival paused it, or a `pause --at` closed it. `at` is the time, when it was not now; `message` says when a stub under a minute was dropped. |
+| `started` | Focus moved the timer to this ticket, or a `start --at` or `resume --at` opened it; `at` is the time. |
 | `byHand` | A start by hand made the running timer one an agent can't move. |
 | `recovered` | A stale timer was capped; `at` is where. |
 | `synced` | The tracker took the worklog. |
