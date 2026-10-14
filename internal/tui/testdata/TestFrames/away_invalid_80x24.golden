@@ -7,7 +7,7 @@
 │ · PLATFORM-4410 Investigate intermi…       —  ││To                           │
 │                                               ││  09:00                      │
 │                                               ││                             │
-│                                               ││✗ 09:00 is before 09:05      │
+│                                               ││✗ 09:05 is not before 09:00  │
 │                                               ││                             │
 │                                               ││                             │
 │                                               ││                             │

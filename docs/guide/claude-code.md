@@ -119,9 +119,9 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 | `/punch start [KEY] [--at TIME]` | Start KEY, or this session's ticket (`here`, asked fresh) when no key is given. With neither: `No ticket here (no .punchcard, and the branch names none): use /punch start KEY.` |
 | `/punch pause [--at TIME]` | Pause the running timer. |
 | `/punch resume [KEY] [--at TIME]` | Resume the last paused entry, or start KEY. |
+| `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
 
 `--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and the toasts say `⏸ ABC-123 paused at 10:00` and `▶ ABC-123 started at 10:45`. Being by hand, it works on a timer you set by hand.
-| `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
 
 `/punch stop` runs a dry run first and shows a dialog with the exact worklog, for example `Log 1h30m to ABC-123 with "fixed the formatter"?`, and these answers:
 

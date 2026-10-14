@@ -150,7 +150,7 @@ Nothing paused is exit 4: `no timer: nothing is paused`.
 
 `--at` on `pause`, `resume` or `start` makes the change at TIME instead of now. The two common fixes:
 
-**A meeting you forgot to pause for.** Pause at when it started, resume at when it ended (or `-` in the [TUI](tui.md#away--)):
+**A meeting you forgot to pause for.** Pause at when it started, resume at when it ended:
 
 ```
 $ punchcard pause --at 10:00
@@ -167,6 +167,8 @@ $ punchcard resume --at 13:00
 ```
 
 Either way the entry keeps both stretches, and the gap between them is a pause like any other, left out of the worklog (the TUI's Ticket pane shows it as `10:00–10:45 ‖ paused 45m`). `start KEY --at 09:00` starts KEY at 09:00, and a ticket it pauses is paused at 09:00 too.
+
+Each `--at` moves one boundary, so you need to know where the entry's stretches start and stop. The TUI's [Away dialog](tui.md#away--) (`-`) takes the window you were not working instead, `From` 10:00 `To` 10:45, and removes it from the entry wherever it falls, across pauses too.
 
 TIME is one of:
 

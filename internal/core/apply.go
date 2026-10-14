@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -327,25 +328,103 @@ func (a *applier) resumeAt(t *TrackedTicket, e *TimeEntry, at time.Time, origin 
 	return nil
 }
 
-// away is Away: pauseAt From, then resumeAt To, in this one transition.
+// away is Away: it removes [From, To) from Key's open entry, To zero
+// meaning now, and resumes a paused entry at a To after its pause.
 func (a *applier) away(c Away) error {
-	if !c.From.IsZero() {
-		if err := a.pauseAt(Pause{Key: c.Key, At: c.From, Origin: c.Origin}); err != nil {
-			return err
-		}
-	}
-	if c.To.IsZero() {
-		return nil
-	}
-	if t, e := a.running(); e != nil {
-		return a.refuseResumeAt(t)
-	}
 	t := a.listed(c.Key)
 	e := openEntry(t)
 	if e == nil || len(e.Segments) == 0 {
-		return fmt.Errorf("%w: %s has nothing paused", ErrNoTimer, c.Key)
+		return fmt.Errorf("%w: %s has nothing running or paused", ErrNoTimer, c.Key)
 	}
-	return a.resumeAt(t, e, c.To, c.Origin)
+	if e.ByHand && c.Origin != OriginHand {
+		return fmt.Errorf("%s %w", t.Key, ErrByHand)
+	}
+	if c.From.IsZero() {
+		return fmt.Errorf("%w: away needs the time you left", ErrUsage)
+	}
+	from, err := a.namedAt(c.From)
+	if err != nil {
+		return err
+	}
+	to := a.now
+	if !c.To.IsZero() {
+		if to, err = a.namedAt(c.To); err != nil {
+			return err
+		}
+	}
+	if !from.Before(to.Time) {
+		return fmt.Errorf("%w: %s is not before %s", ErrUsage, a.hhmm(from), a.hhmm(to))
+	}
+	if first := e.Segments[0].StartedAt; from.Before(first.Time) {
+		return fmt.Errorf("%w: %s is before the entry started at %s", ErrUsage, a.hhmm(from), a.hhmm(first))
+	}
+	// "I came back at To": a paused entry resumes then, as resume --at.
+	resume := !c.To.IsZero() && !e.Running() && to.After(lastEnd(*e).Time)
+	if resume {
+		if r, _ := a.running(); r != nil {
+			return a.refuseResumeAt(r)
+		}
+		if err := a.overlaps(to, a.now, nil); err != nil {
+			return err
+		}
+	}
+	cut, notes := a.removeWindow(e, from, to, !c.To.IsZero())
+	if !cut && !resume {
+		return nil
+	}
+	e.Origin = c.Origin
+	if cut {
+		a.events = append(a.events, Event{Kind: EventPaused, Key: t.Key, At: from, Message: strings.Join(notes, "; ")})
+	}
+	if resume {
+		a.openAt(e, c.Origin, to)
+	}
+	if last := e.Segments[len(e.Segments)-1]; last.Open() && last.StartedAt.Equal(to.Time) {
+		a.events = append(a.events, Event{Kind: EventStarted, Key: t.Key, At: to})
+	}
+	return nil
+}
+
+// removeWindow takes [from, to) out of e's stretches: one inside it
+// goes, one over an edge is trimmed, one over the whole of it is split.
+// The open stretch runs on from to when keepOpen, else it ends at from.
+// A trimmed stretch left under a minute is dropped, and notes say so;
+// the open stretch is kept however short. cut says any counted time was
+// inside the window; without it e is untouched.
+func (a *applier) removeWindow(e *TimeEntry, from, to Timestamp, keepOpen bool) (cut bool, notes []string) {
+	var out []Segment
+	keep := func(s Segment) {
+		if d := s.EndedAt.Sub(s.StartedAt.Time); !s.Open() && d < time.Minute {
+			notes = append(notes, fmt.Sprintf("the %s from %s was under a minute, so it was dropped", d.Round(time.Second), a.hhmm(s.StartedAt)))
+			return
+		}
+		out = append(out, s)
+	}
+	for _, s := range e.Segments {
+		end := s.EndedAt
+		if s.Open() {
+			end = a.now
+		}
+		if !s.StartedAt.Before(to.Time) || !end.After(from.Time) {
+			out = append(out, s) // nothing counted in the window
+			continue
+		}
+		cut = true
+		if s.StartedAt.Before(from.Time) {
+			keep(Segment{StartedAt: s.StartedAt, EndedAt: from})
+		}
+		if (s.Open() && keepOpen) || (!s.Open() && end.After(to.Time)) {
+			keep(Segment{StartedAt: to, EndedAt: s.EndedAt})
+		}
+	}
+	if !cut {
+		return false, nil
+	}
+	if len(out) == 0 { // the entry keeps its start, closed at it, as closeAt does
+		out = []Segment{{StartedAt: e.Segments[0].StartedAt, EndedAt: e.Segments[0].StartedAt}}
+	}
+	e.Segments = out
+	return true, notes
 }
 
 func (a *applier) stop(c Stop) error {

@@ -130,7 +130,7 @@ Under it, `stop logs this as one worklog — x` (with Jira, `stop sends this as 
  06:00–06:15     15m
 ```
 
-`! away` is time cut off by recovery. Every gap you made reads `‖ paused`, however you made it: a plain pause, a pause moved with `pause --at`, or a cut with the [Away dialog](#away--).
+`! away` is time cut off by recovery. Every gap you made reads `‖ paused`, however you made it: a plain pause, a pause moved with `pause --at`, or a window removed with the [Away dialog](#away--).
 
 A running entry that was recovered earlier says `recovered earlier — check the duration at stop` under the headline.
 
@@ -174,7 +174,7 @@ Only the keys that apply now. `space` reads `start`, `pause` or `resume` to matc
 | `space`, `enter` | Start, pause or resume the selected ticket. Starting one pauses whatever ran. With Jira, on an unverified ticket it also asks Jira for the summary. |
 | `p` | Pause whatever is running, from any row. |
 | `x` | Open the stop dialog for the selected ticket's open entry. On a row with none: `nothing to stop on OPS-77 — space starts it`. |
-| `-` | Open the Away dialog for the selected ticket's open entry: cut time you were away out of it. On a row with none: `nothing to cut on OPS-77 — space starts it`. |
+| `-` | Open the Away dialog for the selected ticket's open entry: remove a window you were not working from it. On a row with none: `nothing to cut on OPS-77 — space starts it`. |
 | `a` | Open the add dialog. |
 | `d` | Open the remove dialog for the selected ticket. |
 | `r` | With Jira: send every pending and failed worklog. With nothing owed: `nothing to send: Jira has everything`. While a sync is already out, nothing. With no tracker: `no tracker · nothing is sent · S to set one up`. |
@@ -278,10 +278,10 @@ A recovered entry is never prefilled:
 
 ### Away (`-`)
 
-`-` on a row with an open entry corrects its pauses after the fact. The two common fixes:
+`-` on a row with an open entry says "I wasn't working from `From` to `To`". The window comes out of the entry wherever it falls, and you never need to know where its stretches start or stop. The two common fixes:
 
 - **A meeting you forgot to pause for:** `From` 10:00, `To` 10:45. The meeting becomes a pause.
-- **A lunch you paused for late:** on the paused entry, set `From` back to when you left, and `To` to when you got back (or leave `To` empty to stay paused).
+- **A lunch you paused for late:** on the paused entry, set `From` back to when you left, and `To` to when you got back. The entry resumes at `To`; leave `To` empty to stay paused.
 
 ```
 ╭─Away from PUN-142───────────╮
@@ -299,14 +299,19 @@ A recovered entry is never prefilled:
 
 Key bar: `enter cut  tab field  esc cancel`.
 
-`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. `To` empty means now: the entry is paused from `From`, a plain backdated pause. Enter is `pause --at From`, then `resume --at To`, made as one change: if either half is refused, nothing changes. On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause. The cut shows in the Ticket pane as a pause, `10:00–10:45 ‖ paused 45m`.
+`From` is when you left and `To` when you came back. Both take the CLI's [`--at` forms](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time): `10:00`, or `-45m` for that long ago. Enter removes the window `From`–`To` from the entry, as one change: a stretch inside it goes, a stretch over one edge is trimmed, and a stretch over the whole of it is split in two. The entry drops by exactly the counted time inside the window. A stretch left under a minute is dropped. It never touches another ticket's time or a stopped entry, and it never adds time, except for the resume below.
 
-The last line previews the cut and what the entry becomes, or says why it cannot be made; enter does nothing then. It refuses as the CLI does:
+- `To` empty means now: the entry ends paused at `From`. On a paused entry that removes `From` to the pause.
+- A running entry with `To` set keeps running.
+- A paused entry whose `To` is after its pause also resumes at `To` ("I came back at `To`"), as `resume --at` would.
 
-- a time in the future, or `To` before `From` (`✗ 10:00 is before 10:45`);
-- `From` before the entry started (`✗ 08:30 is before the entry started at 08:58`);
-- `To` while another ticket runs (it resumes this entry, as `resume --at` would);
-- a time over another ticket's time (`✗ that overlaps PUN-7's time from 09:00 to 10:00; fix the length at stop instead`).
+On a paused entry the second line reads `paused at 10:30` and `From` starts at the pause. Every gap the cut leaves shows in the Ticket pane as a pause, `10:00–10:45 ‖ paused 45m`, and the toast says `paused PUN-142 10:00–10:45` (`paused PUN-142 at 10:00` with `To` empty).
+
+The last line previews the cut, `→ cuts 45m · entry becomes 1:12`, where 45m is the counted time removed. With nothing counted in the window it says `nothing counted between 09:10 and 09:50`, and enter just closes the dialog. When the cut cannot be made it says why, and enter does nothing. It refuses when:
+
+- `From` is not before `To` (`✗ 10:45 is not before 10:00`), or either is in the future;
+- `From` is before the entry started (`✗ 08:30 is before the entry started at 08:58`);
+- it would resume the entry at `To` while another ticket runs, or over another ticket's time after `To` (`✗ that overlaps PUN-7's time from 11:00 to 11:30; fix the length at stop instead`).
 
 ### Add (`a`)
 

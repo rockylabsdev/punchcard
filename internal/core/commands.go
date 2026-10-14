@@ -69,12 +69,21 @@ type Resume struct {
 	Grammar tracker.Grammar
 }
 
-// Away cuts time the user was away out of Key's open entry, in one
-// transition: a Pause at From (Key's, as pause --at), then, when To is
-// set, a resume of Key's paused entry at To, as resume --at does, which
-// refuses while any timer runs. From zero leaves a paused entry's pause
-// where it is. Either half refused refuses the whole cut: nothing
-// changes. It is the TUI's Away dialog.
+// Away removes the window [From, To) the user was away from Key's open
+// entry, wherever it falls, in one transition: a stretch inside it goes,
+// one over an edge is trimmed, one over the whole of it is split, and a
+// trimmed stretch left under a minute is dropped (EventPaused's Message
+// says so). To zero means now, so the entry ends paused at From. A
+// running entry with To set keeps running. A paused entry whose To is
+// after its pause also resumes at To, as resume --at does, with its
+// refusals: another ticket running, or another ticket's time after To.
+//
+// EventPaused (At From) reports a cut, and EventStarted (At To) an entry
+// running from To. Nothing counted in the window and no resume changes
+// nothing, with no events. Refused (ErrUsage): no From, From not before
+// To, either in the future, or From before the entry started. It never
+// touches another ticket, a stopped entry or lastSeen. It is the TUI's
+// Away dialog; pause --at and resume --at each move one boundary.
 type Away struct {
 	Key      string
 	From, To time.Time

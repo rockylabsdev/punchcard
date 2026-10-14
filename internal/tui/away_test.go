@@ -144,7 +144,7 @@ func TestAwayDialogSaysWhyItCannotCut(t *testing.T) {
 	hs.typeText("10:45")
 	hs.key("tab")
 	hs.typeText("10:00")
-	frameHas(t, hs, "✗ 10:00 is before 10:45")
+	frameHas(t, hs, "✗ 10:45 is not before 10:00")
 	hs.st.commands()
 	hs.key("enter")
 	for _, c := range hs.st.commands() {
@@ -153,6 +153,103 @@ func TestAwayDialogSaysWhyItCannotCut(t *testing.T) {
 		}
 	}
 	frameHas(t, hs, "Away from PUN-1")
+}
+
+func TestAwayDialogRemovesAWindowOverAGap(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("20:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("20:50:00", pause)
+	hs.setup("21:06:00", start("PUN-1", "E1"))
+	hs.setup("21:12:00", pause)
+	hs.open("21:30:00", 120, 32)
+
+	hs.key("-")
+	frameHas(t, hs, "paused at 21:12")
+	for range len("21:12") {
+		hs.key("backspace")
+	}
+	hs.typeText("20:43")
+	hs.key("tab")
+	hs.typeText("21:07")
+	frameHas(t, hs, "→ cuts 8m · entry becomes 0:48")
+	hs.st.commands()
+	hs.key("enter")
+
+	want := []core.Command{
+		core.Away{Key: "PUN-1", From: at("20:43:00"), To: at("21:07:00"), Origin: core.OriginHand},
+	}
+	if d := cmp.Diff(want, hs.st.commands(), anyGrammar); d != "" {
+		t.Fatalf("commands (-want +got)\n%s", d)
+	}
+	frameHas(t, hs, "paused PUN-1 20:43–21:07")
+	wantLines(t, paneText(t, hs.frame(), 120),
+		"21:07–21:12      5m",
+		"20:43–21:07 ‖ paused 24m",
+		"20:00–20:43      43m",
+	)
+}
+
+func TestAwayDialogLateLunchCutsAndResumes(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("11:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("12:30:00", pause)
+	hs.open("13:20:00", 120, 32)
+
+	hs.key("-")
+	for range len("12:30") {
+		hs.key("backspace")
+	}
+	hs.typeText("12:00")
+	hs.key("tab")
+	hs.typeText("13:00")
+	frameHas(t, hs, "→ cuts 30m · entry becomes 1:20")
+	hs.key("enter")
+	if hs.running() != "PUN-1" {
+		t.Errorf("running %q, want PUN-1 from 13:00", hs.running())
+	}
+	frameHas(t, hs, "paused PUN-1 12:00–13:00")
+}
+
+func TestAwayDialogFromThePauseOnlyResumes(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("09:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("10:30:00", pause)
+	hs.open("10:50:00", 120, 32)
+
+	hs.key("-", "tab")
+	hs.typeText("10:40")
+	frameHas(t, hs, "→ adds 10m · entry becomes 1:40")
+	hs.key("enter")
+	if hs.running() != "PUN-1" {
+		t.Errorf("running %q, want PUN-1 from 10:40", hs.running())
+	}
+}
+
+func TestAwayDialogWithNothingCountedJustCloses(t *testing.T) {
+	hs := newHarness(t)
+	hs.setup("08:00:00", add("PUN-1"), start("PUN-1", "E1"))
+	hs.setup("09:00:00", pause)
+	hs.setup("10:00:00", start("PUN-1", "E1"))
+	hs.setup("10:30:00", pause)
+	hs.open("10:50:00", 120, 32)
+
+	hs.key("-")
+	frameHas(t, hs, "nothing counted between 10:30 and 10:50")
+	for range len("10:30") {
+		hs.key("backspace")
+	}
+	hs.typeText("09:10")
+	hs.key("tab")
+	hs.typeText("09:50")
+	frameHas(t, hs, "nothing counted between 09:10 and 09:50")
+	hs.st.commands()
+	hs.key("enter")
+	for _, c := range hs.st.commands() {
+		if _, ok := c.(core.Touch); !ok {
+			t.Errorf("nothing to cut applied %#v", c)
+		}
+	}
+	frameLacks(t, hs, "Away from PUN-1", "paused PUN-1")
 }
 
 func TestAwayKeyNeedsAnOpenEntry(t *testing.T) {
