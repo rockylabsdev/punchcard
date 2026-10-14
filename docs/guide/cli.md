@@ -129,7 +129,7 @@ $ punchcard pause
 ⏸ DEMO-2 paused  0:00:00
 ```
 
-Nothing running is exit 4: `no timer: nothing is running`.
+Nothing running is exit 4: `nothing is running`.
 
 ### `resume [KEY]`
 
@@ -144,7 +144,7 @@ $ punchcard resume DEMO-1
 ▶ DEMO-1 running  0:00:00  by hand
 ```
 
-Nothing paused is exit 4: `no timer: nothing is paused`.
+Nothing paused is exit 4: `nothing is paused`.
 
 ### `--at TIME`: pause, resume or start at an earlier time
 

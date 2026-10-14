@@ -28,6 +28,26 @@ func TestARefusedAtSaysWhyWithoutTheSentinel(t *testing.T) {
 	}
 }
 
+func TestNothingToPauseSaysWhyWithoutTheSentinel(t *testing.T) {
+	m := newMachine(t)
+	m.now = time.Date(2026, 8, 9, 9, 0, 0, 0, zone)
+	const why = "nothing is running"
+
+	if r := m.run("pause"); r.stderr != "punchcard: "+why+"\n" {
+		t.Errorf("stderr %q, want %q", r.stderr, "punchcard: "+why+"\n")
+	}
+	r := m.run("pause", "--json")
+	var env struct {
+		Error struct{ Code, Message string }
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatalf("%v: %q", err, r.stdout)
+	}
+	if env.Error.Code != "no_timer" || env.Error.Message != why {
+		t.Errorf("error %+v, want code no_timer and message %q", env.Error, why)
+	}
+}
+
 func TestAMeetingCutOutWithTwoCommands(t *testing.T) {
 	m := newMachine(t)
 	m.now = time.Date(2026, 8, 9, 8, 58, 0, 0, zone)

@@ -273,7 +273,7 @@ func (a *app) failure(cmd string, err error) int {
 			hint: "check the key; if it is right, the ticket may exist but be hidden from this account. Nothing changed."})
 	case errors.As(err, &amb):
 		return a.out.fail(cmd, ExitNoTimer, failure{
-			code: "no_timer", msg: err.Error(), hint: "name one: punchcard " + cmd + " KEY",
+			code: "no_timer", msg: core.Reason(err), hint: "name one: punchcard " + cmd + " KEY",
 			data: CandidatesData{Candidates: amb.Keys},
 		})
 	case errors.Is(err, core.ErrTooShort):
@@ -291,7 +291,7 @@ func (a *app) failure(cmd string, err error) int {
 		return a.out.fail(cmd, ExitNoTimer, failure{code: "by_hand", msg: err.Error(),
 			hint: "the user set it by hand; only they can move or pause it"})
 	case errors.Is(err, core.ErrNoTimer), errors.Is(err, core.ErrNotTracked):
-		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: err.Error()})
+		return a.out.fail(cmd, ExitNoTimer, failure{code: "no_timer", msg: core.Reason(err)})
 	case errors.Is(err, store.ErrNewerSchema):
 		return a.out.fail(cmd, ExitStateUnreadable, failure{code: "state_unreadable", msg: err.Error(), hint: "upgrade punchcard"})
 	case errors.Is(err, store.ErrBusy):
