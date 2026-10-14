@@ -67,7 +67,7 @@ Without a tracker a key is any slug: a letter or digit, then letters, digits, `.
 
 ```
 $ punchcard start "pay roll"
-punchcard: usage: "pay roll" is not a ticket key
+punchcard: "pay roll" is not a ticket key
 [exit 64]
 ```
 

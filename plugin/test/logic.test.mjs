@@ -474,7 +474,8 @@ describe('stop dialog', () => {
 describe('replyText', () => {
   test('refusal with hint', () => {
     const env = { ok: false, outcome: 'no_timer', error: { code: 'no_timer', message: 'nothing is running', hint: 'start one' } }
-    assert.equal(replyText('pause', env, 4), 'punchcard pause: nothing is running (start one)')
+    // Claude Code already puts "punchcard:" before the reply.
+    assert.equal(replyText('pause', env, 4), 'nothing is running (start one)')
   })
   test('no JSON', () => assert.equal(replyText('pause', null, 1), 'punchcard pause exited 1 without a JSON answer.'))
   test('a timer command answers with the band', () => {

@@ -1,9 +1,32 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
+
+func TestARefusedAtSaysWhyWithoutTheSentinel(t *testing.T) {
+	m := newMachine(t)
+	m.now = time.Date(2026, 8, 9, 8, 58, 0, 0, zone)
+	m.ok("start", "AA-1")
+	m.now = time.Date(2026, 8, 9, 10, 50, 0, 0, zone)
+	const why = "08:30 is before the entry started at 08:58"
+
+	if r := m.run("pause", "--at", "08:30"); r.stderr != "punchcard: "+why+"\n" {
+		t.Errorf("stderr %q, want %q", r.stderr, "punchcard: "+why+"\n")
+	}
+	r := m.run("pause", "--at", "08:30", "--json")
+	var env struct {
+		Error struct{ Code, Message string }
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatalf("%v: %q", err, r.stdout)
+	}
+	if env.Error.Code != "usage" || env.Error.Message != why {
+		t.Errorf("error %+v, want code usage and message %q", env.Error, why)
+	}
+}
 
 func TestAMeetingCutOutWithTwoCommands(t *testing.T) {
 	m := newMachine(t)

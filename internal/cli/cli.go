@@ -279,7 +279,7 @@ func (a *app) failure(cmd string, err error) int {
 	case errors.Is(err, core.ErrTooShort):
 		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: "a worklog under one minute is never logged", hint: "pass --duration"})
 	case errors.Is(err, core.ErrUsage):
-		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: err.Error()})
+		return a.out.fail(cmd, ExitUsage, failure{code: "usage", msg: core.Reason(err)})
 	case errors.Is(err, core.ErrUnlogged):
 		// With no tracker only an open entry is unlogged: stopping logs it.
 		hint := "stop and sync it first, or pass --force to drop the unsent time"

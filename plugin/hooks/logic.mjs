@@ -553,7 +553,8 @@ export function replyText(verb, env, exitCode) {
   if (!env) return `punchcard ${verb} exited ${exitCode} without a JSON answer.`
   if (!env.ok) {
     const e = env.error ?? {}
-    return `punchcard ${verb}: ${e.message ?? env.outcome}${e.hint ? ` (${e.hint})` : ''}`
+    // Claude Code already puts "punchcard:" before the reply.
+    return `${e.message ?? env.outcome}${e.hint ? ` (${e.hint})` : ''}`
   }
   if (verb === 'stop') {
     const d = env.data ?? {}

@@ -129,7 +129,7 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 - **Keep pending** (Jira only) stops the timer and keeps the worklog to send later (`punchcard sync`).
 - **Cancel** leaves the timer running.
 
-The stop that follows is pinned to the ticket and duration you were shown, in whole minutes. A recovered entry is not stopped without a duration: `/punch stop 1h30m`. The reply in the transcript says what happened: `Logged 1h30m to ABC-123.` (logged locally, or sent to Jira), and with Jira `Stopped ABC-123: 1h30m kept pending.` or `Stopped ABC-123: 1h30m saved but not sent (…). Run `punchcard sync` later; never stop again.` Anything else answers with the CLI's error and hint.
+The stop that follows is pinned to the ticket and duration you were shown, in whole minutes. A recovered entry is not stopped without a duration: `/punch stop 1h30m`. The reply in the transcript says what happened: `Logged 1h30m to ABC-123.` (logged locally, or sent to Jira), and with Jira `Stopped ABC-123: 1h30m kept pending.` or `Stopped ABC-123: 1h30m saved but not sent (…). Run `punchcard sync` later; never stop again.` Anything else answers with the CLI's error and hint, which Claude Code shows after `punchcard:`, for example `punchcard: 10:00 is before the entry started at 10:20`.
 
 ## What an agent may do
 
