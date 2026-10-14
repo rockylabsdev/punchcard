@@ -121,7 +121,7 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 | `/punch resume [KEY] [--at TIME]` | Resume the last paused entry, or start KEY. |
 | `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
 
-`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and each reply leads with when the change took effect, before the band: `⏸ ABC-123 paused at 10:00 · ⏸ ABC-123 1:00 · …` and `▶ ABC-123 started at 10:45 · ▶ ABC-123 1:05 · by hand · …`. When the pause leaves a stretch under a minute, the reply says it was dropped, in brackets after the time. Without `--at` the reply is the band alone. Being by hand, it works on a timer you set by hand.
+`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and each reply leads with when the change took effect, then the rest of the band: `⏸ ABC-123 paused at 10:00 · 1:00 · …` and `▶ ABC-123 started at 10:45 · 1:05 · by hand · …`. When the pause leaves a stretch under a minute, the reply says it was dropped, in brackets after the time. Without `--at` the reply is the band alone. Being by hand, it works on a timer you set by hand.
 
 `/punch stop` runs a dry run first and shows a dialog with the exact worklog, for example `Log 1h30m to ABC-123 with "fixed the formatter"?`, and these answers:
 

@@ -487,10 +487,10 @@ describe('replyText', () => {
     const pausedAt = withEvents({ paused: [timer({ key: 'BB-4', state: 'paused', elapsedSeconds: 0 })], todaySeconds: 180 },
       [{ kind: 'paused', key: 'BB-4', at: '2026-10-13T22:21:00.000-0500', message: 'the 30s from 22:20 was under a minute, so it was dropped' }])
     assert.equal(replyText('pause', pausedAt, 0),
-      '⏸ BB-4 paused at 22:21 (the 30s from 22:20 was under a minute, so it was dropped) · ⏸ BB-4 0:00 · today 3m')
+      '⏸ BB-4 paused at 22:21 (the 30s from 22:20 was under a minute, so it was dropped) · 0:00 · today 3m')
     const resumedAt = withEvents({ running: timer({ key: 'BB-4', byHand: true, elapsedSeconds: 180 }) },
       [{ kind: 'started', key: 'BB-4', at: '2026-10-13T22:24:00.000-0500' }])
-    assert.equal(replyText('resume', resumedAt, 0), '▶ BB-4 started at 22:24 · ▶ BB-4 0:03 · by hand')
+    assert.equal(replyText('resume', resumedAt, 0), '▶ BB-4 started at 22:24 · 0:03 · by hand')
     // start --at while another runs pauses that one at the same time: the
     // reply leads with the start, the command's own event.
     const startedAt = withEvents({ running: timer({ key: 'BB-5', byHand: true, elapsedSeconds: 60 }) }, [
@@ -498,7 +498,7 @@ describe('replyText', () => {
       { kind: 'added', key: 'BB-5' },
       { kind: 'started', key: 'BB-5', at: '2026-10-13T22:30:00.000-0500' },
     ])
-    assert.equal(replyText('start', startedAt, 0), '▶ BB-5 started at 22:30 · ▶ BB-5 0:01 · by hand')
+    assert.equal(replyText('start', startedAt, 0), '▶ BB-5 started at 22:30 · 0:01 · by hand')
     // Without a named time the events carry no at, and the band alone answers.
     const now = withEvents({ running: timer({ byHand: true }) }, [{ kind: 'started', key: 'ABC-123' }])
     assert.equal(replyText('start', now, 0), '▶ ABC-123 1:12 · by hand')

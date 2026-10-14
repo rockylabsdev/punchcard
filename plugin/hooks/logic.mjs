@@ -572,5 +572,9 @@ export function replyText(verb, env, exitCode) {
   // took effect; the command's own event does, with any stub dropped.
   const kind = verb === 'pause' ? 'paused' : 'started'
   const named = (env.events ?? []).find((/** @type {any} */ e) => e.kind === kind && e.at)
-  return named ? `${eventText(named)} · ${text}` : text
+  if (!named) return text
+  // The event already names the ticket: the band's glyph and key would repeat it.
+  const lead = `${text.slice(0, 1)} ${named.key} `
+  const rest = text.startsWith(lead) && eventText(named).startsWith(lead) ? text.slice(lead.length) : text
+  return `${eventText(named)} · ${rest}`
 }
