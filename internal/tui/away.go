@@ -145,7 +145,7 @@ func (d awayDialog) key(m Model, k tea.KeyPressMsg) (Model, tea.Cmd) {
 		if !asks(c) {
 			return m, nil // a pause left where it was: just close
 		}
-		return m.enqueue(intent{kind: intentCommand, cmd: c, say: "cut time away from " + d.ticket})
+		return m.enqueue(intent{kind: intentCommand, cmd: c, say: pausedSay(c, m.now.Location())})
 	}
 	var cmd tea.Cmd
 	if d.onTo {
@@ -180,4 +180,13 @@ func (d awayDialog) body(m Model, w int) []string {
 	}
 	becomes := fmt.Sprintf("%d:%02d", int(after.Hours()), int(after.Minutes())%60)
 	return append(lines, wrap("→ "+verb+" "+sPaused.Bold(true).Render(core.FormatDuration(diff))+" · entry becomes "+becomes, w)...)
+}
+
+// pausedSay is what the Away dialog did, in the pane's words: a gap the
+// user made is a pause, however it was made.
+func pausedSay(c core.Away, loc *time.Location) string {
+	if c.To.IsZero() {
+		return "paused " + c.Key + " at " + core.Clock(c.From, loc)
+	}
+	return "paused " + c.Key + " " + core.Clock(c.From, loc) + "–" + core.Clock(c.To, loc)
 }

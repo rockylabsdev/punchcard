@@ -67,7 +67,8 @@ func TestAwayDialogCutsAMeetingOutOfARunningEntry(t *testing.T) {
 	if d := cmp.Diff(want, hs.st.commands(), anyGrammar); d != "" {
 		t.Fatalf("commands (-want +got)\n%s", d)
 	}
-	frameLacks(t, hs, "Away from PUN-1")
+	frameLacks(t, hs, "Away from PUN-1", "cut time away")
+	frameHas(t, hs, "paused PUN-1 10:00–10:45")
 	wantLines(t, paneText(t, hs.frame(), 120), "10:00–10:45 ‖ paused 45m")
 }
 
@@ -88,6 +89,7 @@ func TestAwayDialogWithNoToIsABackdatedPause(t *testing.T) {
 	if hs.running() != "" {
 		t.Errorf("still running")
 	}
+	frameHas(t, hs, "paused PUN-1 at 10:30")
 }
 
 func TestAwayDialogOnAPausedEntryMovesThePause(t *testing.T) {
@@ -103,6 +105,8 @@ func TestAwayDialogOnAPausedEntryMovesThePause(t *testing.T) {
 	}
 	hs.typeText("10:00")
 	frameHas(t, hs, "→ cuts 30m · entry becomes 1:02")
+	hs.key("enter")
+	frameHas(t, hs, "paused PUN-1 at 10:00")
 }
 
 func TestAwayDialogToIsAResumeNotASwitch(t *testing.T) {
