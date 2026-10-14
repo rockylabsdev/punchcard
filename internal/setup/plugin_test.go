@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/j-dsmith/punchcard/internal/config"
 )
 
 func TestDecidePlugin(t *testing.T) {
@@ -125,6 +127,10 @@ func TestPluginStep(t *testing.T) {
 				"no release with that tag"},
 			{"no HTTPS credentials", "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n",
 				"Claude Code could not clone the repository. It is private", "no release with that tag"},
+			{"no way to ask for a password", "fatal: unable to get password from user\n",
+				"Claude Code could not clone the repository. It is private", "no release with that tag"},
+			{"terminal prompts disabled alone", "error: terminal prompts disabled\n",
+				"Claude Code could not clone the repository. It is private", "no release with that tag"},
 			{"no release for this tag", "fatal: Remote branch v0.1.0 not found in upstream origin\n",
 				"This build is `v0.1.0` and no release with that tag exists yet. The plugin can be loaded from a clone for one session: `claude --plugin-dir /path/to/punchcard/plugin`.",
 				"gh auth setup-git"},
@@ -139,6 +145,28 @@ func TestPluginStep(t *testing.T) {
 				r.run("", "n", "", "n")
 				r.has("✗ claude "+install+" failed: exit status 1", "Your Jira credentials are unaffected", c.want)
 				r.lacks(c.notWant)
+			})
+		}
+	})
+	t.Run("with no tracker a failure does not mention Jira", func(t *testing.T) {
+		install := "plugin install punchcard@punchcard -s user"
+		cases := []struct{ name, said, want string }{
+			{"generic", "network is down\n", "Run it again by hand when you are ready."},
+			{"with a remedy", "fatal: unable to get password from user\n", "`gh auth setup-git`"},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				r := newRig(t)
+				if err := config.Save(r.getenv, config.Config{Tracker: config.TrackerNone}); err != nil {
+					t.Fatal(err)
+				}
+				r.claude.found = true
+				r.claude.list = "[]"
+				r.claude.fail = map[string]error{install: errors.New("exit status 1")}
+				r.claude.said = map[string]string{install: c.said}
+				r.run("none", "", "n")
+				r.has("✗ claude "+install+" failed: exit status 1", c.want)
+				r.lacks("Jira credentials")
 			})
 		}
 	})

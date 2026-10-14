@@ -27,7 +27,7 @@ Run the bare `punchcard` through Bash and always pass `--json`; read the envelop
 
 `pause`, `resume` and `start` take `--at TIME`: the change happens then instead of now. TIME is `HH:MM` (the latest such time, so `23:50` just after midnight is last night) or `-D`, that long ago (`-45m`, `-1h30m`). The `paused`/`started` events then carry `at`.
 
-`data.todaySeconds` in `punchcard status --json` answers "how long have I worked today": the day's total over every ticket.
+`data.todaySeconds` in `punchcard status --json` answers "how long have I worked today": the day's total over every ticket: what today's stops logged plus the time still open.
 
 ## Rules
 

@@ -553,7 +553,8 @@ export function replyText(verb, env, exitCode) {
   if (!env) return `punchcard ${verb} exited ${exitCode} without a JSON answer.`
   if (!env.ok) {
     const e = env.error ?? {}
-    return `punchcard ${verb}: ${e.message ?? env.outcome}${e.hint ? ` (${e.hint})` : ''}`
+    // Claude Code already puts "punchcard:" before the reply.
+    return `${e.message ?? env.outcome}${e.hint ? ` (${e.hint})` : ''}`
   }
   if (verb === 'stop') {
     const d = env.data ?? {}
@@ -566,5 +567,14 @@ export function replyText(verb, env, exitCode) {
     return logged ? `Logged ${time} to ${d.key}.` : `Stopped ${d.key}: ${time} kept pending.`
   }
   const band = bandFrom({ envelope: env }, '')
-  return band ? band.text : 'Nothing running.'
+  const text = band ? band.text : 'Nothing running.'
+  // At a named time (--at) the band's clock does not say when the change
+  // took effect; the command's own event does, with any stub dropped.
+  const kind = verb === 'pause' ? 'paused' : 'started'
+  const named = (env.events ?? []).find((/** @type {any} */ e) => e.kind === kind && e.at)
+  if (!named) return text
+  // The event already names the ticket: the band's glyph and key would repeat it.
+  const lead = `${text.slice(0, 1)} ${named.key} `
+  const rest = text.startsWith(lead) && eventText(named).startsWith(lead) ? text.slice(lead.length) : text
+  return `${eventText(named)} · ${rest}`
 }

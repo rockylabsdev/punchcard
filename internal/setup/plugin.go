@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/j-dsmith/punchcard/internal/config"
 )
 
 // PluginID is the plugin as Claude Code names it: plugin@marketplace.
@@ -221,15 +223,28 @@ func (w wizard) runClaude(args []string) bool {
 	}
 	if err != nil {
 		lines := []string{"✗ " + command(args) + " failed: " + err.Error()}
-		if why := pluginFailure(said.String()); why != "" {
+		jira := w.jira()
+		switch why := pluginFailure(said.String()); {
+		case why != "" && jira:
 			lines = append(lines, "  "+why, "  Your Jira credentials are unaffected.")
-		} else {
+		case why != "":
+			lines = append(lines, "  "+why)
+		case jira:
 			lines = append(lines, "  Your Jira credentials are unaffected; run it again by hand when you are ready.")
+		default:
+			lines = append(lines, "  Run it again by hand when you are ready.")
 		}
 		w.UI.Say(lines...)
 		return false
 	}
 	return true
+}
+
+// jira reports whether Jira is the tracker the tracker step left, so a
+// failure mentions Jira credentials only when there are some.
+func (w wizard) jira() bool {
+	t, err := config.Chosen(w.Getenv)
+	return err == nil && t == config.TrackerJira
 }
 
 // askRule is the ask-rule step: offered whatever the plugin step did.
@@ -280,7 +295,8 @@ var missingTag = regexp.MustCompile(`Remote branch (\S+) not found`)
 // output, for the two failures a tester can fix; "" for anything else.
 func pluginFailure(said string) string {
 	switch {
-	case strings.Contains(said, "Permission denied (publickey)"), strings.Contains(said, "could not read Username"):
+	case strings.Contains(said, "Permission denied (publickey)"), strings.Contains(said, "could not read Username"),
+		strings.Contains(said, "unable to get password from user"), strings.Contains(said, "terminal prompts disabled"):
 		return "Claude Code could not clone the repository. It is private: run `gh auth login` and `gh auth setup-git`, then `punchcard setup` again."
 	}
 	if m := missingTag.FindStringSubmatch(said); m != nil {

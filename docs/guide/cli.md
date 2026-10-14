@@ -67,7 +67,7 @@ Without a tracker a key is any slug: a letter or digit, then letters, digits, `.
 
 ```
 $ punchcard start "pay roll"
-punchcard: usage: "pay roll" is not a ticket key
+punchcard: "pay roll" is not a ticket key
 [exit 64]
 ```
 
@@ -129,7 +129,7 @@ $ punchcard pause
 ⏸ DEMO-2 paused  0:00:00
 ```
 
-Nothing running is exit 4: `no timer: nothing is running`.
+Nothing running is exit 4: `nothing is running`.
 
 ### `resume [KEY]`
 
@@ -144,7 +144,7 @@ $ punchcard resume DEMO-1
 ▶ DEMO-1 running  0:00:00  by hand
 ```
 
-Nothing paused is exit 4: `no timer: nothing is paused`.
+Nothing paused is exit 4: `nothing is paused`.
 
 ### `--at TIME`: pause, resume or start at an earlier time
 
@@ -332,7 +332,7 @@ Nothing running.
 Not connected to Jira: no API token (run punchcard setup, or set PUNCHCARD_TOKEN)
 ```
 
-The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line. Last, when anything is counted today, the day's total over every ticket (removed ones included), as the TUI's Tickets title reads it: `Today: 3h 10m` (a stale timer counts capped). `status --short` never shows it.
+The lines, in order: the running timer or `Nothing running.`; each paused timer; the unsent count and total when any. The rest is Jira only: `! Jira rejected the token at 10:20; run punchcard setup` after a 401 until a call succeeds; then the Jira line: `Jira token: Keychain`, `file` or `PUNCHCARD_TOKEN`, or `Not connected to Jira: <why>`, or `! Not connected to Jira: macOS Keychain: <error>`. A stray token file next to a working Keychain item gets its own warning line. Last, when anything is counted today, the day's total over every ticket (removed ones included), as the TUI's Tickets title reads it: `Today: 3h 10m`. A stopped entry counts the duration it logged, on its worklog's day; a running or paused one counts its time today, with a stale timer capped. So the total is the Today pane's `logged` plus the time still open. `status --short` never shows it.
 
 A stale timer (running, no presence for over 2 hours) is shown capped, as the next change will record it:
 
@@ -669,10 +669,10 @@ One shape on stdout, success or failure. Notices and warnings go to stderr, so s
 
 | Command | `data` |
 | --- | --- |
-| `status` | `{running, paused, unsent, todaySeconds, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `todaySeconds` is the day's total over every ticket, removed ones included, open entries counted up to now and a stale timer counted capped; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
+| `status` | `{running, paused, unsent, todaySeconds, authFailedAt, tracker, configured?, tokenSource?, strayTokenFile?, keychainError?, notConfigured?, here?}`. `running` is a timer or `null`; `paused` is a list of timers; `unsent` is `{count, seconds}`; `todaySeconds` is the day's total over every ticket, removed ones included: a stopped entry counts its worklog's duration on the worklog's day, and an open entry its time today up to now, with a stale timer counted capped; `authFailedAt` is a timestamp or `null`; `tracker` is `none` or `jira`. `configured`, `tokenSource` (`env`, `keychain` or `file`), `strayTokenFile`, `keychainError` and `notConfigured` appear only with Jira. `here` appears only with `--cwd`: `{key, source}` with `source` `file` or `branch`, or `null`. |
 | `status --short` | The same without the Jira fields. |
 | `start`, `pause`, `resume`, `touch` | `{running, paused, unsent, todaySeconds, authFailedAt}` after the change. |
-| `ls` | `{tickets: [{key, summary?, unverified, addedAt, removedAt?, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. `removedAt` appears only on a removed ticket, which only `ls --all` lists. |
+| `ls` | `{tickets: [{key, summary?, unverified, addedAt, removedAt?, state?, elapsedSeconds, todaySeconds, unsynced}]}`. `state` is `running`, `paused` or `stale`, absent when idle. `removedAt` appears only on a removed ticket, which only `ls --all` lists. `todaySeconds` is the ticket's share of `status`'s, counted the same way. |
 | `add` | As `ls`, for the keys given. |
 | `rm` | `{key, keptWorklogs}`: `keptWorklogs` counts the logged worklogs that stay in the log. |
 | `stop` | `{key, entryId, worklog}`. |

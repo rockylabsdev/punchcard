@@ -314,6 +314,12 @@ func TestEnvelopes(t *testing.T) {
 		}, "10:00",
 			[]string{"status"}, 0,
 			ok("status", unlinked(`{"running": null, "paused": [], "unsent": {"count": 1, "seconds": 1800}, "todaySeconds": 1800, "authFailedAt": null}`), noEvents)},
+		{"status counts a stopped entry's worklog today, not its measured time", func(h *harness) {
+			h.do("09:00", "start", "AA-1")
+			h.do("09:03", "stop", "--duration", "1h30m")
+		}, "10:00",
+			[]string{"status"}, 0,
+			ok("status", unlinked(`{"running": null, "paused": [], "unsent": {"count": 1, "seconds": 5400}, "todaySeconds": 5400, "authFailedAt": null}`), noEvents)},
 		{"status --short is the same envelope", nil, "09:00", []string{"status", "--short"}, 0, ok("status", idle, noEvents)},
 		{"status refuses a newer schema", func(h *harness) {
 			os.WriteFile(filepath.Join(h.dir, "state.json"), []byte(`{"schemaVersion": 9}`), 0o600)

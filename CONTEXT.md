@@ -56,7 +56,12 @@ A `Worklog` is what is recorded; a `TimeEntry` is what Punchcard measured. They 
 
 ### Today
 
-The local calendar day that contains now. **Time today** for a ticket is the part of its segments that falls inside that day: a segment that spans midnight is split there, and only the part after midnight counts toward today. A worklog's day is the local date it started, which is its entry's first segment start. Yesterday's time is never recounted and today's never carries over.
+The local calendar day that contains now. A worklog's day is the local date it started, which is its entry's first segment start. **Time today** for a ticket counts each of its `TimeEntry`s by its state:
+
+- **Stopped:** its `Worklog`'s duration, what was logged rather than what was measured, when the worklog's day is today. Its segments do not count. A worklog has no start and end, so a stopped entry that crossed midnight counts all of it on its worklog's day.
+- **Running or paused:** the part of its segments that falls inside today, the open segment up to now and a stale timer capped. A segment that spans midnight is split there, and only the part after midnight counts toward today.
+
+The day's total is time today over every ticket, removed ones included, so it agrees with the day's logged worklogs plus the time still open. Yesterday's time is never recounted and today's never carries over.
 
 ### Running / Paused / Stopped
 

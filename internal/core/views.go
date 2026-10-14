@@ -23,15 +23,24 @@ func Elapsed(e TimeEntry, now time.Time) time.Duration {
 	return d
 }
 
-// TimeToday is the part of t's segments (every entry) inside the local
-// calendar day containing now, in now's location. A segment spanning
-// midnight is split there; an open segment counts up to now.
+// TimeToday is t's time in the local calendar day containing now, in
+// now's location. A stopped entry counts its worklog's duration, whole,
+// when the worklog's day is today: what was logged, not what was
+// measured. A running or paused entry counts the part of its segments
+// inside today: a segment spanning midnight is split there, and an open
+// segment counts up to now.
 func TimeToday(t TrackedTicket, now time.Time) time.Duration {
 	y, m, d := now.Date()
 	dayStart := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.AddDate(0, 0, 1)
 	var total time.Duration
 	for _, e := range t.Entries {
+		if wl := e.Worklog; wl != nil {
+			if day := wl.StartedAt.In(now.Location()); !day.Before(dayStart) && day.Before(dayEnd) {
+				total += time.Duration(wl.TimeSpentSeconds) * time.Second
+			}
+			continue
+		}
 		for _, s := range e.Segments {
 			from, to := s.StartedAt.Time, now
 			if !s.Open() && s.EndedAt.Before(now) {
@@ -52,9 +61,9 @@ func TimeToday(t TrackedTicket, now time.Time) time.Duration {
 }
 
 // TodayTotal is TimeToday summed over every tracked ticket, removed ones
-// included: the day's total answers for the day, not for the list. A
-// stale timer counts capped at lastSeen, the figure the next change
-// records.
+// included: the day's total answers for the day, not for the list. It
+// is the day's logged worklogs plus the time still open. A stale timer
+// counts capped at lastSeen, the figure the next change records.
 func TodayTotal(w World, now time.Time) time.Duration {
 	w, _ = Recover(w, now)
 	var total time.Duration

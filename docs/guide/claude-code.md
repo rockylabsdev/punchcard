@@ -20,7 +20,7 @@ claude plugin install punchcard@punchcard -s user
 
 The marketplace pins the plugin to the binary's release tag, so an install always gets the mod and skill that match the binary. A pre-release (`vX.Y.Z-rc.N`) is pinned the same way, so a tester's install matches their pre-release binary. The marketplace fetches the plugin with git over HTTPS (`https://github.com/j-dsmith/punchcard.git`). If the install fails, setup leaves your credentials alone and, for these two failures, says what to do:
 
-- **`Permission denied (publickey)` or `could not read Username`**: Claude Code could not clone the repository. It is private for now: run `gh auth login` and `gh auth setup-git` (git then signs in to GitHub through the GitHub CLI), then `punchcard setup` again.
+- **`Permission denied (publickey)`, `could not read Username`, `unable to get password from user` or `terminal prompts disabled`**: Claude Code could not clone the repository. It is private for now: run `gh auth login` and `gh auth setup-git` (git then signs in to GitHub through the GitHub CLI), then `punchcard setup` again.
 - **`Remote branch vX.Y.Z not found`**: this build is `vX.Y.Z` and no release with that tag exists yet (`main` between releases, for one). Load the plugin from a clone for one session, as below.
 
 To run the plugin from a clone instead, load it for one session at a time:
@@ -93,7 +93,7 @@ With no tracker, the band is about the timer alone: the rows marked *Jira only* 
 | `▶ ABC-123 1:12 · by hand · Fix the login form` | Running, for 1 h 12 min, set by hand, with its summary. An agent can't move it; your prompts in another session can. |
 | `▶ ABC-123 1:12 · Fix the login form` | Running and not set by hand: your prompts can move it, and so can an agent. |
 | `⏸ ABC-123 0:40 · Fix the login form` | Paused. `+1 paused` follows when more are paused. |
-| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket, removed ones included, as the TUI's Tickets title reads it. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
+| `▶ ABC-123 1:12 · by hand · today 3h 10m · Fix the login form` | The day's total over every ticket, removed ones included, as the TUI's Tickets title reads it: what today's stops logged (the duration you gave at stop, not the time measured) plus the time still open. It follows the clock and `by hand`, before the summary, so a narrow band cuts the summary first. Not shown when nothing is counted today, nor on a recovered or stale band. |
 | `! ABC-123 recovered · fix at stop` | Recovery capped it. Stop it with a duration you choose. |
 | `! ABC-123 stale 1:12` | Running with no presence for over 2 hours; the next change will cap it. |
 | `… · 2 unsent` | *Jira only.* Two worklogs are owed to Jira. |
@@ -121,7 +121,7 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 | `/punch resume [KEY] [--at TIME]` | Resume the last paused entry, or start KEY. |
 | `/punch stop [duration] [-m comment]` | Preview the worklog, then ask. |
 
-`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and the toasts say `⏸ ABC-123 paused at 10:00` and `▶ ABC-123 started at 10:45`. Being by hand, it works on a timer you set by hand.
+`--at TIME` makes the change at TIME instead of now, as the CLI's [`--at`](cli.md#--at-time-pause-resume-or-start-at-an-earlier-time) does: `10:00`, or `-45m` for that long ago. `/punch pause --at 10:00` then `/punch resume --at 10:45` cuts a meeting out of the running entry, and each reply leads with when the change took effect, then the rest of the band: `⏸ ABC-123 paused at 10:00 · 1:00 · …` and `▶ ABC-123 started at 10:45 · 1:05 · by hand · …`. When the pause leaves a stretch under a minute, the reply says it was dropped, in brackets after the time. Without `--at` the reply is the band alone. Being by hand, it works on a timer you set by hand.
 
 `/punch stop` runs a dry run first and shows a dialog with the exact worklog, for example `Log 1h30m to ABC-123 with "fixed the formatter"?`, and these answers:
 
@@ -129,7 +129,7 @@ Act by hand without leaving the session. Everything `/punch` does has origin `ha
 - **Keep pending** (Jira only) stops the timer and keeps the worklog to send later (`punchcard sync`).
 - **Cancel** leaves the timer running.
 
-The stop that follows is pinned to the ticket and duration you were shown, in whole minutes. A recovered entry is not stopped without a duration: `/punch stop 1h30m`. The reply in the transcript says what happened: `Logged 1h30m to ABC-123.` (logged locally, or sent to Jira), and with Jira `Stopped ABC-123: 1h30m kept pending.` or `Stopped ABC-123: 1h30m saved but not sent (…). Run `punchcard sync` later; never stop again.` Anything else answers with the CLI's error and hint.
+The stop that follows is pinned to the ticket and duration you were shown, in whole minutes. A recovered entry is not stopped without a duration: `/punch stop 1h30m`. The reply in the transcript says what happened: `Logged 1h30m to ABC-123.` (logged locally, or sent to Jira), and with Jira `Stopped ABC-123: 1h30m kept pending.` or `Stopped ABC-123: 1h30m saved but not sent (…). Run `punchcard sync` later; never stop again.` Anything else answers with the CLI's error and hint, which Claude Code shows after `punchcard:`, for example `punchcard: 10:00 is before the entry started at 10:20`.
 
 ## What an agent may do
 
