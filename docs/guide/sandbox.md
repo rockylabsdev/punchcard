@@ -40,11 +40,14 @@ Punchcard reads config and data from `~/.config/punchcard` and `~/.local/share/p
 export XDG_CONFIG_HOME=~/punchcard-sandbox/config
 export XDG_DATA_HOME=~/punchcard-sandbox/data
 export PUNCHCARD_TOKEN=sandbox
+export DISABLE_AUTOUPDATER=1
 ```
 
-With `PUNCHCARD_TOKEN` set, `setup` lets you leave the token field blank, tests with the environment's token, and writes nothing to the Keychain: it says `No token saved: PUNCHCARD_TOKEN supplies it`. Delete the two directories when you are done and nothing remains.
+`DISABLE_AUTOUPDATER` is for Claude Code, not Punchcard. Claude Code installs its own updates under `XDG_DATA_HOME` and points `~/.local/bin/claude` at the new copy. Without the variable, a `claude` started from this shell can update itself into the sandbox, and deleting the sandbox then leaves `claude` pointing at nothing. If that has already happened, point it back at your normal copy: `ln -sfn ~/.local/share/claude/versions/<version> ~/.local/bin/claude`.
 
-Anything that must see the sandbox, the TUI, a second terminal, Claude Code, has to be started from a shell with those three variables exported.
+With `PUNCHCARD_TOKEN` set, `setup` lets you leave the token field blank, tests with the environment's token, and writes nothing to the Keychain: it says `No token saved: PUNCHCARD_TOKEN supplies it`. Delete the two directories when you are done and nothing remains. First check that `readlink ~/.local/bin/claude` does not point into them.
+
+Anything that must see the sandbox, the TUI, a second terminal, Claude Code, has to be started from a shell with those variables exported.
 
 ## Set it up
 
