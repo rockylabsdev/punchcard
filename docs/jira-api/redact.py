@@ -32,6 +32,14 @@ FAKE_KEY = "EX-1234"
 FAKE_ISSUE_ID = "100001"
 FAKE_WORKLOG_ID = "110001"
 FAKE_SUMMARY = "Example ticket summary for fixture purposes"
+# search-jql.json carries up to fifty issues that are not the spike ticket:
+# numbered placeholders, so a fixture row still reads as a distinct ticket.
+FAKE_PROJECT = "EX"
+FAKE_SEARCH_KEY = FAKE_PROJECT + "-{n}"          # EX-2001, EX-2002, ...
+FAKE_SEARCH_ID = "20{n:04d}"                      # 202001, 202002, ...
+FAKE_SEARCH_SUMMARY = "Example assigned ticket {n}"
+FAKE_PAGE_TOKEN = "REDACTED-NEXT-PAGE-TOKEN"      # tenant-bound, expires in 7 days
+SEARCH_FIXTURE = "search-jql.json"
 
 
 def load(name):
@@ -95,6 +103,79 @@ def build_mapping():
     return {k: v for k, v in m.items() if k and k != v}
 
 
+def redact_search(mapping):
+    """Rewrite the /search/jql fixture structurally and return extra mappings.
+
+    The response lists every open ticket assigned to the account, so its keys,
+    ids, `self` URLs and summaries are all real work, and far too many (and
+    too short: an id is five digits, a summary can be one word) to scrub by
+    global text replacement the way the single spike ticket is. Each issue is
+    rewritten in place; the spike ticket, when it appears, keeps the same
+    placeholders the other fixtures use, so one key means one ticket across
+    the whole directory. Idempotent: an issue already carrying a placeholder
+    key is left alone.
+
+    Returns real -> placeholder pairs safe to add to the global text mapping
+    (issue keys, which are distinctive; summaries only when long enough not to
+    collide with ordinary words elsewhere), so a write-up passed on the
+    command line is scrubbed of them too.
+    """
+    p = OUT / SEARCH_FIXTURE
+    if not p.exists():
+        return {}, False
+    try:
+        data = json.loads(p.read_text())
+    except json.JSONDecodeError:
+        return {}, False  # a non-200 body; apply() still scrubs it as text
+    issues = data.get("issues") if isinstance(data, dict) else None
+    if not isinstance(issues, list):
+        return {}, False
+
+    extra = {}
+    changed = False
+    n = 0
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        key = issue.get("key") or ""
+        if key.startswith(FAKE_PROJECT + "-"):
+            continue  # already redacted
+        n += 1
+        fields = issue.get("fields") if isinstance(issue.get("fields"), dict) else {}
+        summary = fields.get("summary")
+
+        if key in mapping:  # the spike ticket: reuse its placeholders
+            fake_key, fake_id, fake_summary = FAKE_KEY, FAKE_ISSUE_ID, FAKE_SUMMARY
+        else:
+            fake_key = FAKE_SEARCH_KEY.format(n=2000 + n)
+            fake_id = FAKE_SEARCH_ID.format(n=n)
+            fake_summary = FAKE_SEARCH_SUMMARY.format(n=n)
+
+        if key:
+            issue["key"] = fake_key
+            extra[key] = fake_key
+        if issue.get("id"):
+            issue["id"] = fake_id
+        if issue.get("self"):
+            issue["self"] = f"https://{FAKE_HOST}/rest/api/3/issue/{fake_id}"
+        if isinstance(summary, str) and summary:
+            fields["summary"] = fake_summary
+            if len(summary) >= 12:
+                extra[summary] = fake_summary
+        changed = True
+
+    token = data.get("nextPageToken")
+    if isinstance(token, str) and token and token != FAKE_PAGE_TOKEN:
+        data["nextPageToken"] = FAKE_PAGE_TOKEN
+        extra[token] = FAKE_PAGE_TOKEN
+        changed = True
+
+    if changed:
+        # Jira sends compact single-line JSON; keep the fixture in that form.
+        p.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False))
+    return {k: v for k, v in extra.items() if k and k != v}, changed
+
+
 def apply(mapping, paths):
     # Longest first, so a value that contains another is replaced whole.
     keys = sorted(mapping, key=len, reverse=True)
@@ -119,7 +200,9 @@ def apply(mapping, paths):
 
 def main():
     mapping = build_mapping()
-    if not mapping:
+    extra, search_changed = redact_search(mapping)
+    mapping.update(extra)
+    if not mapping and not search_changed:
         print("nothing to redact — fixtures are absent or already redacted")
         return 0
 
@@ -128,6 +211,8 @@ def main():
     targets += [Path(a) for a in sys.argv[1:]]
 
     touched = apply(mapping, targets)
+    if search_changed and OUT / SEARCH_FIXTURE not in touched:
+        touched.append(OUT / SEARCH_FIXTURE)
     print(f"mapped {len(mapping)} value(s); rewrote {len(touched)} file(s):")
     for p in touched:
         print("  ", p.relative_to(Path.cwd()) if p.is_absolute() else p)
